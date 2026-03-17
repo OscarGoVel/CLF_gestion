@@ -331,7 +331,7 @@ class VentanaCotizacion:
                 ))
             
             # Actualizar totales
-            self.actualizar_totales()
+            self.actualizar_tabla_productos()
             
         except sqlite3.Error as e:
             messagebox.showerror("Error", f"No se pudieron cargar los datos:\n{str(e)}")

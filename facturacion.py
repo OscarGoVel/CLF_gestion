@@ -264,6 +264,9 @@ class SeccionFacturacion:
         self.sistema._toolbar_btn(tb, '🔗 Centro de Vinculación',
                                   self.sistema._abrir_centro_vinculacion, color='#dc2626')
         self.sistema._toolbar_btn(tb, '🔄', self.cargar_facturas)
+        self.sistema._toolbar_sep(tb)
+        self.sistema._toolbar_btn(tb, '📊 Exportar CSV', self.exportar_csv,
+                                  color='#065f46')
 
         # Barra de búsqueda / filtros
         ff = tk.Frame(sec, bg=self.C['toolbar_bg'], pady=4)
@@ -326,6 +329,109 @@ class SeccionFacturacion:
         self.cargar_facturas()
 
     # ── Cargar tabla ───────────────────────────────────────────────────────────
+    def exportar_csv(self):
+        """Exporta la vista actual de facturas a CSV.
+        Columnas: Folio, OC Relacionada, Fecha Emisión, Monto Total.
+        Respeta los filtros activos (búsqueda y estado de vinculación).
+        """
+        import csv as _csv
+        from tkinter import filedialog as _fd
+        from datetime import datetime as _dt
+
+        # Construir query con los mismos filtros que cargar_facturas
+        buscar = self._entry_buscar.get().strip()
+        vinc   = self._filtro_vinc.get()
+
+        where_parts = []
+        params      = []
+
+        if vinc == 'Vinculadas':
+            where_parts.append("""(
+                EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
+                OR EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+            )""")
+        elif vinc == 'Sin vincular':
+            where_parts.append("""(
+                NOT EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
+                AND NOT EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+            )""")
+
+        if buscar:
+            where_parts.append(
+                '(f.uuid LIKE ? OR f.rfc_receptor LIKE ? '
+                'OR f.nombre_receptor LIKE ? OR f.folio_factura LIKE ?)')
+            p = f'%{buscar}%'
+            params += [p, p, p, p]
+
+        where_sql = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
+
+        self.cursor.execute(f"""
+            SELECT
+                CASE WHEN f.serie IS NOT NULL AND f.serie != ''
+                     THEN f.serie || '-' || f.folio_factura
+                     ELSE f.folio_factura
+                END                                    AS folio,
+                f.uuid                                 AS folio_fiscal,
+                GROUP_CONCAT(DISTINCT c.orden_compra)  AS oc_relacionada,
+                f.fecha                                AS fecha_emision,
+                f.total                                AS monto,
+                f.moneda
+            FROM facturas f
+            LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
+            LEFT JOIN cotizaciones c          ON c.id = fc.cotizacion_id
+            LEFT JOIN compras comp            ON comp.factura_xml_id = f.id
+            {where_sql}
+            GROUP BY f.id
+            ORDER BY f.fecha DESC, f.fecha_registro DESC
+        """, params)
+
+        filas = self.cursor.fetchall()
+
+        if not filas:
+            messagebox.showinfo('Sin datos',
+                'No hay facturas que exportar con los filtros actuales.',
+                parent=self.root)
+            return
+
+        # Pedir ruta de guardado
+        fecha_hoy = _dt.now().strftime('%Y-%m-%d')
+        ruta = _fd.asksaveasfilename(
+            title='Guardar exportación como...',
+            defaultextension='.csv',
+            initialfile=f'facturas_{fecha_hoy}.csv',
+            filetypes=[('CSV', '*.csv'), ('Todos los archivos', '*.*')],
+            parent=self.root,
+        )
+        if not ruta:
+            return
+
+        try:
+            with open(ruta, 'w', newline='', encoding='utf-8-sig') as f:
+                writer = _csv.writer(f)
+                # Encabezado
+                writer.writerow(['Folio', 'Folio Fiscal (UUID)', 'OC Relacionada',
+                                  'Fecha Emisión', 'Monto', 'Moneda'])
+                # Datos
+                for folio, uuid, oc, fecha, monto, moneda in filas:
+                    writer.writerow([
+                        folio or '',
+                        uuid or '',
+                        oc or '',
+                        (fecha or '')[:10],
+                        f'{monto:,.2f}' if monto else '0.00',
+                        moneda or 'MXN',
+                    ])
+
+            n = len(filas)
+            messagebox.showinfo(
+                '✅ Exportación completa',
+                f'{n} factura{"s" if n != 1 else ""} exportada{"s" if n != 1 else ""}\n\n'
+                f'Archivo: {ruta}',
+                parent=self.root)
+
+        except Exception as e:
+            messagebox.showerror('Error al exportar', str(e), parent=self.root)
+
     def cargar_facturas(self):
         self.tree.delete(*self.tree.get_children())
 
