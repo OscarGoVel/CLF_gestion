@@ -91,6 +91,8 @@ class CotizacionesUI:
         self.sistema._toolbar_sep(tb)
         self._btn_vincular = self.sistema._toolbar_btn(tb, '🔗 Vincular', self._abrir_centro_vinculacion, color='#7c3aed')
         self._actualizar_badge_vinculacion()
+        self.sistema._toolbar_sep(tb)
+        self.sistema._toolbar_btn(tb, '📊 Exportar CSV', self.exportar_csv, color='#065f46')
 
         # Barra de filtros
         ff = tk.Frame(sec, bg=self.C['toolbar_bg'], pady=4)
@@ -296,6 +298,67 @@ class CotizacionesUI:
                     bg='#16a34a')
         except Exception:
             pass
+
+    def exportar_csv(self):
+        """Exporta la vista actual de cotizaciones a CSV respetando filtros activos."""
+        import csv as _csv
+        from tkinter import filedialog as _fd
+        from datetime import datetime as _dt
+
+        buscar = self.entry_buscar_cotizacion.get().strip()
+        filtro = self._filtro_estado_cot.get() if self._filtro_estado_cot else 'Todos'
+
+        params, where_parts = [], []
+        if filtro and filtro != 'Todos':
+            where_parts.append('c.estado = ?')
+            params.append(filtro)
+        if buscar:
+            where_parts.append(
+                '(c.folio LIKE ? OR cl.nombre_comercial LIKE ? OR c.orden_compra LIKE ?)')
+            params += [f'%{buscar}%'] * 3
+        where_sql = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
+
+        self.cursor.execute(f"""
+            SELECT c.folio, c.fecha, cl.nombre_comercial,
+                   c.total, c.estado, c.orden_compra,
+                   c.monto_entregado, c.monto_pagado,
+                   c.numero_factura, c.observaciones
+            FROM cotizaciones c
+            JOIN clientes cl ON c.cliente_id = cl.id
+            {where_sql}
+            ORDER BY c.folio DESC
+        """, params)
+        filas = self.cursor.fetchall()
+
+        if not filas:
+            messagebox.showinfo('Sin datos', 'No hay cotizaciones con los filtros activos.')
+            return
+
+        ruta = _fd.asksaveasfilename(
+            title='Exportar cotizaciones',
+            defaultextension='.csv',
+            initialfile=f'cotizaciones_{_dt.now().strftime("%Y-%m-%d")}.csv',
+            filetypes=[('CSV', '*.csv')], parent=self.root)
+        if not ruta:
+            return
+
+        with open(ruta, 'w', newline='', encoding='utf-8-sig') as f:
+            w = _csv.writer(f)
+            w.writerow(['Folio', 'Fecha', 'Cliente', 'Total', 'Estado',
+                        'OC', 'Entregado', 'Pagado', 'No. Factura', 'Observaciones'])
+            for row in filas:
+                folio, fecha, cliente, total, estado, oc, entregado, pagado, fac, obs = row
+                w.writerow([folio, (fecha or '')[:10], cliente,
+                            f'{total:,.2f}' if total else '0.00',
+                            estado, oc or '', 
+                            f'{entregado:,.2f}' if entregado else '0.00',
+                            f'{pagado:,.2f}' if pagado else '0.00',
+                            fac or '', obs or ''])
+
+        n = len(filas)
+        messagebox.showinfo('✅ Exportación completa',
+            f'{n} cotización{"es" if n!=1 else ""} exportada{"s" if n!=1 else ""}\n{ruta}',
+            parent=self.root)
 
     def cargar_cotizaciones(self):
         """Carga la lista de cotizaciones en la tabla.

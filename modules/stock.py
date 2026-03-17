@@ -287,6 +287,12 @@ class SeccionStock:
         self.entry_buscar_stock.bind('<KeyRelease>',
                                      lambda e: self.cargar_vista_stock())
 
+        tk.Button(tb, text='📊 Exportar CSV',
+                  font=('Arial', 9, 'bold'), bg='#065f46', fg='white',
+                  cursor='hand2', padx=10, pady=2, relief='flat',
+                  command=self.exportar_csv_stock
+                  ).pack(side='right', padx=(0, 6))
+
         # Leyenda ABC
         leyenda = tk.Frame(parent, bg=self.C['content_bg'])
         leyenda.pack(fill='x', padx=8, pady=(4, 0))
@@ -348,6 +354,39 @@ class SeccionStock:
                                           bg=self.C['content_bg'],
                                           fg=self.C['text_muted'])
         self.lbl_resumen_stock.pack(pady=(0, 4))
+
+    def exportar_csv_stock(self):
+        """Exporta exactamente lo que está visible en la tabla de stock (respeta filtros)."""
+        import csv as _csv
+        from tkinter import filedialog as _fd
+        from datetime import datetime as _dt
+
+        items = self.tree_stock.get_children()
+        if not items:
+            messagebox.showinfo('Sin datos', 'No hay productos visibles para exportar.',
+                                parent=self.s.root)
+            return
+
+        ruta = _fd.asksaveasfilename(
+            title='Exportar stock',
+            defaultextension='.csv',
+            initialfile=f'stock_{_dt.now().strftime("%Y-%m-%d")}.csv',
+            filetypes=[('CSV', '*.csv')], parent=self.s.root)
+        if not ruta:
+            return
+
+        with open(ruta, 'w', newline='', encoding='utf-8-sig') as f:
+            w = _csv.writer(f)
+            w.writerow(['Código', 'Nombre', 'Cat. ABC', 'Stock Actual',
+                        'Stock Mínimo', 'Estado', 'Valor', 'Unidad'])
+            for iid in items:
+                vals = self.tree_stock.item(iid)['values']
+                w.writerow(vals)
+
+        n = len(items)
+        messagebox.showinfo('✅ Exportado',
+            f'{n} producto{"s" if n!=1 else ""} exportado{"s" if n!=1 else ""}\n{ruta}',
+            parent=self.s.root)
 
     def cargar_vista_stock(self):
         """Carga la tabla principal de stock con categorías ABC."""
