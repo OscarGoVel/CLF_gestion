@@ -12,13 +12,15 @@ from datetime import datetime
 class VentanaCotizacion:
     """Ventana para crear o editar cotizaciones"""
     
-    def __init__(self, parent, conn, cursor, utilidad, modo='nueva', cotizacion_id=None):
+    def __init__(self, parent, conn, cursor, utilidad, modo='nueva', cotizacion_id=None,
+                 on_ir_catalogo=None):
         self.parent = parent
         self.conn = conn
         self.cursor = cursor
         self.UTILIDAD = utilidad
         self.modo = modo
         self.cotizacion_id = cotizacion_id
+        self.on_ir_catalogo = on_ir_catalogo  # callback para navegar al catálogo
         
         # Lista de productos agregados a la cotización
         self.productos_cotizacion = []
@@ -1190,6 +1192,180 @@ class VentanaCotizacion:
         
         self.actualizar_tabla_productos()
     
+    def _calcular_umbral_dias(self, producto_id):
+        """Calcula el umbral de días para considerar un precio desactualizado.
+        Si hay 3+ registros históricos: promedio de días entre cambios × 0.8
+        Si no: default de 30 días.
+        Retorna (umbral_dias, n_registros, confianza)
+        """
+        self.cursor.execute("""
+            SELECT fecha FROM producto_precio_historial
+            WHERE producto_id = ?
+              AND fuente != 'backfill'
+            ORDER BY fecha ASC
+        """, (producto_id,))
+        fechas = [r[0] for r in self.cursor.fetchall()]
+        n = len(fechas)
+
+        if n >= 3:
+            from datetime import date as _date
+            deltas = []
+            for i in range(1, n):
+                try:
+                    d1 = _date.fromisoformat(fechas[i-1])
+                    d2 = _date.fromisoformat(fechas[i])
+                    deltas.append((d2 - d1).days)
+                except Exception:
+                    pass
+            if deltas:
+                promedio = sum(deltas) / len(deltas)
+                umbral   = max(7, int(promedio * 0.8))
+                return umbral, n, 'alta'
+
+        return 30, n, 'baja' if n == 0 else 'media'
+
+    def _verificar_precios_desactualizados(self):
+        """Revisa cada producto de la cotización y muestra alerta si alguno
+        tiene precio_base desactualizado según su umbral calculado."""
+        from datetime import date as _date
+        hoy = _date.today()
+
+        productos_alerta = []
+        for prod in self.productos_cotizacion:
+            pid = prod['producto_id']
+
+            # Obtener último cambio de precio REAL (excluir backfill inicial)
+            self.cursor.execute("""
+                SELECT fecha, fuente FROM producto_precio_historial
+                WHERE producto_id = ?
+                ORDER BY fecha DESC, fecha_registro DESC
+                LIMIT 1
+            """, (pid,))
+            row = self.cursor.fetchone()
+
+            self.cursor.execute("SELECT precio_base, precio_base_fecha FROM productos WHERE id=?", (pid,))
+            pr = self.cursor.fetchone()
+            precio_actual = pr[0] if pr else 0
+
+            if not row or row[1] == 'backfill':
+                # Solo hay backfill o nada — usar precio_base_fecha del producto
+                # Si precio_base_fecha también es nulo, el precio nunca se ha revisado
+                ultima_fecha_str = pr[1] if pr else None
+            else:
+                ultima_fecha_str = row[0]
+
+            umbral, n_registros, confianza = self._calcular_umbral_dias(pid)
+
+            if ultima_fecha_str:
+                try:
+                    ultima_fecha = _date.fromisoformat(str(ultima_fecha_str)[:10])
+                    dias_desde = (hoy - ultima_fecha).days
+                except Exception:
+                    dias_desde = 9999
+            else:
+                dias_desde = 9999  # nunca actualizado
+
+            if dias_desde > umbral:
+                productos_alerta.append({
+                    'nombre':       prod['nombre'],
+                    'precio':       precio_actual,
+                    'dias':         dias_desde,
+                    'umbral':       umbral,
+                    'n_registros':  n_registros,
+                    'confianza':    confianza,
+                    'producto_id':  pid,
+                })
+
+        if not productos_alerta:
+            return
+
+        # ── Modal de alerta ────────────────────────────────────────────────
+        dlg = tk.Toplevel(self.ventana)
+        dlg.title("⚠ Precios posiblemente desactualizados")
+        dlg.geometry("620x400")
+        dlg.configure(bg="#fff7ed")
+        dlg.transient(self.ventana)
+        dlg.grab_set()
+
+        # Centrar
+        dlg.update_idletasks()
+        x = self.ventana.winfo_x() + (self.ventana.winfo_width()  - 620) // 2
+        y = self.ventana.winfo_y() + (self.ventana.winfo_height() - 400) // 2
+        dlg.geometry(f"620x400+{x}+{y}")
+
+        hdr = tk.Frame(dlg, bg="#d97706", pady=10)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="⚠  Verificación de Precios",
+                 font=("Arial", 11, "bold"), bg="#d97706", fg="white").pack()
+        n_alerta = len(productos_alerta)
+        tk.Label(hdr,
+                 text=f"{n_alerta} producto{'s' if n_alerta>1 else ''} con precio "
+                      f"posiblemente desactualizado",
+                 font=("Arial", 9), bg="#d97706", fg="#fff7ed").pack()
+
+        # Tabla de productos con alerta
+        frame_tbl = tk.Frame(dlg, bg="#fff7ed")
+        frame_tbl.pack(fill="both", expand=True, padx=16, pady=10)
+
+        cols = ("Producto", "Precio Base", "Días sin cambio", "Umbral", "Confianza")
+        tree = ttk.Treeview(frame_tbl, columns=cols, show="headings", height=8)
+        widths = [220, 90, 110, 70, 80]
+        for col, w in zip(cols, widths):
+            tree.heading(col, text=col)
+            tree.column(col, width=w, anchor="e" if col not in ("Producto","Confianza") else "w")
+
+        tree.tag_configure("alta",  foreground="#dc2626")
+        tree.tag_configure("media", foreground="#d97706")
+        tree.tag_configure("baja",  foreground="#6b7280", font=("Arial", 8, "italic"))
+
+        for p in productos_alerta:
+            conf_txt = {"alta": "Alta ✓✓✓", "media": "Media ✓✓", "baja": "Baja ✓"}.get(
+                p['confianza'], p['confianza'])
+            tree.insert("", "end", tags=(p['confianza'],), values=(
+                p['nombre'][:38],
+                f"${p['precio']:,.2f}",
+                f"{p['dias']} días",
+                f"{p['umbral']} días",
+                conf_txt,
+            ))
+
+        sc = ttk.Scrollbar(frame_tbl, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=sc.set)
+        tree.pack(side="left", fill="both", expand=True)
+        sc.pack(side="right", fill="y")
+
+        # Nota sobre confianza
+        nota = tk.Frame(dlg, bg="#fff7ed", padx=16)
+        nota.pack(fill="x")
+        tk.Label(nota,
+                 text="Confianza Alta = 3+ cambios históricos  |  Media = 1-2 registros  |  Baja = sin historial (umbral default: 30 días)",
+                 font=("Arial", 7, "italic"), bg="#fff7ed", fg="#92400e",
+                 wraplength=580, justify="left").pack(anchor="w")
+
+        # Pie
+        foot = tk.Frame(dlg, bg="#fef3c7", pady=8)
+        foot.pack(fill="x", side="bottom")
+        def _ir_catalogo():
+            dlg.destroy()
+            self.ventana.destroy()
+            if self.on_ir_catalogo:
+                self.on_ir_catalogo()
+
+        tk.Button(foot, text="✏ Ir a Catálogo de Productos",
+                  font=("Arial", 9, "bold"), bg="#d97706", fg="white",
+                  cursor="hand2", padx=12, pady=5, relief="flat",
+                  command=_ir_catalogo
+                  ).pack(side="left", padx=12)
+        tk.Button(foot, text="Ignorar y continuar",
+                  font=("Arial", 9), bg="#6b7280", fg="white",
+                  cursor="hand2", padx=12, pady=5, relief="flat",
+                  command=dlg.destroy).pack(side="right", padx=12)
+        tk.Label(foot,
+                 text="La cotización ya fue guardada correctamente.",
+                 font=("Arial", 8), bg="#fef3c7", fg="#92400e").pack(side="right", padx=8)
+
+        dlg.wait_window()
+
     def guardar_cotizacion(self):
         """Guarda la cotización en la base de datos"""
         
@@ -1315,7 +1491,10 @@ class VentanaCotizacion:
                 mensaje_exito = f"Cotización actualizada correctamente\n\nFolio: {folio}\nTotal: ${total:,.2f}"
             
             messagebox.showinfo("Éxito", mensaje_exito)
-            
+
+            # ── Alerta de precios desactualizados ──────────────────────────
+            self._verificar_precios_desactualizados()
+
             # Verificar si hay productos sin stock
             sin_stock = [p for p in self.productos_cotizacion if not p['tiene_stock']]
             if sin_stock:
@@ -1323,12 +1502,10 @@ class VentanaCotizacion:
                 for p in sin_stock:
                     mensaje += f"- {p['nombre']} (Stock: {p['stock_disponible']}, Requerido: {p['cantidad']})\n"
                 mensaje += "\n¿Deseas generar un presupuesto para compras?"
-                
                 respuesta = messagebox.askyesno("Productos sin stock", mensaje)
                 if respuesta:
-                    # Aquí se implementaría la generación del presupuesto
                     messagebox.showinfo("Info", "La función de presupuesto se implementará próximamente")
-            
+
             self.ventana.destroy()
             
         except sqlite3.Error as e:

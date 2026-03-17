@@ -196,6 +196,7 @@ class Catalogos:
 
         nb = ttk.Notebook(sec)
         nb.pack(fill='both', expand=True)
+        self._notebook = nb
 
         # ── Tab Clientes ──────────────────────────────────────────────────
         tab_cli = tk.Frame(nb, bg=self.C['content_bg'])

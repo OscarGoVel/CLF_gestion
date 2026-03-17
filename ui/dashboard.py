@@ -272,7 +272,8 @@ class Dashboard:
             lbl_txt.pack(side='left')
             self._estado_labels[estado] = lbl_n
             def _ir_estado(e=None, _est=estado):
-                self.sistema._filtro_estado_cot.set(_est)
+                if hasattr(self.sistema, 'cotizaciones_ui') and self.sistema.cotizaciones_ui._filtro_estado_cot:
+                    self.sistema.cotizaciones_ui._filtro_estado_cot.set(_est)
                 self.sistema._navegar('cotizaciones')
             bg_dark = _darken(bg)
             for widget in (cell, lbl_n, lbl_txt):

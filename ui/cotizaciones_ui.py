@@ -24,6 +24,7 @@ from ui.generador_pdf_cly import GeneradorPDFCLY
 from ui.dialogo_impresion import DialogoImpresion
 from modules.estado_de_cuenta import VentanaEstadoCuenta
 from modules.entregas import VentanaEntregaParcial
+from modules.vinculacion import PanelVinculacion, detectar_pendientes
 
 
 class CotizacionesUI:
@@ -278,7 +279,7 @@ class CotizacionesUI:
     def _abrir_centro_vinculacion(self):
         """Abre el panel de vinculación inteligente."""
         if not hasattr(self, '_panel_vinculacion'):
-            self._panel_vinculacion = PanelVinculacion(self)
+            self._panel_vinculacion = PanelVinculacion(self.sistema)
         self._panel_vinculacion.abrir()
 
     def _actualizar_badge_vinculacion(self):
@@ -520,8 +521,19 @@ class CotizacionesUI:
     
     def nueva_cotizacion(self):
         """Abre ventana para crear nueva cotización"""
-        ventana_cot = VentanaCotizacion(self.root, self.conn, self.cursor, self.UTILIDAD, modo='nueva')
-        # Esperar a que se cierre la ventana y actualizar
+        def _ir_catalogo_nueva():
+            self.sistema._navegar('catalogos')
+            try:
+                nb = self.sistema.catalogos._notebook
+                for i in range(nb.index('end')):
+                    if 'roducto' in nb.tab(i, 'text'):
+                        nb.select(i)
+                        break
+            except Exception:
+                pass
+
+        ventana_cot = VentanaCotizacion(self.root, self.conn, self.cursor, self.UTILIDAD,
+                                        modo='nueva', on_ir_catalogo=_ir_catalogo_nueva)
         self.root.wait_window(ventana_cot.ventana)
         # Recargar cotizaciones y dashboard
         self.cargar_cotizaciones()
@@ -548,9 +560,21 @@ class CotizacionesUI:
             return
         
         # Abrir ventana en modo edición
+        def _ir_catalogo_editar():
+            self.sistema._navegar('catalogos')
+            try:
+                nb = self.sistema.catalogos._notebook
+                for i in range(nb.index('end')):
+                    if 'roducto' in nb.tab(i, 'text'):
+                        nb.select(i)
+                        break
+            except Exception:
+                pass
+
         ventana_cot = VentanaCotizacion(
-            self.root, self.conn, self.cursor, self.UTILIDAD, 
-            modo='editar', cotizacion_id=cotizacion_id
+            self.root, self.conn, self.cursor, self.UTILIDAD,
+            modo='editar', cotizacion_id=cotizacion_id,
+            on_ir_catalogo=_ir_catalogo_editar
         )
         self.root.wait_window(ventana_cot.ventana)
         self.cargar_cotizaciones()
