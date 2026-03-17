@@ -379,7 +379,21 @@ def inicializar_bd(db_path):
         )
     ''')
 
-    # ── Migraciones SAT en clientes y proveedores ─────────────────────────────
+    # ── Historial de precios de productos ────────────────────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS producto_precio_historial (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            producto_id INTEGER NOT NULL,
+            precio      REAL    NOT NULL,
+            fecha       TEXT    NOT NULL,
+            motivo      TEXT,
+            fuente      TEXT DEFAULT 'manual',
+            fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (producto_id) REFERENCES productos(id)
+        )
+    ''')
+
+    # ── Migraciones SAT en clientes y proveedores ─────────────────────────────────
     for tabla, cols in [
         ('clientes',    [('regimen_fiscal','TEXT'), ('uso_cfdi','TEXT'), ('cp_fiscal','TEXT'),
                          ('corporativo_id','INTEGER')]),

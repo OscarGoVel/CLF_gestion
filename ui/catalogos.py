@@ -172,6 +172,24 @@ class Catalogos:
                   cursor='hand2', padx=12, pady=6).pack(side='right', padx=12)
         e_nombre.focus()
 
+    # ── Historial de precios ─────────────────────────────────────────────────
+    def _registrar_precio_historial(self, producto_id, precio_nuevo,
+                                     precio_anterior=None, motivo=None, fuente='manual'):
+        """Registra un cambio de precio en producto_precio_historial.
+        Solo inserta si el precio realmente cambió respecto al último registrado.
+        """
+        from datetime import date
+        # Verificar si el precio cambió
+        if precio_anterior is not None and abs(float(precio_nuevo) - float(precio_anterior)) < 0.001:
+            return  # Sin cambio, no registrar
+
+        self.cursor.execute("""
+            INSERT INTO producto_precio_historial
+                (producto_id, precio, fecha, motivo, fuente)
+            VALUES (?, ?, ?, ?, ?)
+        """, (producto_id, float(precio_nuevo), date.today().isoformat(),
+              motivo, fuente))
+
     def crear_seccion(self):
         sec = tk.Frame(self.sistema._content_area, bg=self.C['content_bg'])
         self.sistema._secciones['catalogos'] = sec
@@ -812,7 +830,7 @@ class Catalogos:
         """Ventana para crear o editar producto"""
         ventana = tk.Toplevel(self.root)
         ventana.title("Nuevo Producto" if modo == 'nuevo' else "Editar Producto")
-        ventana.geometry("600x650")
+        ventana.geometry("720x660")
         ventana.resizable(False, False)
         
         # Cargar categorías y subcategorías
@@ -1177,6 +1195,11 @@ class Catalogos:
                         datos['clave_sat'], datos['clave_unidad_sat']
                     ))
                     mensaje = "Producto registrado correctamente"
+                    # Registrar precio inicial en historial
+                    nuevo_id = self.cursor.lastrowid
+                    self._registrar_precio_historial(
+                        nuevo_id, datos['precio_base'],
+                        motivo='Precio inicial al crear producto', fuente='manual')
                 else:
                     self.cursor.execute("""
                         UPDATE productos SET
@@ -1193,7 +1216,16 @@ class Catalogos:
                         producto_id
                     ))
                     mensaje = "Producto actualizado correctamente"
-                
+                    # Registrar cambio de precio si cambió
+                    self.cursor.execute(
+                        "SELECT precio_base FROM productos WHERE id=?", (producto_id,))
+                    row_prev = self.cursor.fetchone()
+                    if row_prev:
+                        self._registrar_precio_historial(
+                            producto_id, datos['precio_base'],
+                            precio_anterior=row_prev[0],
+                            motivo=None, fuente='manual')
+
                 self.conn.commit()
                 messagebox.showinfo("Éxito", mensaje)
                 self.cargar_productos()
@@ -1242,7 +1274,18 @@ class Catalogos:
             state='normal' if modo == 'editar' else 'disabled'
         )
         btn_proveedores.pack(side='left', padx=5)
-        
+
+        # Botón de historial de precios (solo en modo editar)
+        if modo == 'editar' and producto_id:
+            tk.Button(
+                frame_botones,
+                text='📈 Historial de Precios',
+                command=lambda: self._ver_historial_precios(producto_id, ventana),
+                bg='#1a4b8c', fg='white',
+                font=('Arial', 10, 'bold'),
+                cursor='hand2', padx=15, pady=8
+            ).pack(side='left', padx=5)
+
         # Tooltip para modo nuevo
         if modo == 'nuevo':
             def mostrar_tooltip(event):
@@ -1272,6 +1315,93 @@ class Catalogos:
         ventana.grab_set()
         entry_codigo.focus()
     
+    def _ver_historial_precios(self, producto_id, parent):
+        """Muestra ventana con el historial completo de precios del producto."""
+        self.cursor.execute(
+            "SELECT nombre, precio_base FROM productos WHERE id=?", (producto_id,))
+        prod = self.cursor.fetchone()
+        if not prod:
+            return
+        nombre_prod, precio_actual = prod
+
+        self.cursor.execute("""
+            SELECT fecha, precio, motivo, fuente, fecha_registro
+            FROM producto_precio_historial
+            WHERE producto_id = ?
+            ORDER BY fecha DESC, fecha_registro DESC
+        """, (producto_id,))
+        registros = self.cursor.fetchall()
+
+        win = tk.Toplevel(parent)
+        win.title(f"📈 Historial de Precios — {nombre_prod}")
+        win.geometry("680x460")
+        win.configure(bg="#f1f5f9")
+        win.transient(parent)
+        win.grab_set()
+
+        # Header
+        hdr = tk.Frame(win, bg="#1a4b8c", pady=10)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text=f"📈  Historial de Precios",
+                 font=("Arial", 11, "bold"), bg="#1a4b8c", fg="white").pack()
+        tk.Label(hdr, text=f"{nombre_prod}   •   Precio actual: ${precio_actual:,.2f}",
+                 font=("Arial", 9), bg="#1a4b8c", fg="#bfdbfe").pack()
+
+        # Tabla
+        frame_tbl = tk.Frame(win, bg="#f1f5f9")
+        frame_tbl.pack(fill="both", expand=True, padx=16, pady=12)
+
+        cols = ("Fecha", "Precio", "Variación", "Motivo", "Fuente")
+        tree = ttk.Treeview(frame_tbl, columns=cols, show="headings", height=14)
+        widths = [90, 100, 90, 280, 80]
+        for col, w in zip(cols, widths):
+            tree.heading(col, text=col)
+            tree.column(col, width=w, minwidth=40,
+                        anchor="e" if col in ("Precio","Variación") else "w")
+
+        tree.tag_configure("subida",  foreground="#dc2626")
+        tree.tag_configure("bajada",  foreground="#16a34a")
+        tree.tag_configure("neutro",  foreground="#374151")
+        tree.tag_configure("par",     background="#f8fafc")
+        tree.tag_configure("impar",   background="white")
+
+        sc = ttk.Scrollbar(frame_tbl, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=sc.set)
+        tree.pack(side="left", fill="both", expand=True)
+        sc.pack(side="right", fill="y")
+
+        precio_prev = None
+        for i, (fecha, precio, motivo, fuente, _) in enumerate(registros):
+            if precio_prev is not None:
+                diff = precio - precio_prev
+                var_txt = f"{'▲' if diff > 0 else '▼'} ${abs(diff):,.2f}"
+                tag_var = "subida" if diff > 0 else "bajada"
+            else:
+                var_txt = "—"
+                tag_var = "neutro"
+            fila_tag = "par" if i % 2 == 0 else "impar"
+            tree.insert("", "end", tags=(tag_var, fila_tag), values=(
+                (fecha or "")[:10],
+                f"${precio:,.2f}",
+                var_txt,
+                motivo or "—",
+                fuente or "manual",
+            ))
+            precio_prev = precio
+
+        if not registros:
+            tree.insert("", "end", values=("—", "—", "—", "Sin registros aún", "—"))
+
+        # Footer info
+        foot = tk.Frame(win, bg="#e2e8f0", pady=8)
+        foot.pack(fill="x")
+        n = len(registros)
+        tk.Label(foot, text=f"{n} registro{'s' if n!=1 else ''} en historial",
+                 font=("Arial", 8), bg="#e2e8f0", fg="#6b7280").pack(side="left", padx=12)
+        tk.Button(foot, text="Cerrar", command=win.destroy,
+                  bg="#6b7280", fg="white", font=("Arial", 9),
+                  cursor="hand2", padx=12, pady=4, relief="flat").pack(side="right", padx=12)
+
     def gestionar_proveedores_producto(self, producto_id, ventana_padre):
         """Gestiona los proveedores asociados a un producto"""
         # Obtener nombre del producto

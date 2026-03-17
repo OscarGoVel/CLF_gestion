@@ -584,6 +584,13 @@ class VentanaCompra:
                                 precio_base_fecha = ?
                             WHERE id = ?
                         """, (s['nuevo_costo'], hoy, s['producto_id']))
+                        # Registrar en historial de precios
+                        self.cursor.execute("""
+                            INSERT INTO producto_precio_historial
+                                (producto_id, precio, fecha, motivo, fuente)
+                            VALUES (?, ?, ?, ?, 'compra')
+                        """, (s['producto_id'], s['nuevo_costo'], hoy,
+                              f"Actualizado desde compra — costo supera precio base anterior (${s['precio_base']:,.2f})"))
                     self.conn.commit()
                     messagebox.showinfo(
                         'Precio base actualizado',

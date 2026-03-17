@@ -140,6 +140,24 @@ class SistemaGestion:
         ruta = db_path or 'gestion_comercial.db'
         self.conn, self.cursor = inicializar_bd(ruta)
 
+        # Backfill historial de precios con los precios actuales de productos
+        self.cursor.execute("""
+            INSERT OR IGNORE INTO producto_precio_historial
+                (producto_id, precio, fecha, motivo, fuente)
+            SELECT p.id,
+                   p.precio_base,
+                   COALESCE(p.precio_base_fecha, DATE('now')),
+                   'Precio inicial (backfill)',
+                   'backfill'
+            FROM productos p
+            WHERE p.precio_base IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM producto_precio_historial h
+                  WHERE h.producto_id = p.id
+              )
+        """)
+        self.conn.commit()
+
     def crear_interfaz(self):
         """Crea la interfaz principal estilo ERP compacto"""
 
