@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Sistema de Gestión Comercial
-Comercializadora, Logística y Fuerza Yucateca
+SMC
 """
 
 import tkinter as tk
@@ -10,22 +10,24 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 import sqlite3
 from datetime import datetime
 import os
-from cotizaciones import VentanaCotizacion
-from generador_pdf_cly import GeneradorPDFCLY
-from dialogo_impresion import DialogoImpresion
-from stock import SeccionStock
-from compras import VentanaCompra
-from estado_de_cuenta import VentanaEstadoCuenta
-from facturacion import SeccionFacturacion
-from vinculacion import PanelVinculacion, detectar_pendientes
+from modules.cotizaciones import VentanaCotizacion
+from ui.generador_pdf_cly import GeneradorPDFCLY
+from ui.dialogo_impresion import DialogoImpresion
+from modules.stock import SeccionStock
+from modules.compras import VentanaCompra
+from modules.estado_de_cuenta import VentanaEstadoCuenta
+from modules.facturacion import SeccionFacturacion
+from modules.vinculacion import PanelVinculacion, detectar_pendientes
+from selector_empresa import mostrar_selector, cargar_config, guardar_config
+from db_init import inicializar_bd
 
-# Información de la empresa
+# Información de la empresa activa (se llena al seleccionar empresa al arrancar)
 EMPRESA = {
-    'nombre': 'Comercializadora, Logística y Fuerza Yucateca',
-    'rfc': 'CLF240418U94',
-    'email': 'clfyucateca@gmail.com',
-    'telefono': '',  # Agregar después
-    'direccion': ''  # Agregar después
+    'nombre': '',
+    'rfc':    '',
+    'email':  '',
+    'telefono': '',
+    'direccion': '',
 }
 
 # Porcentajes de utilidad por tipo de cliente
@@ -566,14 +568,28 @@ class VentanaEntregaParcial:
             messagebox.showerror("Error", f"No se pudo registrar la entrega:\n{str(e)}")
 
 class SistemaGestion:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Sistema de Gestión - CLF Yucateca")
+    def __init__(self, root, empresa=None):
+        self.root    = root
+        self.empresa = empresa or {}
+
+        # Actualizar dict global EMPRESA con los datos de la empresa activa
+        global EMPRESA
+        if empresa:
+            EMPRESA.update({
+                'nombre':    empresa.get('nombre', ''),
+                'rfc':       empresa.get('rfc', ''),
+                'email':     empresa.get('email', ''),
+                'telefono':  empresa.get('telefono', ''),
+                'direccion': empresa.get('direccion', ''),
+            })
+
+        titulo = f"Sistema de Gestión — {empresa['nombre']}" if empresa else "Sistema de Gestión - CLF"
+        self.root.title(titulo)
         self.root.geometry("1200x700")
-        
-        # Inicializar base de datos
-        self.init_database()
-        
+
+        # Inicializar base de datos (usa la ruta de la empresa seleccionada)
+        self.init_database(empresa.get('db_path') if empresa else None)
+
         # Crear interfaz
         self.crear_interfaz()
     
@@ -643,374 +659,14 @@ class SistemaGestion:
         
         return tree
     
-    def init_database(self):
-        """Inicializa la base de datos SQLite"""
-        self.conn = sqlite3.connect('gestion_comercial.db')
-        self.cursor = self.conn.cursor()
-        
-        # Tabla de clientes
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS clientes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre_comercial TEXT NOT NULL,
-                razon_social TEXT,
-                tipo TEXT NOT NULL,
-                rfc TEXT,
-                direccion TEXT,
-                contacto TEXT,
-                telefono TEXT,
-                email TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Tabla de categorías
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS categorias (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL UNIQUE
-            )
-        ''')
-        
-        # Tabla de subcategorías
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS subcategorias (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                categoria_id INTEGER,
-                nombre TEXT NOT NULL,
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id)
-            )
-        ''')
-        
-        # Tabla de productos
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS productos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo TEXT UNIQUE NOT NULL,
-                nombre TEXT NOT NULL,
-                descripcion TEXT,
-                categoria_id INTEGER,
-                subcategoria_id INTEGER,
-                unidad_medida TEXT,
-                precio_base REAL NOT NULL,
-                aplica_iva INTEGER DEFAULT 1,
-                precio_venta REAL,
-                stock_actual REAL DEFAULT 0,
-                stock_minimo REAL DEFAULT 0,
-                clave_sat TEXT,
-                clave_unidad_sat TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (categoria_id) REFERENCES categorias(id),
-                FOREIGN KEY (subcategoria_id) REFERENCES subcategorias(id)
-            )
-        ''')
-        
-        # Tabla de cotizaciones
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cotizaciones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                folio TEXT UNIQUE NOT NULL,
-                fecha DATE NOT NULL,
-                cliente_id INTEGER NOT NULL,
-                subtotal REAL DEFAULT 0,
-                iva REAL DEFAULT 0,
-                total REAL DEFAULT 0,
-                notas TEXT,
-                estado TEXT DEFAULT 'Pendiente',
-                orden_compra TEXT,
-                fecha_orden_compra DATE,
-                fecha_entrega DATE,
-                fecha_factura DATE,
-                fecha_pago DATE,
-                monto_entregado REAL DEFAULT 0,
-                monto_facturado REAL DEFAULT 0,
-                monto_pagado REAL DEFAULT 0,
-                numero_factura TEXT,
-                entrega_parcial INTEGER DEFAULT 0,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-            )
-        ''')
-        
-        # Tabla de detalle de cotizaciones
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cotizacion_detalle (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cotizacion_id INTEGER NOT NULL,
-                producto_id INTEGER NOT NULL,
-                cantidad REAL NOT NULL,
-                precio_unitario REAL NOT NULL,
-                subtotal REAL NOT NULL,
-                iva REAL DEFAULT 0,
-                total REAL NOT NULL,
-                tiene_stock INTEGER DEFAULT 1,
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                FOREIGN KEY (producto_id) REFERENCES productos(id)
-            )
-        ''')
-        
-        # Tabla de proveedores
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS proveedores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL,
-                razon_social TEXT,
-                rfc TEXT,
-                direccion TEXT,
-                contacto TEXT,
-                telefono TEXT,
-                email TEXT,
-                notas TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Tabla de métodos de pago
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS metodos_pago (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT UNIQUE NOT NULL,
-                descripcion TEXT,
-                activo INTEGER DEFAULT 1
-            )
-        ''')
-        
-        # Insertar métodos de pago por defecto
-        metodos_default = [
-            ('Efectivo', 'Pago en efectivo'),
-            ('Transferencia', 'Transferencia bancaria'),
-            ('Tarjeta Débito', 'Tarjeta de débito'),
-            ('Tarjeta Crédito', 'Tarjeta de crédito'),
-            ('Cheque', 'Pago con cheque')
-        ]
-        
-        for metodo, desc in metodos_default:
-            try:
-                self.cursor.execute(
-                    "INSERT INTO metodos_pago (nombre, descripcion) VALUES (?, ?)",
-                    (metodo, desc)
-                )
-            except sqlite3.IntegrityError:
-                pass  # Ya existe
-        
-        # Tabla de compras
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS compras (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                folio TEXT UNIQUE NOT NULL,
-                proveedor_id INTEGER,
-                fecha_compra DATETIME NOT NULL,
-                subtotal REAL DEFAULT 0,
-                iva REAL DEFAULT 0,
-                total REAL DEFAULT 0,
-                metodo_pago_id INTEGER,
-                notas TEXT,
-                ticket_referencia TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
-                FOREIGN KEY (metodo_pago_id) REFERENCES metodos_pago(id)
-            )
-        ''')
-        
-        # Tabla de detalle de compras
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS compra_detalle (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                compra_id INTEGER NOT NULL,
-                producto_id INTEGER NOT NULL,
-                cantidad REAL NOT NULL,
-                costo_unitario REAL NOT NULL,
-                costo_total REAL NOT NULL,
-                FOREIGN KEY (compra_id) REFERENCES compras(id),
-                FOREIGN KEY (producto_id) REFERENCES productos(id)
-            )
-        ''')
-        
-        # Tabla de entregas parciales
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS entregas_parciales (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cotizacion_id INTEGER NOT NULL,
-                producto_id INTEGER NOT NULL,
-                cantidad_entregada REAL NOT NULL,
-                fecha_entrega DATE NOT NULL,
-                notas TEXT,
-                usuario TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                FOREIGN KEY (producto_id) REFERENCES productos(id)
-            )
-        ''')
-        
-        # Tabla de movimientos de stock
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS movimientos_stock (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                producto_id     INTEGER NOT NULL,
-                tipo            TEXT    NOT NULL,
-                motivo          TEXT,
-                cantidad        REAL    NOT NULL,
-                stock_antes     REAL    NOT NULL,
-                stock_despues   REAL    NOT NULL,
-                referencia      TEXT,
-                notas           TEXT,
-                fecha           DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (producto_id) REFERENCES productos(id)
-            )
-        ''')
+    def init_database(self, db_path=None):
+        """Inicializa la base de datos SQLite.
+        Delega la creación de tablas a db_init.inicializar_bd() para que
+        main.py y selector_empresa compartan exactamente el mismo esquema.
+        """
+        ruta = db_path or 'gestion_comercial.db'
+        self.conn, self.cursor = inicializar_bd(ruta)
 
-        # Tabla de relación producto-proveedor (para presupuestos por proveedor)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS producto_proveedor (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                producto_id INTEGER NOT NULL,
-                proveedor_id INTEGER NOT NULL,
-                es_principal INTEGER DEFAULT 0,
-                notas TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (producto_id) REFERENCES productos(id),
-                FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
-                UNIQUE(producto_id, proveedor_id)
-            )
-        ''')
-        
-        # Tabla de claves SAT históricas por producto (un producto puede tener varias)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS producto_claves_sat (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                producto_id  INTEGER NOT NULL,
-                clave_sat    TEXT NOT NULL,
-                fuente       TEXT DEFAULT 'xml_import',
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (producto_id) REFERENCES productos(id),
-                UNIQUE(producto_id, clave_sat)
-            )
-        ''')
-
-        self.conn.commit()
-
-        # Backfill: poblar producto_claves_sat con los clave_sat ya existentes en productos
-        self.cursor.execute("""
-            INSERT OR IGNORE INTO producto_claves_sat (producto_id, clave_sat, fuente)
-            SELECT id, clave_sat, 'backfill'
-            FROM productos
-            WHERE clave_sat IS NOT NULL AND clave_sat != ''
-        """)
-        self.conn.commit()
-
-        # Auto-migración: agregar campos nuevos si no existen
-        try:
-            self.cursor.execute("ALTER TABLE cotizaciones ADD COLUMN numero_factura TEXT")
-            self.conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Ya existe
-        
-        # Tabla de documentos por cotizacion (OC, Facturas, Complementos, Otros)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS documentos_cotizacion (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cotizacion_id INTEGER NOT NULL,
-                tipo TEXT NOT NULL,
-                nombre_archivo TEXT NOT NULL,
-                ruta_archivo TEXT NOT NULL,
-                notas TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id)
-            )
-        ''')
-        self.conn.commit()
-
-        # Tabla de seguimiento por etapas de cada cotización
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS seguimiento_etapas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cotizacion_id INTEGER NOT NULL,
-                etapa TEXT NOT NULL,
-                completada INTEGER DEFAULT 0,
-                referencia TEXT,
-                fecha_etapa DATE,
-                notas TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(cotizacion_id, etapa),
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id)
-            )
-        ''')
-        self.conn.commit()
-
-        # Tabla de corporativos (grupos de clientes)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS corporativos (
-                id     INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL UNIQUE
-            )
-        ''')
-
-        # ── Tablas de junction (relaciones many-to-many) ───────────────────────
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS factura_cotizaciones (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                factura_id    INTEGER NOT NULL,
-                cotizacion_id INTEGER NOT NULL,
-                fecha_vinculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (factura_id)    REFERENCES facturas(id),
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                UNIQUE(factura_id, cotizacion_id)
-            )
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ordenes_compra (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero         TEXT,
-                cliente_id     INTEGER,
-                fecha          TEXT,
-                monto_total    REAL DEFAULT 0,
-                documento      TEXT,
-                notas          TEXT,
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-            )
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS oc_cotizaciones (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                oc_id         INTEGER NOT NULL,
-                cotizacion_id INTEGER NOT NULL,
-                fecha_vinculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (oc_id)         REFERENCES ordenes_compra(id),
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                UNIQUE(oc_id, cotizacion_id)
-            )
-        ''')
-
-        self.conn.commit()
-
-        # Backfill factura_cotizaciones desde columna legacy facturas.cotizacion_id
-        self.cursor.execute("""
-            INSERT OR IGNORE INTO factura_cotizaciones (factura_id, cotizacion_id)
-            SELECT id, cotizacion_id FROM facturas
-            WHERE cotizacion_id IS NOT NULL
-        """)
-        self.conn.commit()
-
-        # Migraciones adicionales
-        migraciones = [
-            ("compras", "cotizacion_id",  "INTEGER"),          # Compra vinculada a cotización (opcional)
-            ("compras", "factura_xml_id", "INTEGER"),          # FK a facturas si viene de XML importado
-            ("cotizaciones", "oc_documento", "TEXT"),       # Path/nombre del documento OC
-            ("cotizaciones", "observaciones", "TEXT"),       # Observaciones rápidas
-            ("cotizaciones", "factura_documento", "TEXT"),   # Path/nombre del doc factura
-            ("productos",    "clave_sat", "TEXT"),           # Clave prod/serv SAT (XML)
-            ("productos",    "clave_unidad_sat", "TEXT"),    # Clave unidad SAT (XML)
-            ("productos",    "precio_base_fecha", "TEXT"),   # Fecha ultima actualizacion precio_base
-            ("clientes",     "corporativo_id", "INTEGER"),   # FK a corporativos
-        ]
-        for tabla, columna, tipo in migraciones:
-            try:
-                self.cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
-                self.conn.commit()
-            except sqlite3.OperationalError:
-                pass
-    
     def crear_interfaz(self):
         """Crea la interfaz principal estilo ERP compacto"""
 
@@ -1043,10 +699,8 @@ class SistemaGestion:
         # Logo / marca
         logo_frame = tk.Frame(nav, bg='#141f30', padx=14)
         logo_frame.pack(side='left', fill='y')
-        tk.Label(logo_frame, text='CLF', font=('Arial', 11, 'bold'),
-                 bg='#141f30', fg='#1aab82').pack(side='left', padx=(0, 6), pady=0, anchor='center')
-        tk.Label(logo_frame, text='· GESTIÓN', font=('Arial', 9),
-                 bg='#141f30', fg='#4a5a6e').pack(side='left', anchor='center')
+        tk.Label(logo_frame, text='⚙  GESTIÓN', font=('Arial', 10, 'bold'),
+                 bg='#141f30', fg='#1aab82').pack(side='left', anchor='center')
 
         # Separador
         tk.Frame(nav, bg='#141f30', width=1).pack(side='left', fill='y')
@@ -1081,6 +735,24 @@ class SistemaGestion:
                                     bg='#c0392b', fg='white',
                                     padx=4, pady=0)
         # se posiciona dinámicamente junto al botón cotizaciones
+
+        # ── Lado derecho: empresa activa + botón cambiar ───────────────────
+        btn_cambiar = tk.Button(
+            nav, text='⇄  Cambiar empresa',
+            font=('Arial', 8), bg='#141f30', fg='#64748b',
+            activebackground='#1e2d45', activeforeground='#94a3b8',
+            bd=0, padx=10, pady=0, cursor='hand2', relief='flat',
+            command=self._cambiar_empresa
+        )
+        btn_cambiar.pack(side='right', fill='y', padx=(0, 4))
+
+        nombre_emp = self.empresa.get('nombre', '') if self.empresa else ''
+        if nombre_emp:
+            # Truncar si es muy largo
+            display = nombre_emp if len(nombre_emp) <= 32 else nombre_emp[:30] + '…'
+            tk.Label(nav, text=f'🏢  {display}',
+                     font=('Arial', 8), bg=self.C['nav_bg'],
+                     fg='#475569').pack(side='right', padx=(0, 6), pady=0)
 
         # ── Área de contenido ──────────────────────────────────────────────
         self._content_area = tk.Frame(self.root, bg=self.C['content_bg'])
@@ -7261,12 +6933,46 @@ PRODUCTOS:"""
             except Exception:
                 pass
     
+    def _cambiar_empresa(self):
+        """Cierra la sesión actual y regresa al selector de empresa."""
+        if not messagebox.askyesno(
+            'Cambiar empresa',
+            '¿Deseas cerrar la sesión actual y regresar al selector de empresa?',
+            parent=self.root
+        ):
+            return
+        # Cerrar BD actual
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        # Destruir ventana principal
+        self.root.destroy()
+        # Abrir selector de empresa de nuevo
+        from selector_empresa import mostrar_selector
+        empresa = mostrar_selector()
+        if empresa is None:
+            return  # Cerró sin elegir → terminar
+        # Abrir sistema con la nueva empresa
+        new_root = tk.Tk()
+        SistemaGestion(new_root, empresa=empresa)
+        new_root.mainloop()
+
     def __del__(self):
         """Cierra la conexión a la base de datos al cerrar la aplicación"""
         if hasattr(self, 'conn'):
             self.conn.close()
 
 if __name__ == '__main__':
+    # ── Selector de empresa ───────────────────────────────────────────────────
+    empresa = mostrar_selector()
+
+    if empresa is None:
+        # Usuario cerró el selector sin elegir → no arrancar
+        import sys
+        sys.exit(0)
+
+    # ── Sistema principal ─────────────────────────────────────────────────────
     root = tk.Tk()
-    app = SistemaGestion(root)
+    app  = SistemaGestion(root, empresa=empresa)
     root.mainloop()

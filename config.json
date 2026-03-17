@@ -1,0 +1,26 @@
+{
+  "empresas": [
+    {
+      "id": "emp_CLF240418U94_default",
+      "nombre": "Comercializadora, Logística y Fuerza Yucateca",
+      "rfc": "CLF240418U94",
+      "razon_social": "Comercializadora, Logística y Fuerza Yucateca S.A. de C.V.",
+      "email": "clfyucateca@gmail.com",
+      "telefono": "9993633880",
+      "direccion": "Calle 17 No. 56 Depto. 74, Kanasín, Yucatán",
+      "db_path": "c:\\Users\\oscar\\OneDrive\\Documentos\\CLF Sistema\\Gestion-CLF\\gestion_comercial.db",
+      "fecha_registro": "2024-01-01"
+    },
+    {
+      "id": "emp_PTE150903KZ8_1773783949",
+      "nombre": "PRIMERO TU EMPRESA",
+      "rfc": "PTE150903KZ8",
+      "razon_social": "PRIMERO TU EMPRESA",
+      "email": "",
+      "telefono": "",
+      "db_path": "C:/Users/oscar/OneDrive/Documentos/CLF Sistema/Gestion-PTE/Gestion-PTE.db",
+      "fecha_registro": "2026-03-17"
+    }
+  ],
+  "ultima_empresa": "emp_PTE150903KZ8_1773783949"
+}
