@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante Version="4.0" xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Serie="A" Folio="285" Fecha="2026-02-24T17:49:11" NoCertificado="00001000000714794125" Certificado="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" Exportacion="01" Moneda="MXN" TipoDeComprobante="I" MetodoPago="PPD" FormaPago="99" SubTotal="8400.00" Total="9744.00" LugarExpedicion="97370" Sello="J0CJODu+We/s204Yi3Tx+a4dbut3UddsZbBw359fynxlHhikH3xBoBsE+1lvXEH8k3QzXIXUCbrSP+QSActlmP+g1bcVFicoqnnzBvaY2Wgvsr36BOBpV1xKfHx7Gx5o/uef6mR45cjf2Q0J4jDLrZTMvoctrvObQBuUv7GEY8/fPTxeIL19isdGbARyZ0Ulu3XzAarwn1Lv747/5zao2vNtNa6q0zw12kILpZ3K6jGJQa974AyjJ0aI70yVHN481dYoCpUZElAaNYiKCupvfRp1OTjAZo+SJ0ExgiXW9mIdn/1OAIlvaHgC6X2gN8l6E4D+Y9M4xKjEAsVIey72gg=="><cfdi:Emisor Rfc="CLF240418U94" Nombre="COMERCIALIZADORA, LOGISTICA Y FUERZA YUCATECA" RegimenFiscal="626"/>
+<cfdi:Receptor Rfc="SHA840512SX1" Nombre="SECRETARIA DE ADMINISTRACION Y FINANZAS"  UsoCFDI="G03" DomicilioFiscalReceptor="97000" RegimenFiscalReceptor="603"/>
+<cfdi:Conceptos>
+<cfdi:Concepto ClaveProdServ="44122107" Cantidad="10.00" ClaveUnidad="H87" Descripcion="CAJA DE GRAPAS C/1000 PZA PARA PISTOLA ET-50 1/2" ValorUnitario="70.00" Importe="700.00" ObjetoImp="02">
+<cfdi:Impuestos>
+<cfdi:Traslados>
+<cfdi:Traslado Base="700.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="112.00"/>
+</cfdi:Traslados>
+</cfdi:Impuestos>
+</cfdi:Concepto><cfdi:Concepto ClaveProdServ="44121615" Cantidad="5.00" ClaveUnidad="H87" Descripcion="ENGRAPADORAS TRUPER ET-50 TIPO PISTOLA USO RUDO" ValorUnitario="840.00" Importe="4200.00" ObjetoImp="02">
+<cfdi:Impuestos>
+<cfdi:Traslados>
+<cfdi:Traslado Base="4200.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="672.00"/>
+</cfdi:Traslados>
+</cfdi:Impuestos>
+</cfdi:Concepto><cfdi:Concepto ClaveProdServ="25172104" Cantidad="10.00" ClaveUnidad="H87" Descripcion="CINCHOS BLANCAS 300XM DE 50 PIEZAS" ValorUnitario="350.00" Importe="3500.00" ObjetoImp="02">
+<cfdi:Impuestos>
+<cfdi:Traslados>
+<cfdi:Traslado Base="3500.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="560.00"/>
+</cfdi:Traslados>
+</cfdi:Impuestos>
+</cfdi:Concepto></cfdi:Conceptos><cfdi:Impuestos TotalImpuestosTrasladados="1344.00">
+<cfdi:Traslados>
+<cfdi:Traslado Base="8400.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000"  Importe="1344.00"/>
+</cfdi:Traslados>
+</cfdi:Impuestos>	<cfdi:Complemento>
+		<tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd" Version="1.1" UUID="B7DDC160-0940-4126-B9E7-72B08BB2E3AF" FechaTimbrado="2026-02-24T17:49:12" RfcProvCertif="TBN040609RKA" SelloCFD="J0CJODu+We/s204Yi3Tx+a4dbut3UddsZbBw359fynxlHhikH3xBoBsE+1lvXEH8k3QzXIXUCbrSP+QSActlmP+g1bcVFicoqnnzBvaY2Wgvsr36BOBpV1xKfHx7Gx5o/uef6mR45cjf2Q0J4jDLrZTMvoctrvObQBuUv7GEY8/fPTxeIL19isdGbARyZ0Ulu3XzAarwn1Lv747/5zao2vNtNa6q0zw12kILpZ3K6jGJQa974AyjJ0aI70yVHN481dYoCpUZElAaNYiKCupvfRp1OTjAZo+SJ0ExgiXW9mIdn/1OAIlvaHgC6X2gN8l6E4D+Y9M4xKjEAsVIey72gg==" NoCertificadoSAT="00001000000708361114" SelloSAT="qjN1bBu6JZ6vctiyXSeXbgzEJg2QmTRdMBk45VSljKgSIcdhyrHyvSZg+MxkuU7rM8NH1xuzQEZQiP6OLf3sVdeNqmAuwFtBAbPRwq4puE3QFMdn3aJgj2i7LvqM3j+6oIDW2ePUUIqVf6dGH5xfH2sCMpXgHKAQK51TJdcQ0QooL3xuPptm8jB9+0et2doNQ6PYuQ1ulL4WzXBw2WrVfET4E+McdOAsBxZdDDFE07yDLZOkbl9Q9BtZdOPc6aWdWIEqaWf3paWeTEsCSV2Lsu6UPKjTvQDjjDmidecAebUoRkB5Nt1usSNt1hGzVmkswX/bSNv0JpBUoGonP92o4w=="/>
+	</cfdi:Complemento>
+</cfdi:Comprobante>
