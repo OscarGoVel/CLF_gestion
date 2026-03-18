@@ -16,6 +16,7 @@ import sqlite3
 import os
 from datetime import datetime
 from modules.compras import VentanaCompra
+from ui.generador_pdf_cly import GeneradorPDFCLY
 
 
 class Catalogos:

@@ -69,67 +69,66 @@ class SistemaGestion:
     def _configurar_sorting_treeview(self, tree, columnas_numericas=None):
         """
         Configura ordenamiento por click en headers de columnas.
-        
+        El sort activo se persiste en tree._sort_col y tree._sort_reverse
+        para que pueda reaplicarse tras una recarga de datos.
+
         Args:
             tree: ttk.Treeview widget
-            columnas_numericas: lista de nombres de columnas que contienen números/montos
-                                (se ordenarán numéricamente, no alfabéticamente)
+            columnas_numericas: lista de nombres de columnas con números/montos
         """
         if columnas_numericas is None:
             columnas_numericas = []
-        
-        # Estado de ordenamiento por columna (False=ascendente, True=descendente)
-        self._sort_states = {}
-        
-        def ordenar_por_columna(col):
-            # Alternar entre ascendente/descendente
-            reverse = self._sort_states.get(col, False)
-            self._sort_states[col] = not reverse
-            
-            # Obtener todos los items
+
+        # Estado persistente en el propio widget (sobrevive recargas)
+        tree._sort_col     = None   # columna activa
+        tree._sort_reverse = False  # dirección
+        tree._sort_numericas = set(columnas_numericas)
+
+        import re as _re
+
+        def extraer_numero(texto):
+            try:
+                limpio = str(texto).replace('$', '').replace(',', '').replace(' ', '')
+                m = _re.search(r'-?\d+\.?\d*', limpio)
+                return float(m.group()) if m else 0
+            except Exception:
+                return 0
+
+        def aplicar_sort(col, reverse):
+            """Ordena los items actuales del tree por col/reverse."""
             items = [(tree.set(k, col), k) for k in tree.get_children('')]
-            
-            # Ordenar
-            if col in columnas_numericas:
-                # Ordenamiento numérico
-                def extraer_numero(texto):
-                    try:
-                        # Quitar símbolos de moneda, comas, espacios
-                        limpio = str(texto).replace('$', '').replace(',', '').replace(' ', '')
-                        # Extraer el primer número que encuentre
-                        import re
-                        match = re.search(r'-?\d+\.?\d*', limpio)
-                        if match:
-                            return float(match.group())
-                        return 0
-                    except:
-                        return 0
-                
+            if col in tree._sort_numericas:
                 items.sort(key=lambda t: extraer_numero(t[0]), reverse=reverse)
             else:
-                # Ordenamiento alfabético (case-insensitive)
                 items.sort(key=lambda t: str(t[0]).lower(), reverse=reverse)
-            
-            # Reordenar items en el tree
-            for index, (val, k) in enumerate(items):
+            for index, (_, k) in enumerate(items):
                 tree.move(k, '', index)
-            
-            # Actualizar indicador visual en header
+            # Actualizar indicadores en headers
             indicador = ' ▼' if reverse else ' ▲'
-            
-            # Limpiar indicadores de otras columnas
             for c in tree['columns']:
-                texto_actual = str(tree.heading(c)['text'])
-                texto_limpio = texto_actual.replace(' ▲', '').replace(' ▼', '')
-                if c == col:
-                    tree.heading(c, text=texto_limpio + indicador)
-                else:
-                    tree.heading(c, text=texto_limpio)
-        
+                txt = str(tree.heading(c)['text']).replace(' ▲', '').replace(' ▼', '')
+                tree.heading(c, text=txt + (indicador if c == col else ''))
+
+        def ordenar_por_columna(col):
+            # Alternar dirección si es la misma columna
+            if tree._sort_col == col:
+                tree._sort_reverse = not tree._sort_reverse
+            else:
+                tree._sort_col     = col
+                tree._sort_reverse = False
+            aplicar_sort(tree._sort_col, tree._sort_reverse)
+
+        # Método público para reaplicar el sort después de recargar datos
+        def reaplicar_sort():
+            if tree._sort_col:
+                aplicar_sort(tree._sort_col, tree._sort_reverse)
+
+        tree.reaplicar_sort = reaplicar_sort
+
         # Configurar click en cada header
         for col in tree['columns']:
             tree.heading(col, command=lambda c=col: ordenar_por_columna(c))
-        
+
         return tree
     
     def init_database(self, db_path=None):

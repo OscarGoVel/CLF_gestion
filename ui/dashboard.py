@@ -415,10 +415,7 @@ class Dashboard:
                     WHERE se.cotizacion_id = c.id AND se.etapa = 'Facturada'
                     AND se.completada = 1)
                              THEN c.total ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN EXISTS (
-                    SELECT 1 FROM seguimiento_etapas se
-                    WHERE se.cotizacion_id = c.id AND se.etapa = 'Pagada'
-                    AND se.completada = 1)
+                COALESCE(SUM(CASE WHEN c.monto_pagado > 0
                              THEN c.monto_pagado ELSE 0 END), 0)
             FROM cotizaciones c
             WHERE c.fecha >= ?

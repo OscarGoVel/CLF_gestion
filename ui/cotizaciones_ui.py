@@ -510,14 +510,26 @@ class CotizacionesUI:
             tags_finales = (fila_tag,) + tuple(t for t in tags if t not in (
                 'Pendiente','Programada','Parcialmente Entregada',
                 'Entregada','Facturada','Pagada','Cancelada'))
+            # Pagado: N/A si el estado no lo aplica aún
+            if estado in ('Pendiente', 'Cancelada'):
+                pagado_txt = 'N/A'
+            elif pagado and pagado > 0:
+                pagado_txt = f'${pagado:,.2f}'
+            else:
+                pagado_txt = '—'
+
             values = (
                 cot_id, folio, fecha, cliente,
                 f'${total:,.2f}', estado_display,
                 f'${entregado:,.2f}', oc_txt, oc_icon,
                 fac_txt, fac_icon,
-                f'${pagado:,.2f}', obs_txt,
+                pagado_txt, obs_txt,
             )
             self.tree_cotizaciones.insert('', 'end', values=values, tags=tags_finales)
+
+        # Reaplicar ordenamiento si el usuario había seleccionado uno
+        if hasattr(self.tree_cotizaciones, 'reaplicar_sort'):
+            self.tree_cotizaciones.reaplicar_sort()
     
     def nueva_cotizacion(self):
         """Abre ventana para crear nueva cotización"""
@@ -1853,37 +1865,56 @@ class CotizacionesUI:
             try:
                 monto_nuevo = float(entry_monto.get())
                 fecha = entry_fecha.get().strip()
-                
+
                 if not fecha:
                     messagebox.showwarning("Advertencia", "Ingresa la fecha de pago", parent=ventana)
                     return
-                
+
                 nuevo_total_pagado = (pagado_actual or 0) + monto_nuevo
-                nuevo_estado = 'Pagada' if nuevo_total_pagado >= total_cot else estado_actual
-                
+
+                # Obtener estado actual limpio (sin emoji) directo de la BD
+                self.cursor.execute("SELECT estado FROM cotizaciones WHERE id=?", (cotizacion_id,))
+                estado_db = self.cursor.fetchone()[0]
+
+                # Si el pago cubre el total → Pagada; si no, mantener estado actual
+                nuevo_estado = 'Pagada' if nuevo_total_pagado >= total_cot else estado_db
+
                 self.cursor.execute("""
                     UPDATE cotizaciones
                     SET monto_pagado = ?,
-                        fecha_pago = ?,
-                        estado = ?
+                        fecha_pago   = ?,
+                        estado       = ?
                     WHERE id = ?
                 """, (nuevo_total_pagado, fecha, nuevo_estado, cotizacion_id))
 
-                # ── Sincronizar seguimiento_etapas ──────────────────────────
-                self._sync_seguimiento_desde_estado(cotizacion_id, nuevo_estado, fecha)
+                # Siempre sincronizar etapa Pagada en seguimiento con monto parcial o total
+                self.cursor.execute("""
+                    INSERT INTO seguimiento_etapas
+                        (cotizacion_id, etapa, completada, fecha_etapa, notas)
+                    VALUES (?, 'Pagada', ?, ?, ?)
+                    ON CONFLICT(cotizacion_id, etapa) DO UPDATE SET
+                        completada  = excluded.completada,
+                        fecha_etapa = COALESCE(excluded.fecha_etapa, fecha_etapa),
+                        notas       = COALESCE(excluded.notas, notas)
+                """, (cotizacion_id,
+                      1 if nuevo_estado == 'Pagada' else 0,
+                      fecha,
+                      f'Pago parcial ${monto_nuevo:,.2f}' if nuevo_estado != 'Pagada' else None))
 
                 self.conn.commit()
-                
+
                 if nuevo_estado == 'Pagada':
                     msg = f"Cotización {folio} marcada como PAGADA completamente."
                 else:
-                    msg = f"Pago de ${monto_nuevo:,.2f} registrado.\nTotal pagado: ${nuevo_total_pagado:,.2f} de ${total_cot:,.2f}"
-                
+                    msg = (f"Pago de ${monto_nuevo:,.2f} registrado.\n"
+                           f"Total pagado: ${nuevo_total_pagado:,.2f} de ${total_cot:,.2f}\n"
+                           f"Pendiente: ${total_cot - nuevo_total_pagado:,.2f}")
+
                 messagebox.showinfo("Éxito", msg, parent=ventana)
                 ventana.destroy()
                 self.cargar_cotizaciones()
                 self.sistema.actualizar_dashboard()
-                
+
             except ValueError:
                 messagebox.showwarning("Advertencia", "El monto debe ser un número válido", parent=ventana)
             except sqlite3.Error as e:
