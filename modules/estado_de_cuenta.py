@@ -901,18 +901,25 @@ class VentanaEstadoCuenta:
 
             self.cursor.execute(f"""
                 SELECT
-                    COUNT(*)                            AS n_solicitadas,
-                    COALESCE(SUM(c.total), 0)           AS monto_solicitadas,
-                    SUM(CASE WHEN c.estado IN
-                        ('Entregada','Parcialmente Entregada')
-                        THEN 1 ELSE 0 END)              AS n_entregadas,
+                    COUNT(*)                                    AS n_solicitadas,
+                    COALESCE(SUM(c.total), 0)                  AS monto_solicitadas,
+                    -- Entregadas: incluye Entregada, Facturada y Pagada
+                    SUM(CASE WHEN c.estado IN ('Entregada','Facturada','Pagada')
+                        THEN 1 ELSE 0 END)                     AS n_entregadas,
+                    COALESCE(SUM(CASE WHEN c.estado IN ('Entregada','Facturada','Pagada')
+                        THEN c.total ELSE 0 END), 0)           AS monto_entregadas,
+                    -- En tránsito: programadas + parcialmente entregadas
                     COALESCE(SUM(CASE WHEN c.estado IN
-                        ('Entregada','Parcialmente Entregada')
-                        THEN c.total ELSE 0 END), 0)    AS monto_entregadas,
+                        ('Programada','Parcialmente Entregada')
+                        THEN c.total ELSE 0 END), 0)           AS monto_transito,
+                    -- Total activo = entregado + en tránsito
                     COALESCE(SUM(CASE WHEN c.estado IN
-                        ('Programada','Parcialmente Entregada','Entregada')
-                        THEN c.total ELSE 0 END), 0)    AS monto_activo,
-                    COALESCE(SUM(c.monto_pagado), 0)    AS monto_pagado
+                        ('Programada','Parcialmente Entregada','Entregada','Facturada','Pagada')
+                        THEN c.total ELSE 0 END), 0)           AS monto_activo,
+                    -- Pagado: suma de monto_pagado de todos los estados activos
+                    COALESCE(SUM(CASE WHEN c.estado IN
+                        ('Programada','Parcialmente Entregada','Entregada','Facturada','Pagada')
+                        THEN COALESCE(c.monto_pagado, 0) ELSE 0 END), 0) AS monto_pagado
                 FROM cotizaciones c
                 JOIN clientes cl ON cl.id = c.cliente_id
                 WHERE cl.nombre_comercial IN ({ph_cli})
@@ -920,14 +927,16 @@ class VentanaEstadoCuenta:
                   {w_hasta}
             """, params_b)
             row = self.cursor.fetchone()
-            n_sol, m_sol, n_ent, m_ent, m_act, m_pag = row
+            n_sol, m_sol, n_ent, m_ent, m_tra, m_act, m_pag = row
             return {
                 'n_sol':   int(n_sol or 0),
                 'm_sol':   float(m_sol or 0),
                 'n_ent':   int(n_ent or 0),
                 'm_ent':   float(m_ent or 0),
                 'm_act':   float(m_act or 0),
+                'm_tra':   float(m_tra or 0),
                 'm_pag':   float(m_pag or 0),
+                # Saldo = total activo - pagado
                 'm_pend':  float(m_act or 0) - float(m_pag or 0),
             }
 
@@ -958,20 +967,29 @@ class VentanaEstadoCuenta:
             Paragraph(f'Balance Final\n(al {hasta or "hoy"})',           ST_HDR_COL),
         ]]
         bal_rows = [
-            [Paragraph('Órdenes solicitadas',          ST_LBL),
+            [Paragraph('Órdenes solicitadas',           ST_LBL),
              _n(bal_ini['n_sol']),   _n(bal_fin['n_sol'])],
-            [Paragraph('Órdenes entregadas / parciales',ST_LBL),
+            [Paragraph('Órdenes entregadas',            ST_LBL),
              _n(bal_ini['n_ent']),   _n(bal_fin['n_ent'])],
-            [Paragraph('Monto entregado',               ST_LBL),
+            [Paragraph('Monto entregado\n(entregadas totalmente)',
+                       _st('lbl2', fontSize=8, fontName='Helvetica-Bold',
+                           textColor=GRIS)),
              _m(bal_ini['m_ent']),   _m(bal_fin['m_ent'], ST_NUMVD)],
-            [Paragraph('Monto total activo\n(prog. + parcial + entregado)',
+            [Paragraph('Monto en tránsito\n(programadas + parcialmente entregadas)',
+                       _st('lbl2', fontSize=8, fontName='Helvetica-Bold',
+                           textColor=GRIS)),
+             _m(bal_ini['m_tra']),   _m(bal_fin['m_tra'])],
+            [Paragraph('Monto total activo\n(entregado + en tránsito)',
                        _st('lbl2', fontSize=8, fontName='Helvetica-Bold',
                            textColor=GRIS)),
              _m(bal_ini['m_act']),   _m(bal_fin['m_act'])],
-            [Paragraph('Monto pagado',                  ST_LBL),
+            [Paragraph('Monto pagado\n(cotizaciones marcadas Pagada)',
+                       _st('lbl2', fontSize=8, fontName='Helvetica-Bold',
+                           textColor=GRIS)),
              _m(bal_ini['m_pag'], ST_NUMVD),
              _m(bal_fin['m_pag'], ST_NUMVD)],
-            [Paragraph('Saldo pendiente de pago',       ST_LBL),
+            [Paragraph('Saldo pendiente de pago\n(total activo − pagado)',
+                       ST_LBL),
              _m(bal_ini['m_pend'], ST_NUMAM),
              _m(bal_fin['m_pend'], ST_NUMAM)],
         ]
@@ -1036,7 +1054,7 @@ class VentanaEstadoCuenta:
             FROM cotizaciones c
             JOIN clientes cl ON cl.id = c.cliente_id
             WHERE cl.nombre_comercial IN ({ph_cli_p})
-              AND c.estado IN ('Programada','Parcialmente Entregada','Entregada')
+              AND c.estado IN ('Programada','Parcialmente Entregada','Entregada','Facturada')
               AND (c.total - COALESCE(c.monto_pagado,0)) > 0.01
               {w_desde_p}
               {w_hasta_p}
@@ -1066,6 +1084,7 @@ class VentanaEstadoCuenta:
                 'Programada':             BGAZ,
                 'Parcialmente Entregada': rl_colors.HexColor('#ede9fe'),
                 'Entregada':              BGVD,
+                'Facturada':              rl_colors.HexColor('#cffafe'),
             }
 
             # Encabezados tabla
@@ -1103,6 +1122,7 @@ class VentanaEstadoCuenta:
                     'Programada': '📅',
                     'Parcialmente Entregada': '📦',
                     'Entregada': '✅',
+                    'Facturada': '🧾',
                 }.get(estado, '')
 
                 row_cells = [

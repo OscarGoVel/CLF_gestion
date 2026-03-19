@@ -2694,26 +2694,45 @@ class CotizacionesUI:
         """, (cotizacion_id, etapa, fecha_etapa))
 
     def _sync_estado_desde_seguimiento(self, cotizacion_id, etapa, completada):
-        """Sincroniza cotizaciones.estado cuando se edita una etapa de seguimiento.
-        
-        Solo sincroniza estados de entrega (Entregada). Las etapas de Facturada/Pagada/OC
-        son ahora solo de seguimiento y no cambian el estado de la cotización.
+        """Sincroniza cotizaciones.estado y monto_pagado cuando se edita
+        una etapa de seguimiento.
         """
         if not completada:
             return False
-        # Solo Entregada tiene correspondencia con estado (Facturada/Pagada ya no son estados)
+
+        # ── Pagada: marcar pago completo ─────────────────────────────────
+        if etapa == 'Pagada':
+            self.cursor.execute(
+                "SELECT total, monto_pagado, estado FROM cotizaciones WHERE id=?",
+                (cotizacion_id,))
+            row = self.cursor.fetchone()
+            if not row:
+                return False
+            total, monto_pagado, estado_actual = row
+            # Si aún no tiene monto_pagado registrado, asignar el total completo
+            nuevo_pagado = monto_pagado if (monto_pagado and monto_pagado >= total) else total
+            from datetime import datetime as _dt
+            self.cursor.execute("""
+                UPDATE cotizaciones
+                SET monto_pagado = ?,
+                    fecha_pago   = COALESCE(NULLIF(fecha_pago,''), ?),
+                    estado       = 'Pagada'
+                WHERE id = ?
+            """, (nuevo_pagado, _dt.now().strftime('%Y-%m-%d'), cotizacion_id))
+            return True
+
+        # ── Entregada: sincronizar estado ────────────────────────────────
         if etapa != 'Entregada':
             return False
         nuevo_estado = 'Entregada'
-        # Evitar degradar un estado más avanzado
         orden = ['Pendiente', 'Programada', 'Parcialmente Entregada', 'Entregada', 'Cancelada']
         self.cursor.execute("SELECT estado FROM cotizaciones WHERE id = ?", (cotizacion_id,))
         row = self.cursor.fetchone()
         if not row:
             return False
         estado_actual = row[0]
-        idx_actual   = orden.index(estado_actual) if estado_actual in orden else 0
-        idx_nuevo    = orden.index(nuevo_estado)  if nuevo_estado  in orden else 0
+        idx_actual = orden.index(estado_actual) if estado_actual in orden else 0
+        idx_nuevo  = orden.index(nuevo_estado)  if nuevo_estado  in orden else 0
         if idx_nuevo > idx_actual:
             self.cursor.execute(
                 "UPDATE cotizaciones SET estado = ? WHERE id = ?",

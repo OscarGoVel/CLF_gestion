@@ -379,6 +379,20 @@ def inicializar_bd(db_path):
         )
     ''')
 
+    # ── Asignación de costos de compra a cotizaciones ────────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS compra_detalle_cotizacion (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            compra_detalle_id INTEGER NOT NULL,
+            cotizacion_id     INTEGER,
+            cantidad          REAL    NOT NULL,
+            notas             TEXT,
+            fecha_registro    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (compra_detalle_id) REFERENCES compra_detalle(id),
+            FOREIGN KEY (cotizacion_id)     REFERENCES cotizaciones(id)
+        )
+    ''')
+
     # ── Historial de precios de productos ────────────────────────────────────────
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS producto_precio_historial (
@@ -392,6 +406,18 @@ def inicializar_bd(db_path):
             FOREIGN KEY (producto_id) REFERENCES productos(id)
         )
     ''')
+
+    # ── Migraciones columnas faltantes ───────────────────────────────────────────
+    for tabla, cols in [
+        ('cotizacion_detalle', [('costo_snapshot', 'REAL')]),
+        ('compras',            [('cotizacion_id',  'INTEGER'),
+                                ('factura_xml_id', 'INTEGER')]),
+    ]:
+        for col, tipo in cols:
+            try:
+                cursor.execute(f'ALTER TABLE {tabla} ADD COLUMN {col} {tipo}')
+            except Exception:
+                pass
 
     # ── Migraciones SAT en clientes y proveedores ─────────────────────────────────
     for tabla, cols in [

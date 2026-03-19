@@ -953,116 +953,344 @@ class PanelVinculacion:
         entry_bus.bind("<KeyRelease>", lambda e: _cargar_cots(entry_bus.get().strip()))
         _cargar_cots()
 
+        # ═══════════════════════════════════════════════════════════════════
+        # ── PANEL DE ASIGNACIÓN DE COSTOS POR PRODUCTO ─────────────────────
+        # ═══════════════════════════════════════════════════════════════════
+
+        tk.Frame(win, bg="#e2e8f0", height=1).pack(fill="x", padx=12, pady=(8, 0))
+
+        asig_hdr = tk.Frame(win, bg="#1e3a5f", pady=6)
+        asig_hdr.pack(fill="x")
+        tk.Label(asig_hdr, text="📋  Asignación de costos por producto",
+                 font=("Arial", 10, "bold"), bg="#1e3a5f", fg="white").pack(side="left", padx=12)
+        tk.Label(asig_hdr,
+                 text="Asigna cada producto a una cotización o deja en Stock general",
+                 font=("Arial", 8), bg="#1e3a5f", fg="#93c5fd").pack(side="left")
+
+        # Canvas scrollable para las filas de asignación
+        asig_outer = tk.Frame(win, bg="#f8fafc")
+        asig_outer.pack(fill="both", expand=True, padx=12, pady=4)
+        asig_outer.grid_rowconfigure(0, weight=1)
+        asig_outer.grid_columnconfigure(0, weight=1)
+
+        asig_canvas = tk.Canvas(asig_outer, bg="#f8fafc", highlightthickness=0, height=200)
+        asig_sc = ttk.Scrollbar(asig_outer, orient="vertical", command=asig_canvas.yview)
+        asig_canvas.configure(yscrollcommand=asig_sc.set)
+        asig_canvas.grid(row=0, column=0, sticky="nsew")
+        asig_sc.grid(row=0, column=1, sticky="ns")
+
+        asig_inner = tk.Frame(asig_canvas, bg="#f8fafc")
+        asig_wid = asig_canvas.create_window((0, 0), window=asig_inner, anchor="nw")
+        asig_inner.bind("<Configure>",
+            lambda e: asig_canvas.configure(scrollregion=asig_canvas.bbox("all")))
+        asig_canvas.bind("<Configure>",
+            lambda e: asig_canvas.itemconfig(asig_wid, width=e.width))
+
+        # Cargar lista de cotizaciones (todas excepto canceladas)
+        self.cursor.execute("""
+            SELECT c.id, c.folio, cl.nombre_comercial, c.estado
+            FROM cotizaciones c
+            JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.estado NOT IN ('Cancelada')
+            ORDER BY c.folio DESC
+        """)
+        cots_lista = self.cursor.fetchall()
+        cot_opciones = ["— Stock general —"] + [
+            f"{row[1]} | {row[2][:20]} | {row[3]}" for row in cots_lista
+        ]
+        cot_ids_map = {cot_opciones[i+1]: cots_lista[i][0] for i in range(len(cots_lista))}
+
+        # asig_data: lista de dicts por concepto con sus filas de asignación
+        # asig_data[i] = {'prod_id': X, 'nombre': Y, 'cant_total': Z,
+        #                 'costo_unit': W, 'asignaciones': [{'cot_id': ..., 'cant': ..., 'var': ..., 'combo': ...}]}
+        asig_data = []
+
+        def _rebuild_asig_ui():
+            for w in asig_inner.winfo_children():
+                w.destroy()
+
+            # Header de columnas
+            hdr_cols = ["Producto (XML)", "Cant. total", "Costo u.", "", "Cotización", "Cant.", "Subtotal", ""]
+            hdr_ws   = [220, 70, 80, 30, 220, 65, 80, 50]
+            for ci, (ch, cw) in enumerate(zip(hdr_cols, hdr_ws)):
+                tk.Label(asig_inner, text=ch, font=("Arial", 8, "bold"),
+                         bg="#e2e8f0", fg="#374151", width=cw//7,
+                         anchor="w", padx=4, pady=3
+                         ).grid(row=0, column=ci, sticky="ew", padx=1, pady=(0,2))
+
+            row_idx = 1
+            for di, data in enumerate(asig_data):
+                cant_asig = sum(float(a['var'].get() or 0) for a in data['asignaciones'])
+                cant_libre = data['cant_total'] - cant_asig
+                bg_prod = "#f0fdf4" if abs(cant_libre) < 0.001 else "#fff7ed"
+
+                # Fila de producto (nombre + totales)
+                pf = tk.Frame(asig_inner, bg=bg_prod)
+                pf.grid(row=row_idx, column=0, columnspan=8, sticky="ew", pady=(4,0))
+                estado_txt = "✅" if abs(cant_libre) < 0.001 else f"⚠ {cant_libre:g} sin asignar"
+                estado_col = "#16a34a" if abs(cant_libre) < 0.001 else "#d97706"
+                tk.Label(pf, text=f"  {data['nombre'][:35]}",
+                         font=("Arial", 8, "bold"), bg=bg_prod, fg="#1e2d45",
+                         anchor="w").pack(side="left")
+                tk.Label(pf, text=f"  {data['cant_total']:g} pzas × ${data['costo_unit']:,.2f}",
+                         font=("Arial", 8), bg=bg_prod, fg="#6b7280").pack(side="left", padx=8)
+                tk.Label(pf, text=estado_txt, font=("Arial", 8, "bold"),
+                         bg=bg_prod, fg=estado_col).pack(side="right", padx=8)
+                row_idx += 1
+
+                # Filas de asignación existentes
+                for ai, asig in enumerate(data['asignaciones']):
+                    af = tk.Frame(asig_inner, bg="#ffffff",
+                                  highlightbackground="#e2e8f0", highlightthickness=1)
+                    af.grid(row=row_idx, column=0, columnspan=8, sticky="ew", padx=16, pady=1)
+
+                    tk.Label(af, text="", width=30, bg="#ffffff").pack(side="left")  # indent
+
+                    combo = ttk.Combobox(af, values=cot_opciones, state="readonly",
+                                         font=("Arial", 8), width=32)
+                    combo.set(asig.get('combo_val', cot_opciones[0]))
+                    combo.pack(side="left", padx=4, pady=3)
+                    asig['combo'] = combo
+
+                    tk.Label(af, text="Cant:", font=("Arial", 8), bg="#ffffff",
+                             fg="#6b7280").pack(side="left")
+                    var = asig['var']
+                    entry_c = tk.Entry(af, textvariable=var, width=7,
+                                       font=("Arial", 8), relief="solid", bd=1)
+                    entry_c.pack(side="left", padx=(2, 6), pady=3)
+
+                    def _upd(e=None, _di=di, _ai=ai):
+                        asig_data[_di]['asignaciones'][_ai]['combo_val'] =                             asig_data[_di]['asignaciones'][_ai]['combo'].get()
+                        _rebuild_asig_ui()
+
+                    combo.bind("<<ComboboxSelected>>", _upd)
+                    var.trace_add("write", lambda *a, _di=di, _ai=ai: _rebuild_asig_ui())
+
+                    # Subtotal
+                    try:
+                        cant_a = float(var.get() or 0)
+                    except Exception:
+                        cant_a = 0
+                    sub = cant_a * data['costo_unit']
+                    tk.Label(af, text=f"${sub:,.2f}", font=("Arial", 8),
+                             bg="#ffffff", fg="#065f46", width=9).pack(side="left")
+
+                    # Botón quitar fila
+                    def _del_row(_di=di, _ai=ai):
+                        asig_data[_di]['asignaciones'].pop(_ai)
+                        _rebuild_asig_ui()
+                    tk.Button(af, text="✕", font=("Arial", 8), bg="#ffffff",
+                              fg="#dc2626", relief="flat", cursor="hand2",
+                              command=_del_row).pack(side="left", padx=4)
+
+                    row_idx += 1
+
+                # Botón agregar fila
+                add_f = tk.Frame(asig_inner, bg="#f8fafc")
+                add_f.grid(row=row_idx, column=0, columnspan=8, sticky="w", padx=16)
+                def _add_row(_di=di):
+                    libre = asig_data[_di]['cant_total'] - sum(
+                        float(a['var'].get() or 0)
+                        for a in asig_data[_di]['asignaciones'])
+                    asig_data[_di]['asignaciones'].append({
+                        'var': tk.StringVar(value=f"{max(0, libre):g}"),
+                        'combo_val': cot_opciones[0],
+                        'combo': None,
+                    })
+                    _rebuild_asig_ui()
+                tk.Button(add_f, text="＋ Agregar asignación",
+                          font=("Arial", 7), bg="#f8fafc", fg="#1a4b8c",
+                          relief="flat", cursor="hand2",
+                          command=_add_row).pack(side="left", pady=2)
+                row_idx += 1
+
+        # Inicializar asig_data desde conceptos vinculados al catálogo
+        for c in conceptos:
+            no_id, desc, cant, vu, importe, clave_sat_c, nom_cat, cod_cat = c
+            prod_id = None
+            if cod_cat:
+                self.cursor.execute(
+                    "SELECT id FROM productos WHERE UPPER(codigo)=UPPER(?) LIMIT 1",
+                    (cod_cat,))
+                r = self.cursor.fetchone()
+                if r: prod_id = r[0]
+            if not prod_id and clave_sat_c:
+                self.cursor.execute(
+                    "SELECT id FROM productos WHERE UPPER(clave_sat)=UPPER(?) LIMIT 1",
+                    (clave_sat_c,))
+                r = self.cursor.fetchone()
+                if r: prod_id = r[0]
+
+            nombre_display = nom_cat or desc or no_id or "—"
+            asig_data.append({
+                'prod_id':     prod_id,
+                'no_id':       no_id,
+                'clave_sat':   clave_sat_c,
+                'nombre':      nombre_display,
+                'cant_total':  float(cant or 0),
+                'costo_unit':  float(vu or 0),
+                'asignaciones': [{
+                    'var':       tk.StringVar(value=f"{float(cant or 0):g}"),
+                    'combo_val': cot_opciones[0],
+                    'combo':     None,
+                }],
+            })
+
+        _rebuild_asig_ui()
+
         # ── Pie ───────────────────────────────────────────────────────────────
         foot = tk.Frame(win, bg="#1e2d45", pady=8)
         foot.pack(fill="x", side="bottom")
 
-        def _registrar(para_stock=True):
-            """Registra la compra en la BD y opcionalmente la vincula a cotización."""
-            # Buscar proveedor por RFC emisor
+        def _registrar():
+            """Registra la compra con asignación granular de costos."""
+            from datetime import datetime as _dt
+
+            # Validar asignaciones — verificar sobreasignación
+            errores = []
+            for data in asig_data:
+                cant_asig = sum(float(a['var'].get() or 0)
+                                for a in data['asignaciones'])
+                if cant_asig > data['cant_total'] + 0.001:
+                    errores.append(
+                        f"• {data['nombre'][:30]}: asignado {cant_asig:g} > disponible {data['cant_total']:g}")
+            if errores:
+                messagebox.showerror("Sobreasignación",
+                    "Hay productos con más cantidad asignada que disponible:\n\n" +
+                    "\n".join(errores), parent=win)
+                return
+
+            # Verificar si hay cantidades sin asignar → pedir confirmación
+            sin_asignar = []
+            for data in asig_data:
+                cant_asig = sum(float(a['var'].get() or 0)
+                                for a in data['asignaciones'])
+                libre = data['cant_total'] - cant_asig
+                if libre > 0.001:
+                    sin_asignar.append((data, libre))
+
+            if sin_asignar:
+                msgs = [f"• {d['nombre'][:30]}: {lib:g} pzas" for d, lib in sin_asignar]
+                resp = messagebox.askyesno(
+                    "Cantidades sin asignar",
+                    "Los siguientes productos tienen cantidades sin asignar:\n\n" +
+                    "\n".join(msgs) +
+                    "\n\n¿Asignar automáticamente a Stock general?",
+                    parent=win)
+                if resp:
+                    # Añadir fila de stock general con la cantidad libre
+                    for data, libre in sin_asignar:
+                        data['asignaciones'].append({
+                            'var': tk.StringVar(value=f"{libre:g}"),
+                            'combo_val': cot_opciones[0],
+                            'combo': None,
+                        })
+                else:
+                    return  # usuario quiere asignar manualmente
+
+            # Buscar proveedor
             self.cursor.execute(
                 "SELECT id FROM proveedores WHERE UPPER(rfc)=UPPER(?) LIMIT 1",
                 (rfc_em or "",))
-            prov_row  = self.cursor.fetchone()
-            prov_id   = prov_row[0] if prov_row else None
+            prov_row = self.cursor.fetchone()
+            prov_id  = prov_row[0] if prov_row else None
 
-            # Generar folio de compra
-            from datetime import datetime as _dt
+            # Generar folio
             año = (fecha_ or _dt.now().strftime("%Y-%m-%d"))[:4]
             self.cursor.execute(
                 "SELECT COUNT(*) FROM compras WHERE strftime('%Y', fecha_compra)=?", (año,))
-            consec = self.cursor.fetchone()[0] + 1
-            folio_compra = f"COMP-{año}-{consec:04d}"
-
-            cot_id_vincular = None if para_stock else _sel_cot["id"]
+            folio_compra = f"COMP-{año}-{self.cursor.fetchone()[0]+1:04d}"
 
             try:
+                # Insertar compra principal
                 self.cursor.execute("""
                     INSERT INTO compras
                     (folio, proveedor_id, fecha_compra, subtotal, iva, total,
-                     notas, ticket_referencia, cotizacion_id, factura_xml_id)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                     notas, ticket_referencia, factura_xml_id)
+                    VALUES (?,?,?,?,?,?,?,?,?)
                 """, (folio_compra, prov_id,
                       (fecha_ or _dt.now().strftime("%Y-%m-%d"))[:10],
                       sub_ or 0, iva_ or 0, total_ or 0,
-                      f"Importado desde XML {sf}",
-                      sf, cot_id_vincular, fid))
+                      f"Importado desde XML {sf}", sf, fid))
                 compra_id = self.cursor.lastrowid
 
-                # Insertar detalle desde factura_conceptos
-                self.cursor.execute("""
-                    SELECT fc.no_identificacion, fc.clave_prod_serv,
-                           fc.cantidad, fc.valor_unitario, fc.importe
-                    FROM factura_conceptos fc WHERE fc.factura_id=?
-                """, (fid,))
-                for no_id, clave_sat, cant, vu, importe in self.cursor.fetchall():
-                    # Buscar producto por codigo o clave_sat
-                    prod_id = None
-                    if no_id:
-                        self.cursor.execute(
-                            "SELECT id FROM productos WHERE UPPER(codigo)=UPPER(?) LIMIT 1",
-                            (no_id,))
-                        r = self.cursor.fetchone()
-                        if r: prod_id = r[0]
-                    if not prod_id and clave_sat:
-                        self.cursor.execute(
-                            "SELECT id FROM productos WHERE UPPER(clave_sat)=UPPER(?) LIMIT 1",
-                            (clave_sat,))
-                        r = self.cursor.fetchone()
-                        if r: prod_id = r[0]
-                    if prod_id:
-                        self.cursor.execute("""
-                            INSERT INTO compra_detalle
-                            (compra_id, producto_id, cantidad, costo_unitario, costo_total)
-                            VALUES (?,?,?,?,?)
-                        """, (compra_id, prod_id, cant, vu, importe))
+                n_stock = 0
+                n_cot   = 0
 
-                        # ── Actualizar stock y registrar movimiento de entrada ──
+                for data in asig_data:
+                    prod_id = data['prod_id']
+
+                    # Resolver prod_id si no lo teníamos
+                    if not prod_id:
+                        if data.get('no_id'):
+                            self.cursor.execute(
+                                "SELECT id FROM productos WHERE UPPER(codigo)=UPPER(?) LIMIT 1",
+                                (data['no_id'],))
+                            r = self.cursor.fetchone()
+                            if r: prod_id = r[0]
+                        if not prod_id and data.get('clave_sat'):
+                            self.cursor.execute(
+                                "SELECT id FROM productos WHERE UPPER(clave_sat)=UPPER(?) LIMIT 1",
+                                (data['clave_sat'],))
+                            r = self.cursor.fetchone()
+                            if r: prod_id = r[0]
+
+                    cant_total = data['cant_total']
+                    costo_unit = data['costo_unit']
+
+                    # Insertar compra_detalle (1 por producto, cantidad total)
+                    self.cursor.execute("""
+                        INSERT INTO compra_detalle
+                        (compra_id, producto_id, cantidad, costo_unitario, costo_total)
+                        VALUES (?,?,?,?,?)
+                    """, (compra_id, prod_id, cant_total, costo_unit,
+                          cant_total * costo_unit))
+                    detalle_id = self.cursor.lastrowid
+
+                    # Actualizar stock (todo sube porque pasa por bodega)
+                    if prod_id:
                         self.cursor.execute(
                             "SELECT stock_actual FROM productos WHERE id=?", (prod_id,))
-                        stock_row = self.cursor.fetchone()
-                        stock_antes = stock_row[0] if stock_row else 0
-
-                        self.cursor.execute("""
-                            UPDATE productos
-                            SET stock_actual = stock_actual + ?
-                            WHERE id = ?
-                        """, (cant, prod_id))
-
-                        tipo_mov = ("Compra stock general" if para_stock
-                                    else f"Compra p/cotización {_sel_cot['folio'] or ''}")
+                        stock_antes = (self.cursor.fetchone() or (0,))[0] or 0
+                        self.cursor.execute(
+                            "UPDATE productos SET stock_actual = stock_actual + ? WHERE id=?",
+                            (cant_total, prod_id))
                         self.cursor.execute("""
                             INSERT INTO movimientos_stock
                             (producto_id, tipo, motivo, cantidad,
                              stock_antes, stock_despues, referencia, notas)
-                            VALUES (?, 'entrada', ?, ?, ?, ?, ?, ?)
-                        """, (
-                            prod_id,
-                            tipo_mov,
-                            cant,
-                            stock_antes,
-                            stock_antes + cant,
-                            folio_compra,
-                            f"XML {sf} — {nom_em or rfc_em or ''}"
-                        ))
+                            VALUES (?, 'entrada', 'Compra XML', ?, ?, ?, ?, ?)
+                        """, (prod_id, cant_total, stock_antes,
+                              stock_antes + cant_total, folio_compra,
+                              f"XML {sf} — {nom_em or rfc_em or ''}"))
 
-                prods_actualizados = sum(
-                    1 for c in self.cursor.execute(
-                        "SELECT producto_id FROM compra_detalle WHERE compra_id=?",
-                        (compra_id,)).fetchall())
+                    # Insertar asignaciones de costo
+                    for asig in data['asignaciones']:
+                        cant_a = float(asig['var'].get() or 0)
+                        if cant_a <= 0:
+                            continue
+                        combo_val = asig.get('combo_val') or (
+                            asig['combo'].get() if asig.get('combo') else cot_opciones[0])
+                        cot_id_a = cot_ids_map.get(combo_val)  # None = stock general
+
+                        self.cursor.execute("""
+                            INSERT INTO compra_detalle_cotizacion
+                            (compra_detalle_id, cotizacion_id, cantidad)
+                            VALUES (?,?,?)
+                        """, (detalle_id, cot_id_a, cant_a))
+
+                        if cot_id_a:
+                            n_cot += 1
+                        else:
+                            n_stock += 1
 
                 self.conn.commit()
 
-                tipo_txt = ("para stock general" if para_stock
-                            else f"vinculada a {_sel_cot['folio']}")
-                messagebox.showinfo(
-                    "Compra registrada",
-                    f"✅ Folio: {folio_compra}\n"
-                    f"Tipo: Compra {tipo_txt}\n"
-                    f"Total: ${total_:,.2f}\n"
-                    f"Productos con stock actualizado: {prods_actualizados}\n\n"
-                    f"Ahora aparece en el módulo de Compras.",
-                    parent=win)
+                resumen = f"✅ Folio: {folio_compra}\n"
+                resumen += f"Total: ${total_:,.2f}\n"
+                resumen += f"Asignaciones a cotizaciones: {n_cot}\n"
+                resumen += f"Asignaciones a stock general: {n_stock}"
+                messagebox.showinfo("Compra registrada", resumen, parent=win)
                 win.destroy()
                 win_padre.destroy()
                 try:
@@ -1075,21 +1303,13 @@ class PanelVinculacion:
                 self.conn.rollback()
                 messagebox.showerror("Error BD", str(e), parent=win)
 
-        tk.Button(foot,
-                  text="🏭 Registrar para STOCK GENERAL",
-                  command=lambda: _registrar(para_stock=True),
+        tk.Button(foot, text="✅  Registrar compra",
+                  command=_registrar,
                   bg="#065f46", fg="white", font=("Arial", 10, "bold"),
-                  cursor="hand2", padx=14, pady=6, relief="flat").pack(side="left", padx=12)
-        tk.Button(foot,
-                  text="📋 Registrar vinculada a COTIZACIÓN",
-                  command=lambda: (
-                      messagebox.showwarning("Sin cotización",
-                          "Selecciona primero una cotización de la lista.", parent=win)
-                      if not _sel_cot["id"]
-                      else _registrar(para_stock=False)
-                  ),
-                  bg="#1a4b8c", fg="white", font=("Arial", 10),
-                  cursor="hand2", padx=12, pady=6, relief="flat").pack(side="left")
+                  cursor="hand2", padx=16, pady=6, relief="flat").pack(side="left", padx=12)
+        tk.Label(foot,
+                 text="El stock sube para todos los productos (pasan por bodega)",
+                 font=("Arial", 8), bg="#1e2d45", fg="#94a3b8").pack(side="left", padx=6)
         tk.Button(foot, text="Cancelar", command=win.destroy,
                   bg="#6b7280", fg="white", font=("Arial", 9),
                   cursor="hand2", padx=10, pady=6).pack(side="right", padx=12)

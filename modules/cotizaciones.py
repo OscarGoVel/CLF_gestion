@@ -1279,20 +1279,20 @@ class VentanaCotizacion:
         if not productos_alerta:
             return
 
-        # ── Modal de alerta ────────────────────────────────────────────────
+        # ── Modal de alerta con edición inline ────────────────────────────
         dlg = tk.Toplevel(self.ventana)
         dlg.title("⚠ Precios posiblemente desactualizados")
-        dlg.geometry("620x400")
+        dlg.geometry("700x480")
         dlg.configure(bg="#fff7ed")
         dlg.transient(self.ventana)
         dlg.grab_set()
 
-        # Centrar
         dlg.update_idletasks()
-        x = self.ventana.winfo_x() + (self.ventana.winfo_width()  - 620) // 2
-        y = self.ventana.winfo_y() + (self.ventana.winfo_height() - 400) // 2
-        dlg.geometry(f"620x400+{x}+{y}")
+        x = self.ventana.winfo_x() + (self.ventana.winfo_width()  - 700) // 2
+        y = self.ventana.winfo_y() + (self.ventana.winfo_height() - 480) // 2
+        dlg.geometry(f"700x480+{x}+{y}")
 
+        # Header
         hdr = tk.Frame(dlg, bg="#d97706", pady=10)
         hdr.pack(fill="x")
         tk.Label(hdr, text="⚠  Verificación de Precios",
@@ -1300,68 +1300,155 @@ class VentanaCotizacion:
         n_alerta = len(productos_alerta)
         tk.Label(hdr,
                  text=f"{n_alerta} producto{'s' if n_alerta>1 else ''} con precio "
-                      f"posiblemente desactualizado",
+                      f"posiblemente desactualizado — puedes actualizar aquí mismo",
                  font=("Arial", 9), bg="#d97706", fg="#fff7ed").pack()
 
-        # Tabla de productos con alerta
-        frame_tbl = tk.Frame(dlg, bg="#fff7ed")
-        frame_tbl.pack(fill="both", expand=True, padx=16, pady=10)
+        # Instrucción
+        tk.Label(dlg,
+                 text="Escribe el nuevo precio y pulsa 💾 para actualizar. "
+                      "Deja el campo igual si no quieres cambiar ese producto.",
+                 font=("Arial", 8, "italic"), bg="#fff7ed", fg="#92400e",
+                 pady=4).pack()
 
-        cols = ("Producto", "Precio Base", "Días sin cambio", "Umbral", "Confianza")
-        tree = ttk.Treeview(frame_tbl, columns=cols, show="headings", height=8)
-        widths = [220, 90, 110, 70, 80]
-        for col, w in zip(cols, widths):
-            tree.heading(col, text=col)
-            tree.column(col, width=w, anchor="e" if col not in ("Producto","Confianza") else "w")
+        # Canvas scrollable para filas editables
+        canvas_f = tk.Frame(dlg, bg="#fff7ed")
+        canvas_f.pack(fill="both", expand=True, padx=16, pady=(0, 4))
+        canvas_f.grid_rowconfigure(0, weight=1)
+        canvas_f.grid_columnconfigure(0, weight=1)
 
-        tree.tag_configure("alta",  foreground="#dc2626")
-        tree.tag_configure("media", foreground="#d97706")
-        tree.tag_configure("baja",  foreground="#6b7280", font=("Arial", 8, "italic"))
+        canvas = tk.Canvas(canvas_f, bg="#fff7ed", highlightthickness=0)
+        sc = ttk.Scrollbar(canvas_f, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sc.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        sc.grid(row=0, column=1, sticky="ns")
 
-        for p in productos_alerta:
+        inner = tk.Frame(canvas, bg="#fff7ed")
+        wid = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(wid, width=e.width))
+
+        # Header de columnas
+        cols_hdr = ["Producto", "Precio actual", "Nuevo precio", "Días sin cambio", "Confianza", ""]
+        widths_h = [230, 90, 90, 100, 80, 70]
+        for ci, (ch, cw) in enumerate(zip(cols_hdr, widths_h)):
+            tk.Label(inner, text=ch, font=("Arial", 8, "bold"),
+                     bg="#fef3c7", fg="#92400e", width=cw//7, anchor="w",
+                     padx=4, pady=3).grid(row=0, column=ci, sticky="ew", padx=1, pady=(0,2))
+
+        entries_por_pid = {}  # pid -> Entry widget
+
+        def _actualizar_precio(pid, nombre, entry, lbl_actual, row_frame):
+            txt = entry.get().strip().replace('$','').replace(',','')
+            try:
+                nuevo = float(txt)
+                if nuevo <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showwarning("Precio inválido",
+                    f"Ingresa un número mayor a 0 para '{nombre}'.",
+                    parent=dlg)
+                return
+            from datetime import date as _d
+            # Obtener precio anterior
+            self.cursor.execute("SELECT precio_base FROM productos WHERE id=?", (pid,))
+            pr = self.cursor.fetchone()
+            precio_anterior = pr[0] if pr else None
+            if precio_anterior is not None and abs(nuevo - precio_anterior) < 0.001:
+                messagebox.showinfo("Sin cambio",
+                    f"El precio de '{nombre}' ya es ${nuevo:,.2f}.", parent=dlg)
+                return
+            self.cursor.execute("""
+                UPDATE productos
+                SET precio_base = ?, precio_base_fecha = ?
+                WHERE id = ?
+            """, (nuevo, _d.today().isoformat(), pid))
+            self.cursor.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente)
+                VALUES (?, ?, ?, ?, 'manual')
+            """, (pid, nuevo, _d.today().isoformat(), 'Actualizado desde alerta de cotización'))
+            self.conn.commit()
+            lbl_actual.config(text=f"${nuevo:,.2f}", fg="#16a34a")
+            entry.config(state="disabled", bg="#f0fdf4")
+            row_frame.configure(bg="#f0fdf4")
+            for w in row_frame.winfo_children():
+                try: w.configure(bg="#f0fdf4")
+                except Exception: pass
+
+        for ri, p in enumerate(productos_alerta, 1):
+            pid    = p['producto_id']
+            nombre = p['nombre']
+            conf_color = {"alta": "#dc2626", "media": "#d97706", "baja": "#9ca3af"}.get(
+                p['confianza'], "#374151")
             conf_txt = {"alta": "Alta ✓✓✓", "media": "Media ✓✓", "baja": "Baja ✓"}.get(
                 p['confianza'], p['confianza'])
-            tree.insert("", "end", tags=(p['confianza'],), values=(
-                p['nombre'][:38],
-                f"${p['precio']:,.2f}",
-                f"{p['dias']} días",
-                f"{p['umbral']} días",
-                conf_txt,
-            ))
+            bg_row = "#fffbeb" if ri % 2 == 0 else "#fff7ed"
 
-        sc = ttk.Scrollbar(frame_tbl, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=sc.set)
-        tree.pack(side="left", fill="both", expand=True)
-        sc.pack(side="right", fill="y")
+            rf = tk.Frame(inner, bg=bg_row)
+            rf.grid(row=ri, column=0, columnspan=6, sticky="ew", pady=1)
+            for ci2 in range(6):
+                rf.grid_columnconfigure(ci2, weight=[4,2,2,2,1,1][ci2])
 
-        # Nota sobre confianza
+            tk.Label(rf, text=nombre[:32], font=("Arial", 8), bg=bg_row,
+                     fg="#1e2d45", anchor="w", padx=4).grid(row=0, column=0, sticky="ew")
+
+            lbl_actual = tk.Label(rf, text=f"${p['precio']:,.2f}",
+                                  font=("Arial", 8), bg=bg_row, fg="#374151", anchor="e")
+            lbl_actual.grid(row=0, column=1, sticky="ew", padx=4)
+
+            entry = tk.Entry(rf, font=("Arial", 8), width=10,
+                             bg="white", relief="solid", bd=1)
+            entry.insert(0, f"{p['precio']:.2f}")
+            entry.grid(row=0, column=2, padx=4, pady=2)
+            entries_por_pid[pid] = entry
+
+            tk.Label(rf, text=f"{p['dias']} / {p['umbral']} días",
+                     font=("Arial", 8), bg=bg_row, fg="#6b7280", anchor="center"
+                     ).grid(row=0, column=3, sticky="ew")
+
+            tk.Label(rf, text=conf_txt, font=("Arial", 7, "bold"),
+                     bg=bg_row, fg=conf_color, anchor="center"
+                     ).grid(row=0, column=4, sticky="ew")
+
+            tk.Button(rf, text="💾",
+                      font=("Arial", 9), bg="#065f46", fg="white",
+                      cursor="hand2", relief="flat", padx=6,
+                      command=lambda _p=pid, _n=nombre, _e=entry, _l=lbl_actual, _rf=rf:
+                          _actualizar_precio(_p, _n, _e, _l, _rf)
+                      ).grid(row=0, column=5, padx=4, pady=2)
+
+            entry.bind("<Return>", lambda e, _p=pid, _n=nombre, _e=entry,
+                       _l=lbl_actual, _rf=rf:
+                       _actualizar_precio(_p, _n, _e, _l, _rf))
+
+        # Nota confianza
         nota = tk.Frame(dlg, bg="#fff7ed", padx=16)
         nota.pack(fill="x")
         tk.Label(nota,
-                 text="Confianza Alta = 3+ cambios históricos  |  Media = 1-2 registros  |  Baja = sin historial (umbral default: 30 días)",
+                 text="Confianza Alta = 3+ cambios históricos  |  Media = 1-2  |  Baja = sin historial (default 30 días)",
                  font=("Arial", 7, "italic"), bg="#fff7ed", fg="#92400e",
-                 wraplength=580, justify="left").pack(anchor="w")
+                 wraplength=660, justify="left").pack(anchor="w")
 
         # Pie
         foot = tk.Frame(dlg, bg="#fef3c7", pady=8)
         foot.pack(fill="x", side="bottom")
+
         def _ir_catalogo():
             dlg.destroy()
             self.ventana.destroy()
             if self.on_ir_catalogo:
                 self.on_ir_catalogo()
 
-        tk.Button(foot, text="✏ Ir a Catálogo de Productos",
+        tk.Button(foot, text="✏ Ir a Catálogo",
                   font=("Arial", 9, "bold"), bg="#d97706", fg="white",
-                  cursor="hand2", padx=12, pady=5, relief="flat",
-                  command=_ir_catalogo
-                  ).pack(side="left", padx=12)
-        tk.Button(foot, text="Ignorar y continuar",
+                  cursor="hand2", padx=10, pady=5, relief="flat",
+                  command=_ir_catalogo).pack(side="left", padx=12)
+        tk.Button(foot, text="Cerrar",
                   font=("Arial", 9), bg="#6b7280", fg="white",
                   cursor="hand2", padx=12, pady=5, relief="flat",
                   command=dlg.destroy).pack(side="right", padx=12)
-        tk.Label(foot,
-                 text="La cotización ya fue guardada correctamente.",
+        tk.Label(foot, text="La cotización ya fue guardada correctamente.",
                  font=("Arial", 8), bg="#fef3c7", fg="#92400e").pack(side="right", padx=8)
 
         dlg.wait_window()

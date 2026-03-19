@@ -267,19 +267,27 @@ class Catalogos:
         self.sistema._toolbar_btn(ff_prod, '🔍', self.cargar_productos)
         self.sistema._toolbar_sep(ff_prod)
         self.sistema._toolbar_btn(ff_prod, '📊 CSV', self.exportar_csv_productos, color='#065f46')
+        self.sistema._toolbar_sep(ff_prod)
+        self._btn_precios_revisar = self.sistema._toolbar_btn(
+            ff_prod, '⚠ Precios por revisar', self.filtrar_precios_desactualizados,
+            color='#d97706')
 
         ft_prod = tk.Frame(tab_prod, bg=self.C['content_bg'])
         ft_prod.pack(fill='both', expand=True, padx=8, pady=8)
         cols_prod = ('ID', 'Código', 'Nombre', 'Categoría', 'Subcategoría',
                      'Unidad', 'Precio Base', 'IVA', 'Precio Venta',
-                     'Stock', 'Stock Mín', 'Clave SAT', 'Proveedores')
+                     'Stock', 'Stock Mín', 'Clave SAT', 'Proveedores', 'Precio ↺')
         self.tree_productos = ttk.Treeview(
             ft_prod, columns=cols_prod, show='headings', selectmode='browse')
         for col, w in zip(cols_prod,
-                          [0, 80, 200, 110, 110, 60, 90, 50, 90, 70, 70, 90, 140]):
+                          [0, 80, 190, 100, 100, 55, 88, 45, 88, 65, 65, 85, 130, 72]):
             self.tree_productos.heading(col, text=col)
             self.tree_productos.column(col, width=w, minwidth=w)
         self.tree_productos.column('ID', stretch=False)
+        # Tags de frescura de precio
+        self.tree_productos.tag_configure('precio_ok',   foreground='#16a34a')
+        self.tree_productos.tag_configure('precio_warn', foreground='#d97706')
+        self.tree_productos.tag_configure('precio_old',  foreground='#dc2626')
         sc = ttk.Scrollbar(ft_prod, orient='vertical',   command=self.tree_productos.yview)
         sx = ttk.Scrollbar(ft_prod, orient='horizontal', command=self.tree_productos.xview)
         self.tree_productos.configure(yscrollcommand=sc.set, xscrollcommand=sx.set)
@@ -794,8 +802,159 @@ class Catalogos:
                 info_prov = "Sin asignar"
             
             row_list.append(info_prov)
-            self.tree_productos.insert('', 'end', values=row_list)
+
+            # ── Indicador de frescura del precio ──────────────────────────
+            from datetime import date as _d
+            precio_tag = ''
+            try:
+                # Buscar último cambio real (sin backfill)
+                self.cursor.execute("""
+                    SELECT fecha FROM producto_precio_historial
+                    WHERE producto_id = ? AND fuente != 'backfill'
+                    ORDER BY fecha DESC, fecha_registro DESC LIMIT 1
+                """, (producto_id,))
+                ph = self.cursor.fetchone()
+                if ph:
+                    ultima = _d.fromisoformat(str(ph[0])[:10])
+                    dias = (_d.today() - ultima).days
+                else:
+                    # Sin historial real — usar precio_base_fecha
+                    self.cursor.execute(
+                        "SELECT precio_base_fecha FROM productos WHERE id=?", (producto_id,))
+                    pbf = self.cursor.fetchone()
+                    if pbf and pbf[0]:
+                        ultima = _d.fromisoformat(str(pbf[0])[:10])
+                        dias = (_d.today() - ultima).days
+                    else:
+                        dias = 9999
+
+                if dias == 9999:
+                    precio_ind = '❓ Sin registro'
+                    precio_tag = 'precio_old'
+                elif dias <= 30:
+                    precio_ind = f'🟢 Hace {dias}d'
+                    precio_tag = 'precio_ok'
+                elif dias <= 60:
+                    precio_ind = f'🟡 Hace {dias}d'
+                    precio_tag = 'precio_warn'
+                else:
+                    precio_ind = f'🔴 Hace {dias}d'
+                    precio_tag = 'precio_old'
+            except Exception:
+                precio_ind = '—'
+
+            row_list.append(precio_ind)
+            tags = (precio_tag,) if precio_tag else ()
+            self.tree_productos.insert('', 'end', values=row_list, tags=tags)
     
+    def filtrar_precios_desactualizados(self):
+        """Filtra la tabla de productos mostrando solo los con precio desactualizado."""
+        from datetime import date as _d
+        hoy = _d.today()
+
+        self.tree_productos.delete(*self.tree_productos.get_children())
+
+        self.cursor.execute("""
+            SELECT p.id, p.codigo, p.nombre, c.nombre, s.nombre, p.unidad_medida,
+                   p.precio_base, p.aplica_iva, p.precio_venta, p.stock_actual,
+                   p.stock_minimo, p.clave_sat, p.precio_base_fecha
+            FROM productos p
+            LEFT JOIN categorias c   ON p.categoria_id    = c.id
+            LEFT JOIN subcategorias s ON p.subcategoria_id = s.id
+            ORDER BY p.nombre
+        """)
+        rows = self.cursor.fetchall()
+
+        n_filtrados = 0
+        for row in rows:
+            pid = row[0]
+
+            # Calcular umbral igual que la alerta
+            self.cursor.execute("""
+                SELECT fecha FROM producto_precio_historial
+                WHERE producto_id = ? AND fuente != 'backfill'
+                ORDER BY fecha ASC
+            """, (pid,))
+            fechas = [r[0] for r in self.cursor.fetchall()]
+            n = len(fechas)
+            if n >= 3:
+                deltas = []
+                for i in range(1, n):
+                    try:
+                        d1 = _d.fromisoformat(fechas[i-1])
+                        d2 = _d.fromisoformat(fechas[i])
+                        deltas.append((d2 - d1).days)
+                    except Exception:
+                        pass
+                umbral = max(7, int(sum(deltas)/len(deltas)*0.8)) if deltas else 30
+            else:
+                umbral = 30
+
+            # Fecha último cambio real
+            self.cursor.execute("""
+                SELECT fecha FROM producto_precio_historial
+                WHERE producto_id = ? AND fuente != 'backfill'
+                ORDER BY fecha DESC LIMIT 1
+            """, (pid,))
+            ph = self.cursor.fetchone()
+            if ph:
+                try:
+                    dias = (hoy - _d.fromisoformat(str(ph[0])[:10])).days
+                except Exception:
+                    dias = 9999
+            else:
+                pbf = row[12]
+                if pbf:
+                    try:
+                        dias = (hoy - _d.fromisoformat(str(pbf)[:10])).days
+                    except Exception:
+                        dias = 9999
+                else:
+                    dias = 9999
+
+            if dias <= umbral:
+                continue  # precio fresco, no mostrar
+
+            # Construir row para mostrar
+            row_list = list(row[:12])
+            row_list[6] = f"${row[6]:,.2f}" if row[6] else "$0.00"
+            row_list[7] = "Sí" if row[7] else "No"
+            row_list[8] = f"${row[8]:,.2f}" if row[8] else "$0.00"
+            row_list[11] = row[11] or ''
+
+            self.cursor.execute("""
+                SELECT prov.nombre, pp.es_principal FROM producto_proveedor pp
+                JOIN proveedores prov ON pp.proveedor_id = prov.id
+                WHERE pp.producto_id = ? ORDER BY pp.es_principal DESC
+            """, (pid,))
+            provs = self.cursor.fetchall()
+            info_prov = f"⭐ {provs[0][0]}" if provs else "Sin asignar"
+            row_list.append(info_prov)
+
+            if dias == 9999:
+                precio_ind = '❓ Sin registro'
+            elif dias <= 60:
+                precio_ind = f'🟡 Hace {dias}d'
+            else:
+                precio_ind = f'🔴 Hace {dias}d'
+            row_list.append(precio_ind)
+
+            tag = 'precio_warn' if dias <= 60 else 'precio_old'
+            self.tree_productos.insert('', 'end', values=row_list, tags=(tag,))
+            n_filtrados += 1
+
+        # Feedback visual
+        if n_filtrados == 0:
+            messagebox.showinfo('✅ Precios al día',
+                'Todos los productos tienen precios actualizados.',
+                parent=self.sistema.root)
+            self.cargar_productos()
+        else:
+            messagebox.showinfo('⚠ Filtro activo',
+                f'{n_filtrados} producto(s) con precio posiblemente desactualizado.\n'
+                f'Usa "🔍" para volver a ver todos los productos.',
+                parent=self.sistema.root)
+
     def nuevo_producto(self):
         """Abre ventana para crear nuevo producto"""
         self.ventana_producto(modo='nuevo')
