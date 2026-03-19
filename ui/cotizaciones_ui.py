@@ -28,6 +28,25 @@ from modules.vinculacion import PanelVinculacion, detectar_pendientes
 
 
 
+def _campo_error(entry, msg_label, mensaje):
+    """Marca un Entry con borde rojo y muestra mensaje de error en msg_label.
+    Devuelve False para usar en: if not _campo_error(...): return
+    """
+    entry.configure(highlightbackground='#dc2626', highlightcolor='#dc2626',
+                    highlightthickness=2)
+    if msg_label:
+        msg_label.configure(text=mensaje, fg='#dc2626')
+    entry.focus()
+    return False
+
+
+def _campo_ok(entry, msg_label=None):
+    """Limpia el estado de error de un Entry."""
+    entry.configure(highlightthickness=0)
+    if msg_label:
+        msg_label.configure(text='')
+
+
 def _centrar(win, padre=None, ancho=None, alto=None):
     """Centra una ventana respecto a su padre o pantalla."""
     if ancho and alto:
@@ -1761,6 +1780,9 @@ class CotizacionesUI:
         entry_fecha = tk.Entry(frame, width=25, font=('Arial', 10))
         entry_fecha.grid(row=3, column=1, pady=5)
         entry_fecha.insert(0, datetime.now().strftime('%Y-%m-%d'))
+        lbl_err_fecha = tk.Label(frame, text='', font=('Arial', 8), fg='#dc2626',
+                                 bg=frame.cget('bg'))
+        lbl_err_fecha.grid(row=3, column=2, sticky='w', padx=4)
         
         tk.Label(frame, text="Notas:", font=('Arial', 10)).grid(
             row=4, column=0, sticky='nw', pady=5)
@@ -1813,7 +1835,7 @@ class CotizacionesUI:
                 self.sistema.actualizar_dashboard()
                 
             except ValueError:
-                messagebox.showwarning("Advertencia", "El monto debe ser un número válido", parent=ventana)
+                _campo_error(entry_monto, lbl_err_monto, "Ingresa un número válido")
             except sqlite3.Error as e:
                 self.conn.rollback()
                 messagebox.showerror("Error", str(e), parent=ventana)
@@ -1876,6 +1898,9 @@ class CotizacionesUI:
         entry_monto.grid(row=2, column=1, pady=5)
         entry_monto.insert(0, f"{pendiente:.2f}")
         entry_monto.focus()
+        lbl_err_monto = tk.Label(frame, text='', font=('Arial', 8), fg='#dc2626',
+                                 bg=frame.cget('bg'))
+        lbl_err_monto.grid(row=2, column=2, sticky='w', padx=4)
         
         tk.Label(frame, text="Fecha de Pago:", font=('Arial', 10)).grid(
             row=3, column=0, sticky='w', pady=5)
@@ -1898,7 +1923,7 @@ class CotizacionesUI:
                 fecha = entry_fecha.get().strip()
 
                 if not fecha:
-                    messagebox.showwarning("Advertencia", "Ingresa la fecha de pago", parent=ventana)
+                    _campo_error(entry_fecha, lbl_err_fecha, "La fecha es obligatoria")
                     return
 
                 nuevo_total_pagado = (pagado_actual or 0) + monto_nuevo

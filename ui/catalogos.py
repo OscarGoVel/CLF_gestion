@@ -20,6 +20,25 @@ from ui.generador_pdf_cly import GeneradorPDFCLY
 
 
 
+def _campo_error(entry, msg_label, mensaje):
+    """Marca un Entry con borde rojo y muestra mensaje de error en msg_label.
+    Devuelve False para usar en: if not _campo_error(...): return
+    """
+    entry.configure(highlightbackground='#dc2626', highlightcolor='#dc2626',
+                    highlightthickness=2)
+    if msg_label:
+        msg_label.configure(text=mensaje, fg='#dc2626')
+    entry.focus()
+    return False
+
+
+def _campo_ok(entry, msg_label=None):
+    """Limpia el estado de error de un Entry."""
+    entry.configure(highlightthickness=0)
+    if msg_label:
+        msg_label.configure(text='')
+
+
 def _centrar(win, padre=None, ancho=None, alto=None):
     """Centra una ventana respecto a su padre o pantalla."""
     if ancho and alto:
@@ -619,6 +638,9 @@ class Catalogos:
 
         e_nombre   = field(sec1, 0, 'Nombre Comercial', required=True)
         e_nombre.insert(0, datos.get('nombre_comercial', ''))
+        lbl_err_nombre_cli = tk.Label(sec1, text='', font=('Arial', 8),
+                                      fg='#dc2626', bg='white')
+        lbl_err_nombre_cli.grid(row=1, column=1, sticky='w', pady=(0,2))
 
         e_razon    = field(sec1, 1, 'Razón Social')
         e_razon.insert(0, datos.get('razon_social', ''))
@@ -683,16 +705,19 @@ class Catalogos:
         foot.pack(fill='x', side='bottom')
 
         def guardar(event=None):
+            _campo_ok(e_nombre, lbl_err_nombre_cli)
             nombre = e_nombre.get().strip()
             tipo   = c_tipo.get()
+            ok = True
             if not nombre:
-                messagebox.showwarning('Advertencia', 'El nombre comercial es obligatorio',
-                                       parent=ventana)
-                e_nombre.focus()
-                return
+                _campo_error(e_nombre, lbl_err_nombre_cli, "El nombre comercial es obligatorio")
+                ok = False
             if not tipo:
                 messagebox.showwarning('Advertencia', 'Selecciona un tipo de cliente',
                                        parent=ventana)
+                if ok: return
+                return
+            if not ok:
                 return
 
             # Extraer código de régimen y uso (antes del " – ")
@@ -1082,6 +1107,9 @@ class Catalogos:
         entry_codigo = tk.Entry(frame, width=40, font=('Arial', 10))
         entry_codigo.grid(row=row, column=1, pady=5, sticky='w')
         entry_codigo.insert(0, datos_producto.get('codigo', ''))
+        lbl_err_codigo = tk.Label(frame, text='', font=('Arial', 8),
+                                  fg='#dc2626', bg=ventana.cget('bg'))
+        lbl_err_codigo.grid(row=row+1, column=1, sticky='w', pady=(0,2))
         row += 1
         
         # Nombre
@@ -1091,6 +1119,9 @@ class Catalogos:
         entry_nombre = tk.Entry(frame, width=40, font=('Arial', 10))
         entry_nombre.grid(row=row, column=1, pady=5, sticky='w')
         entry_nombre.insert(0, datos_producto.get('nombre', ''))
+        lbl_err_nombre = tk.Label(frame, text='', font=('Arial', 8),
+                                  fg='#dc2626', bg=ventana.cget('bg'))
+        lbl_err_nombre.grid(row=row+1, column=1, sticky='w', pady=(0,2))
         row += 1
         
         # Descripción
@@ -1231,6 +1262,9 @@ class Catalogos:
         entry_precio_base = tk.Entry(frame, width=20, font=('Arial', 10))
         entry_precio_base.grid(row=row, column=1, pady=5, sticky='w')
         entry_precio_base.insert(0, str(datos_producto.get('precio_base', '0.00')))
+        lbl_err_precio = tk.Label(frame, text='', font=('Arial', 8),
+                                  fg='#dc2626', bg=ventana.cget('bg'))
+        lbl_err_precio.grid(row=row+1, column=1, sticky='w', pady=(0,2))
         row += 1
         
         # Aplica IVA
@@ -1311,29 +1345,37 @@ class Catalogos:
         frame_botones.grid(row=row, column=0, columnspan=2, pady=20)
         
         def guardar():
+            # Limpiar errores previos
+            _campo_ok(entry_codigo, lbl_err_codigo)
+            _campo_ok(entry_nombre, lbl_err_nombre)
+            _campo_ok(entry_precio_base, lbl_err_precio)
+
             # Validar campos requeridos
             codigo = entry_codigo.get().strip()
             nombre = entry_nombre.get().strip()
             precio_base = entry_precio_base.get().strip()
-            
+
+            ok = True
             if not codigo:
-                messagebox.showwarning("Advertencia", "El código es obligatorio")
-                entry_codigo.focus()
-                return
-            
+                _campo_error(entry_codigo, lbl_err_codigo, "El código es obligatorio")
+                ok = False
             if not nombre:
-                messagebox.showwarning("Advertencia", "El nombre es obligatorio")
-                entry_nombre.focus()
-                return
-            
+                _campo_error(entry_nombre, lbl_err_nombre, "El nombre es obligatorio")
+                if ok: entry_nombre.focus()
+                ok = False
+            precio_val = None
             try:
-                precio_base = float(precio_base)
-                if precio_base < 0:
+                precio_val = float(precio_base)
+                if precio_val < 0:
                     raise ValueError()
             except ValueError:
-                messagebox.showwarning("Advertencia", "El precio base debe ser un número válido")
-                entry_precio_base.focus()
+                _campo_error(entry_precio_base, lbl_err_precio,
+                             "Debe ser un número mayor o igual a 0")
+                if ok: entry_precio_base.focus()
+                ok = False
+            if not ok:
                 return
+            precio_base = precio_val
             
             # Obtener IDs de categoría y subcategoría
             categoria_id = None
@@ -2360,6 +2402,9 @@ class Catalogos:
         sec1 = section(inner, '📦  Datos Generales', '#92400e')
         e_nombre  = field(sec1, 0, 'Nombre', required=True)
         e_nombre.insert(0, datos.get('nombre', ''))
+        lbl_err_prov = tk.Label(sec1, text='', font=('Arial', 8),
+                                fg='#dc2626', bg='#ffffff')
+        lbl_err_prov.grid(row=1, column=1, sticky='w', pady=(0,2))
         e_razon   = field(sec1, 1, 'Razón Social')
         e_razon.insert(0, datos.get('razon_social', ''))
         e_rfc     = field(sec1, 2, 'RFC')
@@ -2398,9 +2443,10 @@ class Catalogos:
         foot.pack(fill='x', side='bottom')
 
         def guardar(event=None):
+            _campo_ok(e_nombre, lbl_err_prov)
             nombre = e_nombre.get().strip()
             if not nombre:
-                messagebox.showwarning('Advertencia', 'El nombre es obligatorio', parent=ventana)
+                _campo_error(e_nombre, lbl_err_prov, "El nombre es obligatorio")
                 return
             reg_val = c_regimen.get().split(' – ')[0] if c_regimen.get() else ''
             vals_dict = {
