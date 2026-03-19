@@ -166,7 +166,7 @@ class CotizacionesUI:
         # Cols: ID oculto | datos | _oc_doc y _fac_doc = columnas ícono clicables
         cols = ('ID', 'Folio', 'Fecha', 'Cliente', 'Total', 'Estado',
                 'Entregado', 'O.C.', '_oc_doc', 'Ref. Factura', '_fac_doc', 'Pagado',
-                'Observaciones')
+                'Observaciones', 'Días')
         self.tree_cotizaciones = ttk.Treeview(
             ft, columns=cols, show='headings', selectmode='browse')
 
@@ -175,7 +175,7 @@ class CotizacionesUI:
             'Total': 88, 'Estado': 138,
             'Entregado': 86, 'O.C.': 120, '_oc_doc': 36,
             'Ref. Factura': 120, '_fac_doc': 36, 'Pagado': 86,
-            'Observaciones': 200,
+            'Observaciones': 160, 'Días': 55,
         }
         for col in cols:
             if col == 'Observaciones':
@@ -194,6 +194,10 @@ class CotizacionesUI:
         # Filas alternadas homogeneas — color solo en emoji de columna Estado
         self.tree_cotizaciones.tag_configure('fila_par',   background='#ffffff')
         self.tree_cotizaciones.tag_configure('fila_impar', background='#f4f6f9')
+        # Urgencia — sin cambio de fondo, el indicador visual está en la columna Días
+        self.tree_cotizaciones.tag_configure('urg_alta',  font=('Arial', 9))
+        self.tree_cotizaciones.tag_configure('urg_media', font=('Arial', 9))
+        self.tree_cotizaciones.tag_configure('urg_baja',  font=('Arial', 9))
 
         sc_y = ttk.Scrollbar(ft, orient='vertical',   command=self.tree_cotizaciones.yview)
         sc_x = ttk.Scrollbar(ft, orient='horizontal', command=self.tree_cotizaciones.xview)
@@ -225,91 +229,178 @@ class CotizacionesUI:
 
     # ── Preview panel de cotización ───────────────────────────────────────────
     def _build_cotizacion_preview_panel(self, parent):
-        """Construye el panel de preview de productos de una cotización."""
+        """Panel de preview — layout C: avatar, KPIs, etapas, tabla, financiero."""
+        BG   = '#f8fafc'
+        BG2  = '#f1f5f9'
+        BDR  = '#e2e8f0'
 
-        # Usamos grid en el parent para control total del layout
-        parent.grid_rowconfigure(2, weight=1)   # fila del treeview se expande
+        parent.grid_rowconfigure(3, weight=1)
         parent.grid_columnconfigure(0, weight=1)
 
-        # ── Fila 0: Cabecera azul ──────────────────────────────────────────
-        hdr = tk.Frame(parent, bg='#1e3a5f', pady=6)
+        # ── HEADER: avatar + folio + cliente + estado + KPIs ──────────────
+        hdr = tk.Frame(parent, bg=BG2)
         hdr.grid(row=0, column=0, columnspan=2, sticky='ew')
-        tk.Label(hdr, text='📋  Detalle de Cotización',
-                 font=('Arial', 9, 'bold'), bg='#1e3a5f', fg='white').pack(side='left', padx=8)
 
-        # ── Fila 1: Info rápida ────────────────────────────────────────────
-        info = tk.Frame(parent, bg='#f8fafc', pady=5, padx=10)
-        info.grid(row=1, column=0, columnspan=2, sticky='ew')
+        hdr_top = tk.Frame(hdr, bg=BG2, padx=10, pady=8)
+        hdr_top.pack(fill='x')
 
-        self._pv_folio = tk.Label(info, text='—',
-                                   font=('Arial', 10, 'bold'), bg='#f8fafc',
-                                   fg='#1e3a5f', anchor='w')
+        # Avatar (iniciales)
+        self._pv_avatar = tk.Label(hdr_top, text='—',
+            font=('Arial', 13, 'bold'), bg='#fef3c7', fg='#92400e',
+            width=3, relief='flat')
+        self._pv_avatar.pack(side='left', padx=(0, 8))
+
+        hdr_info = tk.Frame(hdr_top, bg=BG2)
+        hdr_info.pack(side='left', fill='x', expand=True)
+
+        self._pv_folio = tk.Label(hdr_info, text='—',
+            font=('Arial', 12, 'bold'), bg=BG2, fg='#1e2d45', anchor='w')
         self._pv_folio.pack(fill='x')
-        self._pv_cliente = tk.Label(info, text='Selecciona una cotización',
-                                     font=('Arial', 8), bg='#f8fafc',
-                                     fg='#6b7280', anchor='w')
+
+        self._pv_cliente = tk.Label(hdr_info, text='Selecciona una cotización',
+            font=('Arial', 9), bg=BG2, fg='#6b7280', anchor='w')
         self._pv_cliente.pack(fill='x')
 
-        sub_row = tk.Frame(info, bg='#f8fafc')
-        sub_row.pack(fill='x')
-        self._pv_estado = tk.Label(sub_row, text='', font=('Arial', 8, 'bold'),
-                                    bg='#f8fafc', fg='#374151', anchor='w')
-        self._pv_estado.pack(side='left')
-        self._pv_fecha = tk.Label(sub_row, text='', font=('Arial', 8),
-                                   bg='#f8fafc', fg='#9ca3af', anchor='e')
-        self._pv_fecha.pack(side='right')
+        self._pv_fecha = tk.Label(hdr_info, text='',
+            font=('Arial', 8), bg=BG2, fg='#9ca3af', anchor='w')
+        self._pv_fecha.pack(fill='x')
 
-        tk.Frame(parent, bg='#e2e8f0', height=1).grid(row=2, column=0,
-                                                        columnspan=2, sticky='ew', pady=(0, 0))
+        hdr_right = tk.Frame(hdr_top, bg=BG2)
+        hdr_right.pack(side='right', anchor='ne')
 
-        # ── Fila 2: Tabla de productos (se expande) ────────────────────────
+        self._pv_estado = tk.Label(hdr_right, text='',
+            font=('Arial', 9, 'bold'), bg='#fef3c7', fg='#92400e',
+            padx=6, pady=2, relief='flat')
+        self._pv_estado.pack(anchor='e')
+
+        self._pv_dias = tk.Label(hdr_right, text='',
+            font=('Arial', 8), bg=BG2, fg='#9ca3af', anchor='e')
+        self._pv_dias.pack(anchor='e', pady=(3,0))
+
+        # KPI strip
+        tk.Frame(hdr, bg=BDR, height=1).pack(fill='x')
+        kpi_frame = tk.Frame(hdr, bg=BG2, padx=8, pady=6)
+        kpi_frame.pack(fill='x')
+        kpi_frame.grid_columnconfigure((0,1,2), weight=1, uniform='kpi')
+
+        def _kpi(col, label, attr, color):
+            f = tk.Frame(kpi_frame, bg='white', relief='flat',
+                         highlightbackground=BDR, highlightthickness=1)
+            f.grid(row=0, column=col, sticky='ew',
+                   padx=(0 if col==0 else 4, 0))
+            tk.Label(f, text=label, font=('Arial', 7), bg='white',
+                     fg='#9ca3af').pack(anchor='w', padx=5, pady=(4,0))
+            lbl = tk.Label(f, text='—', font=('Arial', 11, 'bold'),
+                           bg='white', fg=color, anchor='w')
+            lbl.pack(anchor='w', padx=5, pady=(0,4))
+            setattr(self, attr, lbl)
+
+        _kpi(0, 'Total',      '_pv_kpi_total',     '#0f7b5e')
+        _kpi(1, 'Entregado',  '_pv_kpi_entregado', '#1d4ed8')
+        _kpi(2, 'Pagado',     '_pv_kpi_pagado',    '#166534')
+
+        tk.Frame(parent, bg=BDR, height=1).grid(row=0, column=0,
+            columnspan=2, sticky='ew')
+
+        # ── SEGUIMIENTO: etapas verticales ────────────────────────────────
+        seg_outer = tk.Frame(parent, bg=BG)
+        seg_outer.grid(row=1, column=0, columnspan=2, sticky='ew')
+
+        tk.Label(seg_outer, text='SEGUIMIENTO', font=('Arial', 7, 'bold'),
+                 bg=BG, fg='#9ca3af').pack(anchor='w', padx=12, pady=(7,4))
+
+        self._pv_seg_frame = tk.Frame(seg_outer, bg=BG)
+        self._pv_seg_frame.pack(fill='x', padx=8, pady=(0,6))
+
+        tk.Frame(parent, bg=BDR, height=1).grid(row=2, column=0,
+            columnspan=2, sticky='ew')
+
+        # ── PRODUCTOS: tabla expansible ───────────────────────────────────
+        tk.Label(parent, text='PRODUCTOS', font=('Arial', 7, 'bold'),
+                 bg=BG, fg='#9ca3af', anchor='w', padx=12, pady=6
+                 ).grid(row=3, column=0, columnspan=2, sticky='ew')
+
         cols_pv = ('Descripción', 'Cant.', 'P.Unit.', 'Subtotal')
-        self._pv_tree = ttk.Treeview(parent, columns=cols_pv, show='headings',
-                                      selectmode='none')
-        wcfg_pv = {'Descripción': 155, 'Cant.': 42, 'P.Unit.': 72, 'Subtotal': 78}
+        self._pv_tree = ttk.Treeview(parent, columns=cols_pv,
+                                      show='headings', selectmode='none')
+        wcfg = {'Descripción': 160, 'Cant.': 38, 'P.Unit.': 68, 'Subtotal': 72}
         for col in cols_pv:
-            self._pv_tree.heading(col, text=col,
-                                  anchor='e' if col != 'Descripción' else 'w')
-            self._pv_tree.column(col, width=wcfg_pv[col], minwidth=wcfg_pv[col],
+            r = col != 'Descripción'
+            self._pv_tree.heading(col, text=col, anchor='e' if r else 'w')
+            self._pv_tree.column(col, width=wcfg[col], minwidth=wcfg[col],
                                  stretch=(col == 'Descripción'),
-                                 anchor='e' if col != 'Descripción' else 'w')
+                                 anchor='e' if r else 'w')
         self._pv_tree.tag_configure('par',   background='#f8fafc')
-        self._pv_tree.tag_configure('impar', background='#ffffff')
+        self._pv_tree.tag_configure('impar', background='white')
 
-        sc_pv = ttk.Scrollbar(parent, orient='vertical', command=self._pv_tree.yview)
+        sc_pv = ttk.Scrollbar(parent, orient='vertical',
+                               command=self._pv_tree.yview)
         self._pv_tree.configure(yscrollcommand=sc_pv.set)
+        self._pv_tree.grid(row=4, column=0, sticky='nsew', padx=(8,0))
+        sc_pv.grid(row=4, column=1, sticky='ns')
+        parent.grid_rowconfigure(4, weight=1)
 
-        self._pv_tree.grid(row=2, column=0, sticky='nsew', padx=(4, 0), pady=0)
-        sc_pv.grid(row=2, column=1, sticky='ns', pady=0)
+        tk.Frame(parent, bg=BDR, height=1).grid(row=5, column=0,
+            columnspan=2, sticky='ew')
 
-        # ── Fila 3: Separador ─────────────────────────────────────────────
-        tk.Frame(parent, bg='#e2e8f0', height=1).grid(row=3, column=0,
-                                                        columnspan=2, sticky='ew')
+        # ── RESUMEN FINANCIERO ────────────────────────────────────────────
+        fin = tk.Frame(parent, bg=BG, padx=12, pady=8)
+        fin.grid(row=6, column=0, columnspan=2, sticky='ew')
 
-        # ── Fila 4: Totales ────────────────────────────────────────────────
-        tot = tk.Frame(parent, bg='#f8fafc', pady=7, padx=10)
-        tot.grid(row=4, column=0, columnspan=2, sticky='ew')
-        tot.grid_columnconfigure(1, weight=1)
+        tk.Label(fin, text='RESUMEN FINANCIERO', font=('Arial', 7, 'bold'),
+                 bg=BG, fg='#9ca3af').pack(anchor='w', pady=(0,5))
 
-        def _tot_row(label, var_name, bold=False, color='#374151', sep=False):
+        def _fin_row(label, attr, color='#374151', bold=False, sep=False):
             if sep:
-                tk.Frame(tot, bg='#e2e8f0', height=1).pack(fill='x', pady=3)
+                tk.Frame(fin, bg=BDR, height=1).pack(fill='x', pady=3)
                 return
-            row = tk.Frame(tot, bg='#f8fafc')
-            row.pack(fill='x', pady=1)
-            tk.Label(row, text=label, font=('Arial', 8, 'bold' if bold else 'normal'),
-                     bg='#f8fafc', fg='#9ca3af', anchor='w').pack(side='left')
-            lbl = tk.Label(row, text='—', font=('Arial', 8, 'bold' if bold else 'normal'),
-                           bg='#f8fafc', fg=color, anchor='e')
+            r = tk.Frame(fin, bg=BG)
+            r.pack(fill='x', pady=1)
+            tk.Label(r, text=label, font=('Arial', 9), bg=BG,
+                     fg='#9ca3af').pack(side='left')
+            lbl = tk.Label(r, text='—',
+                           font=('Arial', 9, 'bold' if bold else 'normal'),
+                           bg=BG, fg=color)
             lbl.pack(side='right')
-            setattr(self, var_name, lbl)
+            setattr(self, attr, lbl)
 
-        _tot_row('Subtotal:',  '_pv_subtotal')
-        _tot_row('IVA:',       '_pv_iva')
-        _tot_row('Total:',     '_pv_total',    bold=True, color='#0f7b5e')
-        _tot_row(None, None, sep=True)
-        _tot_row('Entregado:', '_pv_entregado', color='#1d4ed8')
-        _tot_row('Pagado:',    '_pv_pagado',    color='#166534')
+        _fin_row('Subtotal',         '_pv_subtotal')
+        _fin_row('IVA',              '_pv_iva')
+        _fin_row(None, None, sep=True)
+        _fin_row('Total',            '_pv_total',    '#0f7b5e', bold=True)
+        _fin_row(None, None, sep=True)
+        _fin_row('Entregado',        '_pv_entregado', '#1d4ed8')
+        _fin_row('Pagado',           '_pv_pagado',    '#166534')
+        _fin_row(None, None, sep=True)
+        _fin_row('Pendiente pago',   '_pv_pendiente', '#d97706', bold=True)
+
+
+    def _actualizar_badge_urgentes(self):
+        """Actualiza el título del tab de cotizaciones con conteo de urgentes."""
+        try:
+            n = sum(
+                1 for iid in self.tree_cotizaciones.get_children()
+                if 'urg_alta' in self.tree_cotizaciones.item(iid, 'tags')
+                or 'urg_media' in self.tree_cotizaciones.item(iid, 'tags')
+            )
+            # Buscar el frame de la sección y su LabelFrame padre
+            sec = self.sistema._secciones.get('cotizaciones')
+            if not sec:
+                return
+            # Subir hasta encontrar el Notebook (padre del padre del sec)
+            nb = sec.master
+            if not hasattr(nb, 'tab'):
+                nb = nb.master
+            if not hasattr(nb, 'tab'):
+                return
+            for i in range(nb.index('end')):
+                txt = nb.tab(i, 'text')
+                if 'otizaci' in txt:
+                    base = '📋  Cotizaciones'
+                    nb.tab(i, text=f'{base}  ⚠ {n}' if n > 0 else base)
+                    break
+        except Exception:
+            pass
 
     def _abrir_centro_vinculacion(self):
         """Abre el panel de vinculación inteligente."""
@@ -553,18 +644,76 @@ class CotizacionesUI:
             else:
                 pagado_txt = '—'
 
+            # ── Urgencia y columna Días ───────────────────────────────────
+            from datetime import date as _date
+            dias_num  = None
+            dias_txt  = '—'
+            urg_tag   = ''
+            try:
+                hoy = _date.today()
+                if estado == 'Cancelada':
+                    dias_txt = '—'
+                elif estado in ('Pendiente', 'Programada'):
+                    # Días desde creación
+                    dias_num = (hoy - _date.fromisoformat(str(fecha)[:10])).days
+                    if dias_num > 30:
+                        dias_txt = f'🔴 {dias_num}d'
+                        urg_tag  = 'urg_alta'
+                    elif dias_num > 14:
+                        dias_txt = f'🟡 {dias_num}d'
+                        urg_tag  = 'urg_media'
+                    else:
+                        dias_txt = f'{dias_num}d'
+                elif estado == 'Entregada' and not fac_lista:
+                    # Días entregada sin facturar
+                    self.cursor.execute(
+                        "SELECT fecha_entrega FROM cotizaciones WHERE id=?", (cot_id,))
+                    fe_row = self.cursor.fetchone()
+                    fe = fe_row[0] if fe_row and fe_row[0] else fecha
+                    dias_num = (hoy - _date.fromisoformat(str(fe)[:10])).days
+                    if dias_num > 7:
+                        dias_txt = f'🔴 {dias_num}d'
+                        urg_tag  = 'urg_alta'
+                    elif dias_num > 3:
+                        dias_txt = f'🟡 {dias_num}d'
+                        urg_tag  = 'urg_media'
+                    else:
+                        dias_txt = f'✅ {dias_num}d'
+                        urg_tag  = 'urg_baja'
+                elif estado in ('Facturada',):
+                    # Días desde facturación sin pagar
+                    dias_num = (hoy - _date.fromisoformat(str(fecha)[:10])).days
+                    if dias_num > 30:
+                        dias_txt = f'🔴 {dias_num}d'
+                        urg_tag  = 'urg_alta'
+                    else:
+                        dias_txt = f'{dias_num}d'
+                elif estado == 'Pagada':
+                    dias_txt = '✅'
+            except Exception:
+                dias_txt = '—'
+
+            if urg_tag:
+                tags_finales = (urg_tag,) + tuple(
+                    t for t in tags_finales if t not in ('fila_par','fila_impar'))
+            else:
+                pass  # keep existing fila_par/fila_impar
+
             values = (
                 cot_id, folio, fecha, cliente,
                 f'${total:,.2f}', estado_display,
                 f'${entregado:,.2f}', oc_txt, oc_icon,
                 fac_txt, fac_icon,
-                pagado_txt, obs_txt,
+                pagado_txt, obs_txt, dias_txt,
             )
             self.tree_cotizaciones.insert('', 'end', values=values, tags=tags_finales)
 
         # Reaplicar ordenamiento si el usuario había seleccionado uno
         if hasattr(self.tree_cotizaciones, 'reaplicar_sort'):
             self.tree_cotizaciones.reaplicar_sort()
+
+        # Actualizar badge de urgentes en el tab
+        self._actualizar_badge_urgentes()
     
     def nueva_cotizacion(self):
         """Abre ventana para crear nueva cotización"""
@@ -3086,11 +3235,13 @@ class CotizacionesUI:
         self._actualizar_preview_cot(cot_id)
 
     def _actualizar_preview_cot(self, cot_id):
-        """Rellena el panel de preview con los datos de la cotización indicada."""
+        """Rellena el panel de preview con los datos de la cotización."""
         if not hasattr(self, '_pv_tree'):
             return
 
-        # Datos generales
+        self._pv_cot_id = cot_id
+
+        # ── Datos generales ───────────────────────────────────────────────
         self.cursor.execute("""
             SELECT c.folio, c.fecha, c.estado, c.subtotal, c.iva, c.total,
                    c.monto_entregado, c.monto_pagado,
@@ -3105,19 +3256,111 @@ class CotizacionesUI:
         (folio, fecha, estado, subtotal, iva, total,
          entregado, pagado, cliente, contacto) = row
 
-        estado_colores = {
-            'Pendiente': '#d97706', 'Programada': '#1d4ed8',
-            'Parcialmente Entregada': '#7c3aed', 'Entregada': '#166534',
-            'Facturada': '#0e7490', 'Pagada': '#065f46', 'Cancelada': '#6b7280',
-        }
-        color_estado = estado_colores.get(estado, '#374151')
+        entregado = entregado or 0
+        pagado    = pagado    or 0
+        pendiente = total - pagado
 
+        # ── Avatar (2 iniciales del cliente) ─────────────────────────────
+        partes   = (cliente or '').split()
+        iniciales = (partes[0][0] + (partes[1][0] if len(partes) > 1 else '')).upper()
+        self._pv_avatar.config(text=iniciales)
+
+        # ── Folio, cliente, fecha ─────────────────────────────────────────
         self._pv_folio.config(text=folio)
-        self._pv_cliente.config(text=f'👤 {cliente}' + (f'  •  {contacto}' if contacto else ''))
-        self._pv_estado.config(text=f'● {estado}', fg=color_estado)
-        self._pv_fecha.config(text=f'📅 {(fecha or "")[:10]}')
+        contacto_txt = f'  ·  {contacto}' if contacto else ''
+        self._pv_cliente.config(text=f'{cliente}{contacto_txt}')
+        self._pv_fecha.config(text=(fecha or '')[:10])
 
-        # Productos
+        # ── Estado badge ──────────────────────────────────────────────────
+        estado_cfg = {
+            'Pendiente':              ('#fef3c7', '#92400e'),
+            'Programada':             ('#dbeafe', '#1e3a5f'),
+            'Parcialmente Entregada': ('#ede9fe', '#5b21b6'),
+            'Entregada':              ('#dcfce7', '#14532d'),
+            'Facturada':              ('#cffafe', '#164e63'),
+            'Pagada':                 ('#d1fae5', '#065f46'),
+            'Cancelada':              ('#f1f5f9', '#6b7280'),
+        }
+        bg_e, fg_e = estado_cfg.get(estado, ('#f1f5f9', '#374151'))
+        self._pv_estado.config(text=estado, bg=bg_e, fg=fg_e)
+
+        # ── Días de antigüedad ────────────────────────────────────────────
+        from datetime import date as _d
+        try:
+            dias = (_d.today() - _d.fromisoformat(str(fecha)[:10])).days
+            if dias == 0:
+                dias_txt, dias_col = '🆕 Hoy', '#16a34a'
+            elif dias <= 7:
+                dias_txt, dias_col = f'📅 {dias}d', '#374151'
+            elif dias <= 30:
+                dias_txt, dias_col = f'🟡 {dias}d', '#d97706'
+            else:
+                dias_txt, dias_col = f'🔴 {dias}d', '#dc2626'
+        except Exception:
+            dias_txt, dias_col = '', '#9ca3af'
+        self._pv_dias.config(text=dias_txt, fg=dias_col)
+
+        # ── KPIs ──────────────────────────────────────────────────────────
+        self._pv_kpi_total.config(text=f'${total:,.2f}')
+        self._pv_kpi_entregado.config(text=f'${entregado:,.2f}')
+        self._pv_kpi_pagado.config(text=f'${pagado:,.2f}')
+
+        # ── Etapas de seguimiento ─────────────────────────────────────────
+        self.cursor.execute("""
+            SELECT etapa, completada, referencia, fecha_etapa
+            FROM seguimiento_etapas
+            WHERE cotizacion_id = ?
+        """, (cot_id,))
+        seg = {r[0]: (r[1], r[2], r[3]) for r in self.cursor.fetchall()}
+
+        for w in self._pv_seg_frame.winfo_children():
+            w.destroy()
+
+        etapas_def = [
+            ('📋', 'Orden de Compra',     'OC'),
+            ('🚚', 'Entregada',           'Entrega'),
+            ('🧾', 'Facturada',           'Factura'),
+            ('💳', 'Complemento de Pago', 'Complemento'),
+            ('✅', 'Pagada',              'Pago'),
+        ]
+
+        for icono, etapa_key, etapa_short in etapas_def:
+            comp, ref, fec = seg.get(etapa_key, (0, None, None))
+            done = bool(comp)
+            bg_row  = '#f0fdf4' if done else '#f8fafc'
+            fg_name = '#14532d' if done else '#6b7280'
+            fg_ref  = '#16a34a' if done else '#9ca3af'
+            bdr_col = '#6ee7b7' if done else '#e2e8f0'
+
+            row = tk.Frame(self._pv_seg_frame, bg=bg_row,
+                           highlightbackground=bdr_col, highlightthickness=1)
+            row.pack(fill='x', pady=2)
+
+            tk.Label(row, text=icono, font=('Arial', 16),
+                     bg=bg_row, padx=6, pady=4).pack(side='left')
+
+            body = tk.Frame(row, bg=bg_row)
+            body.pack(side='left', fill='x', expand=True, pady=4)
+            tk.Label(body, text=etapa_key, font=('Arial', 9, 'bold'),
+                     bg=bg_row, fg=fg_name, anchor='w').pack(fill='x')
+
+            if done:
+                detalle = ref or ''
+                if fec:
+                    detalle += (f'  ·  {str(fec)[:10]}' if detalle else str(fec)[:10])
+                tk.Label(body, text=detalle or '—',
+                         font=('Arial', 8), bg=bg_row,
+                         fg=fg_ref, anchor='w').pack(fill='x')
+            else:
+                tk.Label(body, text='Pendiente',
+                         font=('Arial', 8), bg=bg_row,
+                         fg=fg_ref, anchor='w').pack(fill='x')
+
+            mark = '✓' if done else '—'
+            tk.Label(row, text=mark, font=('Arial', 10, 'bold'),
+                     bg=bg_row, fg=fg_name, padx=8).pack(side='right')
+
+        # ── Tabla de productos ────────────────────────────────────────────
         self._pv_tree.delete(*self._pv_tree.get_children())
         self.cursor.execute("""
             SELECT p.nombre, cd.cantidad, cd.precio_unitario, cd.subtotal
@@ -3126,21 +3369,22 @@ class CotizacionesUI:
             WHERE cd.cotizacion_id = ?
             ORDER BY cd.id
         """, (cot_id,))
-        for i, (nombre, cant, precio, subtotal_prod) in enumerate(self.cursor.fetchall()):
-            tag = 'par' if i % 2 == 0 else 'impar'
-            self._pv_tree.insert('', 'end', tags=(tag,), values=(
-                nombre,
-                f'{cant:g}',
-                f'${precio:,.2f}',
-                f'${subtotal_prod:,.2f}',
-            ))
+        for i, (nombre, cant, precio, sub_p) in enumerate(self.cursor.fetchall()):
+            self._pv_tree.insert('', 'end',
+                tags=('par' if i % 2 == 0 else 'impar',),
+                values=(nombre, f'{cant:g}',
+                        f'${precio:,.2f}', f'${sub_p:,.2f}'))
 
-        # Totales
+        # ── Resumen financiero ────────────────────────────────────────────
         self._pv_subtotal.config(text=f'${subtotal:,.2f}')
         self._pv_iva.config(text=f'${iva:,.2f}')
         self._pv_total.config(text=f'${total:,.2f}')
         self._pv_entregado.config(text=f'${entregado:,.2f}')
         self._pv_pagado.config(text=f'${pagado:,.2f}')
+        # Pendiente con color dinámico
+        pend_color = '#16a34a' if pendiente <= 0 else '#d97706'
+        self._pv_pendiente.config(text=f'${pendiente:,.2f}', fg=pend_color)
+
 
     # ── SECCIÓN: CATÁLOGOS ─────────────────────────────────────────────────
 

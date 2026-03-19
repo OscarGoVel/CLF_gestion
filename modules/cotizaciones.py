@@ -10,6 +10,25 @@ import sqlite3
 from datetime import datetime
 
 
+def _campo_error(entry, msg_label, mensaje):
+    """Marca un Entry con borde rojo y muestra mensaje de error en msg_label.
+    Devuelve False para usar en: if not _campo_error(...): return
+    """
+    entry.configure(highlightbackground='#dc2626', highlightcolor='#dc2626',
+                    highlightthickness=2)
+    if msg_label:
+        msg_label.configure(text=mensaje, fg='#dc2626')
+    entry.focus()
+    return False
+
+
+def _campo_ok(entry, msg_label=None):
+    """Limpia el estado de error de un Entry."""
+    entry.configure(highlightthickness=0)
+    if msg_label:
+        msg_label.configure(text='')
+
+
 def _centrar(win, padre=None, ancho=None, alto=None):
     """Centra una ventana respecto a su padre o pantalla."""
     if ancho and alto:
@@ -90,6 +109,9 @@ class VentanaCotizacion:
         self.combo_cliente = ttk.Combobox(frame_fila2, width=40, state='readonly', font=('Arial', 10))
         self.combo_cliente.pack(side='left', padx=5)
         self.combo_cliente.bind('<<ComboboxSelected>>', self.cliente_seleccionado)
+        self.lbl_err_cliente = tk.Label(frame_fila2, text='', font=('Arial', 8),
+                                        fg='#dc2626', bg=frame_fila2.cget('bg'))
+        self.lbl_err_cliente.pack(side='left', padx=(2,0))
         
         tk.Button(
             frame_fila2,
@@ -1491,13 +1513,17 @@ class VentanaCotizacion:
     def guardar_cotizacion(self):
         """Guarda la cotización en la base de datos"""
         
-        # Validaciones
+        # Validaciones inline
+        self.lbl_err_cliente.configure(text='')
+        ok = True
         if not self.combo_cliente.get():
-            messagebox.showwarning("Advertencia", "Debes seleccionar un cliente")
-            return
-        
+            self.lbl_err_cliente.configure(text='⚠ Selecciona un cliente')
+            self.combo_cliente.focus()
+            ok = False
         if not self.productos_cotizacion:
             messagebox.showwarning("Advertencia", "Debes agregar al menos un producto")
+            ok = False
+        if not ok:
             return
         
         try:

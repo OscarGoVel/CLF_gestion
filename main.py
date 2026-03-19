@@ -291,6 +291,26 @@ class SistemaGestion:
         self._content_area = tk.Frame(self.root, bg=self.C['content_bg'])
         self._content_area.pack(fill='both', expand=True)
 
+        # ── Barra de estado inferior ───────────────────────────────────────
+        status_bar = tk.Frame(self.root, bg='#dde3ec', height=22)
+        status_bar.pack(fill='x', side='bottom')
+        status_bar.pack_propagate(False)
+        # Icono de actividad (punto animado)
+        self._status_ico = tk.Label(status_bar, text='●',
+            font=('Arial', 8), bg='#dde3ec', fg='#9ca3af', padx=6)
+        self._status_ico.pack(side='left')
+        # Texto principal
+        self._status_lbl = tk.Label(status_bar, text='Listo',
+            font=('Arial', 8), bg='#dde3ec', fg='#6b7280', anchor='w')
+        self._status_lbl.pack(side='left', fill='x', expand=True)
+        # Contador de registros (lado derecho)
+        self._status_count = tk.Label(status_bar, text='',
+            font=('Arial', 8), bg='#dde3ec', fg='#9ca3af', padx=8)
+        self._status_count.pack(side='right')
+        # Separador vertical
+        tk.Frame(status_bar, bg='#c5ccd8', width=1).pack(
+            side='right', fill='y', pady=3)
+
         # Crear todas las secciones (frames apilados)
         self._secciones = {}
         self.dashboard = Dashboard(self)
@@ -365,6 +385,25 @@ class SistemaGestion:
         if hasattr(self, 'dashboard'):
             self.dashboard.actualizar_dashboard()
 
+    def _set_status(self, texto, tipo='info', count=None):
+        """Actualiza la barra de estado inferior.
+        tipo: 'info' | 'ok' | 'warn' | 'busy'
+        """
+        colores = {
+            'info':  ('#6b7280', '#9ca3af'),
+            'ok':    ('#16a34a', '#16a34a'),
+            'warn':  ('#d97706', '#d97706'),
+            'busy':  ('#1a4b8c', '#1a4b8c'),
+        }
+        fg_txt, fg_ico = colores.get(tipo, colores['info'])
+        if hasattr(self, '_status_lbl'):
+            self._status_lbl.config(text=texto, fg=fg_txt)
+            self._status_ico.config(fg=fg_ico,
+                text='⟳' if tipo == 'busy' else '●')
+            if count is not None:
+                self._status_count.config(text=count)
+            self.root.update_idletasks()
+
     def _navegar(self, seccion):
         """Muestra la sección seleccionada, actualiza botones y refresca datos"""
         self._seccion_actual.set(seccion)
@@ -386,28 +425,44 @@ class SistemaGestion:
                            fg=self.C['nav_text'])
 
         # ── Refrescar datos de la sección al navegar ───────────────────────
+        nombres = {
+            'dashboard':   'Dashboard',
+            'cotizaciones':'Cotizaciones',
+            'facturacion': 'Facturación',
+            'catalogos':   'Catálogos',
+            'stock':       'Stock',
+        }
+        self._set_status(f'Cargando {nombres.get(seccion, seccion)}…', 'busy')
+        self.root.config(cursor='watch')
         try:
             if seccion == 'dashboard':
                 self.actualizar_dashboard()
+                self._set_status('Dashboard actualizado', 'ok')
             elif seccion == 'cotizaciones':
                 self.cargar_cotizaciones()
                 self.actualizar_dashboard()
+                n = len(self.cotizaciones_ui.tree_cotizaciones.get_children())                     if hasattr(self, 'cotizaciones_ui') else 0
+                self._set_status('Cotizaciones cargadas', 'ok',
+                                  count=f'{n} registro{"s" if n!=1 else ""}')
             elif seccion == 'facturacion':
                 if hasattr(self, '_facturacion'):
                     self._facturacion.cargar_facturas()
+                self._set_status('Facturación cargada', 'ok')
             elif seccion == 'catalogos':
                 self.cargar_clientes()
                 self.cargar_productos()
                 self.cargar_proveedores()
                 self.cargar_compras()
+                self._set_status('Catálogos cargados', 'ok')
             elif seccion == 'stock':
-                # SeccionStock tiene su propio Notebook con evento de cambio de pestaña;
-                # actualizamos la vista de stock y el historial directamente.
                 if hasattr(self, '_stock'):
                     self._stock.cargar_vista_stock()
                     self._stock.cargar_historial()
+                self._set_status('Stock actualizado', 'ok')
         except Exception:
-            pass  # Nunca bloquear la navegación por un error de recarga
+            self._set_status('Error al cargar sección', 'warn')
+        finally:
+            self.root.config(cursor='')
 
     def _toolbar_sep(self, parent):
         """Inserta un separador vertical en el toolbar"""

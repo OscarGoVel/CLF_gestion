@@ -38,6 +38,7 @@ class Dashboard:
         self.tree_margen         = None
         self._top_prod_frame     = None
         self._dash_inner         = None
+        self._aten_frame         = None
         self._estado_frame       = None
 
     def crear_seccion(self):
@@ -312,6 +313,15 @@ class Dashboard:
         self._top_prod_frame = tk.Frame(frame_top, bg=self.C['content_bg'])
         self._top_prod_frame.pack(fill='x', padx=8, pady=6)
 
+        # ── R5: Requieren atención ───────────────────────────────────
+        frame_aten = tk.LabelFrame(right_col,
+            text='  ⚠  Requieren atención  ',
+            font=('Arial', 9, 'bold'), bg=self.C['content_bg'],
+            fg='#92400e', relief='flat', bd=1)
+        frame_aten.pack(fill='x', pady=(0, 6))
+        self._aten_frame = tk.Frame(frame_aten, bg=self.C['content_bg'])
+        self._aten_frame.pack(fill='x', padx=8, pady=6)
+
         # Guardar referencia al inner para el scrollable
         self._dash_inner = inner
 
@@ -545,6 +555,68 @@ class Dashboard:
                 tk.Label(fila, text=f'{cant:g}',
                          font=('Arial', 8, 'bold'),
                          bg=self.C['content_bg'], fg=colores[i]).pack(side='left', padx=4)
+
+        # ── Sección Atención: cotizaciones urgentes ─────────────────────────────
+        self._actualizar_seccion_atencion(hoy)
+
+    def _actualizar_seccion_atencion(self, hoy):
+        """Llena la sección 'Requieren atención' con cotizaciones urgentes."""
+        if not hasattr(self, '_aten_frame'):
+            return
+        for w in self._aten_frame.winfo_children():
+            w.destroy()
+
+        self.cursor.execute("""
+            SELECT c.folio, cl.nombre_comercial, c.estado,
+                   c.fecha, c.fecha_entrega, c.total
+            FROM cotizaciones c
+            JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.estado NOT IN ('Cancelada', 'Pagada')
+            ORDER BY c.folio DESC
+        """)
+        urgentes = []
+        from datetime import date as _d
+        for folio, cliente, estado, fecha, fecha_entrega, total in self.cursor.fetchall():
+            try:
+                dias = (hoy - _d.fromisoformat(str(fecha)[:10])).days
+            except Exception:
+                continue
+            if estado in ('Pendiente', 'Programada') and dias > 14:
+                urgentes.append((folio, cliente[:22], f'{dias}d sin avanzar', '#dc2626'))
+            elif estado == 'Entregada':
+                try:
+                    fe = _d.fromisoformat(str(fecha_entrega or fecha)[:10])
+                    dias_e = (hoy - fe).days
+                    if dias_e > 3:
+                        urgentes.append((folio, cliente[:22], f'{dias_e}d sin facturar', '#d97706'))
+                except Exception:
+                    pass
+            elif estado == 'Facturada' and dias > 30:
+                urgentes.append((folio, cliente[:22], f'{dias}d sin pago', '#d97706'))
+
+        if not urgentes:
+            tk.Label(self._aten_frame, text='✅  Todo al día',
+                     font=('Arial', 8), bg=self.C['content_bg'],
+                     fg='#16a34a').pack(anchor='w')
+            return
+
+        for folio, cliente, motivo, color in urgentes[:6]:
+            r = tk.Frame(self._aten_frame, bg=self.C['content_bg'])
+            r.pack(fill='x', pady=1)
+            tk.Label(r, text=folio, font=('Arial', 8, 'bold'),
+                     bg=self.C['content_bg'], fg=color,
+                     width=14, anchor='w').pack(side='left')
+            tk.Label(r, text=cliente, font=('Arial', 8),
+                     bg=self.C['content_bg'], fg=self.C['text_muted2'],
+                     width=22, anchor='w').pack(side='left', padx=(4,0))
+            tk.Label(r, text=motivo, font=('Arial', 8, 'bold'),
+                     bg=self.C['content_bg'], fg=color).pack(side='right')
+
+        if len(urgentes) > 6:
+            tk.Label(self._aten_frame,
+                     text=f'... y {len(urgentes)-6} más',
+                     font=('Arial', 7, 'italic'), bg=self.C['content_bg'],
+                     fg=self.C['text_muted']).pack(anchor='e')
 
     # (removed - rebuilt in new ERP UI)
 

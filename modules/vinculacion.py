@@ -1286,6 +1286,13 @@ class PanelVinculacion:
 
                 self.conn.commit()
 
+                # Feedback en barra de estado
+                try:
+                    self.sistema._set_status(
+                        f'Compra {folio_compra} registrada — stock actualizado', 'ok')
+                except Exception:
+                    pass
+
                 resumen = f"✅ Folio: {folio_compra}\n"
                 resumen += f"Total: ${total_:,.2f}\n"
                 resumen += f"Asignaciones a cotizaciones: {n_cot}\n"
