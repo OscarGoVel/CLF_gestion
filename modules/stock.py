@@ -862,11 +862,11 @@ class VentanaSalida:
         sc.pack(side='right', fill='y')
 
         # Total de unidades
-        frame_tot = tk.Frame(frame_prods, bg='#ecf0f1')
+        frame_tot = tk.Frame(frame_prods, bg='#f1f5f9')
         frame_tot.pack(fill='x', padx=10, pady=10)
-        tk.Label(frame_tot, text='TOTAL UNIDADES:', bg='#ecf0f1',
+        tk.Label(frame_tot, text='TOTAL UNIDADES:', bg='#f1f5f9',
                  font=('Arial', 13, 'bold')).pack(side='right', padx=5)
-        self.lbl_total = tk.Label(frame_tot, text='0', bg='#ecf0f1',
+        self.lbl_total = tk.Label(frame_tot, text='0', bg='#f1f5f9',
                                    font=('Arial', 13, 'bold'), fg='#e74c3c')
         self.lbl_total.pack(side='right', padx=5)
 
@@ -893,7 +893,7 @@ class VentanaSalida:
         tk.Button(
             frame_btn, text='❌  Cancelar',
             command=self.ventana.destroy,
-            bg='#95a5a6', fg='white',
+            bg='#6b7280', fg='white',
             font=('Arial', 11, 'bold'), cursor='hand2',
             padx=20, pady=10
         ).pack(side='left', padx=5)
@@ -1009,7 +1009,7 @@ class VentanaSalida:
                   bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=8).pack(side='left', padx=5)
         tk.Button(fb2, text='❌ Cancelar', command=win.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+                  bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=8).pack(side='left', padx=5)
 
     def _quitar_producto(self):

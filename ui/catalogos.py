@@ -19,6 +19,22 @@ from modules.compras import VentanaCompra
 from ui.generador_pdf_cly import GeneradorPDFCLY
 
 
+
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+
 class Catalogos:
     """
     Componente de UI que encapsula los catálogos del sistema.
@@ -53,6 +69,7 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title('Nuevo Producto (desde XML)')
         ventana.geometry('520x480')
+        _centrar(ventana, self.root)
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
         ventana.grab_set()
@@ -545,6 +562,7 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title('Nuevo Cliente' if modo == 'nuevo' else f"Editar Cliente — {datos.get('nombre_comercial','')}")
         ventana.geometry('580x660')
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
@@ -1000,6 +1018,9 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title("Nuevo Producto" if modo == 'nuevo' else "Editar Producto")
         ventana.geometry("720x660")
+        ventana.minsize(640, 580)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
         
         # Cargar categorías y subcategorías
@@ -1421,7 +1442,7 @@ class Catalogos:
             frame_botones,
             text="❌ Cancelar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
@@ -1434,7 +1455,7 @@ class Catalogos:
             frame_botones,
             text="🏭 Gestionar Proveedores",
             command=lambda: self.gestionar_proveedores_producto(producto_id, ventana) if producto_id else None,
-            bg='#16a085' if modo == 'editar' else '#95a5a6',
+            bg='#16a085' if modo == 'editar' else '#6b7280',
             fg='white',
             font=('Arial', 10, 'bold'),
             cursor='hand2' if modo == 'editar' else 'arrow',
@@ -1504,6 +1525,9 @@ class Catalogos:
         win = tk.Toplevel(parent)
         win.title(f"📈 Historial de Precios — {nombre_prod}")
         win.geometry("680x460")
+        win.minsize(600, 380)
+        win.resizable(True, True)
+        _centrar(win, self.root)
         win.configure(bg="#f1f5f9")
         win.transient(parent)
         win.grab_set()
@@ -1583,6 +1607,9 @@ class Catalogos:
         ventana = tk.Toplevel(ventana_padre)
         ventana.title(f"Proveedores — {codigo_prod}: {nombre_prod}")
         ventana.geometry("750x500")
+        ventana.minsize(670, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         
         # Header
         header = tk.Frame(ventana, bg='#16a085', pady=8)
@@ -1620,6 +1647,9 @@ class Catalogos:
             dlg = tk.Toplevel(ventana)
             dlg.title("Agregar Proveedor")
             dlg.geometry("450x420")
+            dlg.minsize(370, 340)
+            dlg.resizable(True, True)
+            _centrar(dlg, self.root)
             dlg.transient(ventana)
             dlg.grab_set()
             
@@ -1685,7 +1715,7 @@ class Catalogos:
                       bg='#27ae60', fg='white', font=('Arial', 9, 'bold'),
                       cursor='hand2', padx=12, pady=5).pack(side='left', padx=3)
             tk.Button(fb, text="❌ Cancelar", command=dlg.destroy,
-                      bg='#95a5a6', fg='white', font=('Arial', 9, 'bold'),
+                      bg='#6b7280', fg='white', font=('Arial', 9, 'bold'),
                       cursor='hand2', padx=12, pady=5).pack(side='left', padx=3)
         
         def quitar_proveedor():
@@ -1719,7 +1749,10 @@ class Catalogos:
 
             dlg = tk.Toplevel(ventana)
             dlg.title(f"Editar — {prov_nombre}")
-            dlg.geometry("380x170")
+            dlg.geometry("420x200")
+            dlg.minsize(340, 200)
+            dlg.resizable(True, True)
+            _centrar(dlg, self.root)
             dlg.resizable(False, False)
             dlg.transient(ventana)
             dlg.grab_set()
@@ -1794,7 +1827,7 @@ class Catalogos:
                   cursor='hand2', padx=10, pady=4).pack(side='left', padx=3)
         
         # Tabla
-        frame_tabla = tk.Frame(ventana, bg='#eceff4')
+        frame_tabla = tk.Frame(ventana, bg='#f1f5f9')
         frame_tabla.pack(fill='both', expand=True, padx=10, pady=10)
         
         tree = ttk.Treeview(frame_tabla,
@@ -1932,6 +1965,9 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title("Presupuesto de Compra — Vista Previa")
         ventana.geometry("1100x640")
+        ventana.minsize(1020, 560)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         ventana.transient(self.root)
         ventana.grab_set()
 
@@ -2025,13 +2061,13 @@ class Catalogos:
             }
 
         # Totales en pie de tabla
-        frame_totales = tk.Frame(ventana, bg='#ecf0f1', pady=6)
+        frame_totales = tk.Frame(ventana, bg='#f1f5f9', pady=6)
         frame_totales.pack(fill='x', padx=10)
 
         lbl_total_est = tk.Label(
             frame_totales,
             text="Total estimado: $0.00",
-            font=('Arial', 11, 'bold'), bg='#ecf0f1', fg='#16a085'
+            font=('Arial', 11, 'bold'), bg='#f1f5f9', fg='#16a085'
         )
         lbl_total_est.pack(side='right', padx=15)
 
@@ -2123,7 +2159,7 @@ class Catalogos:
         tk.Button(
             frame_btn, text="❌ Cerrar",
             command=ventana.destroy,
-            bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+            bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
             cursor='hand2', padx=18, pady=6
         ).pack(side='right', padx=5)
 
@@ -2269,6 +2305,7 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title('Nuevo Proveedor' if modo == 'nuevo' else f"Editar Proveedor — {datos.get('nombre','')}")
         ventana.geometry('560x580')
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
@@ -2517,6 +2554,9 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title("Gestión de Categorías")
         ventana.geometry("700x500")
+        ventana.minsize(620, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         
         # Frame principal
         frame_principal = tk.Frame(ventana, padx=20, pady=20)
@@ -2671,7 +2711,10 @@ class Catalogos:
         # Mini-formulario
         dlg = tk.Toplevel(ventana_padre)
         dlg.title("Editar Categoría")
-        dlg.geometry("340x130")
+        dlg.geometry("400x160")
+        dlg.minsize(340, 200)
+        dlg.resizable(True, True)
+        _centrar(dlg, self.root)
         dlg.resizable(False, False)
         dlg.transient(ventana_padre)
         dlg.grab_set()
@@ -2729,7 +2772,10 @@ class Catalogos:
 
         dlg = tk.Toplevel(ventana_padre)
         dlg.title("Editar Subcategoría")
-        dlg.geometry("340x130")
+        dlg.geometry("400x160")
+        dlg.minsize(340, 200)
+        dlg.resizable(True, True)
+        _centrar(dlg, self.root)
         dlg.resizable(False, False)
         dlg.transient(ventana_padre)
         dlg.grab_set()
@@ -2967,6 +3013,9 @@ class Catalogos:
         ventana = tk.Toplevel(self.root)
         ventana.title(f"Detalle de Compra - {folio}")
         ventana.geometry("700x500")
+        ventana.minsize(620, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
         frame.pack(fill='both', expand=True)
@@ -3021,7 +3070,7 @@ PRODUCTOS:"""
             frame,
             text="Cerrar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 10, 'bold'),
             cursor='hand2',

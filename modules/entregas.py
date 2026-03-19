@@ -10,6 +10,22 @@ from tkinter import ttk, messagebox, simpledialog
 import sqlite3
 from datetime import datetime
 
+
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+
 class VentanaEntregaParcial:
     """Ventana para gestionar entregas parciales de cotizaciones"""
     
@@ -23,6 +39,9 @@ class VentanaEntregaParcial:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Registrar Entrega Parcial")
         self.ventana.geometry("1100x650")
+        self.ventana.minsize(1020, 570)
+        self.ventana.resizable(True, True)
+        _centrar(self.ventana, self.parent)
         
         # Datos de la cotización
         self.cargar_datos_cotizacion()
@@ -218,7 +237,7 @@ class VentanaEntregaParcial:
         self.text_notas.pack(fill='x')
         
         # Frame de botones finales
-        frame_botones = tk.Frame(self.ventana, bg='#ecf0f1')
+        frame_botones = tk.Frame(self.ventana, bg='#f1f5f9')
         frame_botones.pack(fill='x', padx=10, pady=10)
         
         tk.Button(
@@ -249,7 +268,7 @@ class VentanaEntregaParcial:
             frame_botones,
             text="❌ Cancelar",
             command=self.ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
@@ -321,6 +340,9 @@ class VentanaEntregaParcial:
         ventana_historial = tk.Toplevel(self.ventana)
         ventana_historial.title(f"Historial de Entregas - {self.folio}")
         ventana_historial.geometry("900x400")
+        ventana.minsize(820, 320)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.parent)
         
         # Frame para la tabla
         frame = tk.Frame(ventana_historial)
@@ -378,7 +400,7 @@ class VentanaEntregaParcial:
             ventana_historial,
             text="Cerrar",
             command=ventana_historial.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 10, 'bold'),
             cursor='hand2',

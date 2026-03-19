@@ -13,15 +13,20 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 
 
-# ── Namespaces CFDI ────────────────────────────────────────────────────────────
-NS = {
-    'cfdi': 'http://www.sat.gob.mx/cfd/4',
-    'cfdi3': 'http://www.sat.gob.mx/cfd/3',
-    'tfd':  'http://www.sat.gob.mx/TimbreFiscalDigital',
-}
 
-# RFC propio de la empresa — identifica si CLF es receptor (compra) o emisor (venta)
-CLF_RFC = 'CLF240418U94'
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
 
 
 def _attr(element, name, default=''):
@@ -717,6 +722,7 @@ class SeccionFacturacion:
         win = tk.Toplevel(self.root)
         win.title('📦 Confirmar actualización de Stock')
         win.geometry('1000x620')
+        _centrar(win, self.sistema.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
         win.grab_set()
@@ -976,6 +982,7 @@ class SeccionFacturacion:
         win = tk.Toplevel(self.root)
         win.title('Vincular Factura a Cotización')
         win.geometry('700x500')
+        _centrar(win, self.sistema.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
         win.grab_set()
@@ -1021,7 +1028,7 @@ class SeccionFacturacion:
             tree_c.tag_configure(estado, background=bg)
 
         # Preview derecho
-        pv = tk.Frame(body, bg='#f0f4f8', width=240, relief='flat', bd=0,
+        pv = tk.Frame(body, bg='#f8fafc', width=240, relief='flat', bd=0,
                       highlightbackground='#cbd5e1', highlightthickness=1)
         pv.pack(side='right', fill='y')
         pv.pack_propagate(False)
@@ -1031,14 +1038,14 @@ class SeccionFacturacion:
                  font=('Arial', 8, 'bold'), bg='#1e3a5f', fg='white').place(relx=0.5, rely=0.5, anchor='center')
 
         pv_folio   = tk.Label(pv, text='—', font=('Arial', 9, 'bold'),
-                               bg='#f0f4f8', fg='#1e3a5f', anchor='w', padx=8)
+                               bg='#f8fafc', fg='#1e3a5f', anchor='w', padx=8)
         pv_folio.pack(fill='x', pady=(6, 0))
         pv_cliente = tk.Label(pv, text='Selecciona una cotización',
-                               font=('Arial', 8), bg='#f0f4f8', fg='#6b7280',
+                               font=('Arial', 8), bg='#f8fafc', fg='#6b7280',
                                anchor='w', padx=8, wraplength=220, justify='left')
         pv_cliente.pack(fill='x')
         pv_estado  = tk.Label(pv, text='', font=('Arial', 8, 'bold'),
-                               bg='#f0f4f8', fg='#374151', anchor='w', padx=8)
+                               bg='#f8fafc', fg='#374151', anchor='w', padx=8)
         pv_estado.pack(fill='x')
 
         tk.Frame(pv, bg='#e2e8f0', height=1).pack(fill='x', pady=4)
@@ -1057,7 +1064,7 @@ class SeccionFacturacion:
         tk.Frame(pv, bg='#e2e8f0', height=1).pack(fill='x', pady=(4, 0))
 
         pv_total_lbl = tk.Label(pv, text='', font=('Arial', 9, 'bold'),
-                                 bg='#f0f4f8', fg='#0f7b5e', anchor='e', padx=10)
+                                 bg='#f8fafc', fg='#0f7b5e', anchor='e', padx=10)
         pv_total_lbl.pack(fill='x', pady=4)
 
         def _actualizar_pv(cot_id):
@@ -1260,6 +1267,7 @@ class SeccionFacturacion:
         win = tk.Toplevel(self.root)
         win.title(f"Detalle Factura — {f['uuid']}")
         win.geometry('920x640')
+        _centrar(win, self.sistema.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
 
@@ -1428,6 +1436,7 @@ class SeccionFacturacion:
         win = tk.Toplevel(self.root)
         win.title('🏷️  Datos Fiscales SAT')
         win.geometry('960x600')
+        _centrar(win, self.sistema.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
         win.grab_set()
@@ -1532,6 +1541,7 @@ class SeccionFacturacion:
             dlg = tk.Toplevel(win)
             dlg.title(f'Claves SAT — {nombre}')
             dlg.geometry('420x220')
+            _centrar(dlg, self.sistema.root)
             dlg.resizable(False, False)
             dlg.transient(win)
             dlg.grab_set()
@@ -1748,6 +1758,7 @@ class SeccionFacturacion:
             dlg = tk.Toplevel(win)
             dlg.title(f'Datos Fiscales SAT — {vals_c[1]}')
             dlg.geometry('500x230')
+            _centrar(dlg, self.sistema.root)
             dlg.resizable(False, False)
             dlg.transient(win)
             dlg.grab_set()
@@ -1908,6 +1919,7 @@ class SeccionFacturacion:
             dlg_p = tk.Toplevel(win)
             dlg_p.title(f'Datos Fiscales SAT — {vals_p[1]}')
             dlg_p.geometry('480x185')
+            _centrar(ventana, self.sistema.root)
             dlg_p.resizable(False, False)
             dlg_p.transient(win)
             dlg_p.grab_set()

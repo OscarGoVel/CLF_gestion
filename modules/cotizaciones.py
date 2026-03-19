@@ -9,6 +9,22 @@ from tkinter import ttk, messagebox, simpledialog
 import sqlite3
 from datetime import datetime
 
+
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+
 class VentanaCotizacion:
     """Ventana para crear o editar cotizaciones"""
     
@@ -29,6 +45,9 @@ class VentanaCotizacion:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Nueva Cotización" if modo == 'nueva' else "Editar Cotización")
         self.ventana.geometry("1000x700")
+        self.ventana.minsize(920, 620)
+        self.ventana.resizable(True, True)
+        _centrar(self.ventana, self.parent)
         
         self.crear_interfaz()
         
@@ -86,7 +105,7 @@ class VentanaCotizacion:
         self.cargar_clientes()
         
         # Información del cliente seleccionado
-        self.label_info_cliente = tk.Label(frame_fila2, text="", font=('Arial', 9), fg='#7f8c8d')
+        self.label_info_cliente = tk.Label(frame_fila2, text="", font=('Arial', 9), fg='#6b7280')
         self.label_info_cliente.pack(side='left', padx=10)
         
         # Frame de productos
@@ -173,28 +192,28 @@ class VentanaCotizacion:
         self.tree_productos.bind('<Double-1>', lambda e: self.editar_producto_completo())
         
         # Frame de totales
-        frame_totales = tk.Frame(frame_productos, bg='#ecf0f1')
+        frame_totales = tk.Frame(frame_productos, bg='#f1f5f9')
         frame_totales.pack(fill='x', padx=10, pady=10)
         
         # Subtotal
-        frame_subtotal = tk.Frame(frame_totales, bg='#ecf0f1')
+        frame_subtotal = tk.Frame(frame_totales, bg='#f1f5f9')
         frame_subtotal.pack(fill='x', pady=2)
-        tk.Label(frame_subtotal, text="Subtotal:", font=('Arial', 11, 'bold'), bg='#ecf0f1').pack(side='right', padx=5)
-        self.label_subtotal = tk.Label(frame_subtotal, text="$0.00", font=('Arial', 11), bg='#ecf0f1')
+        tk.Label(frame_subtotal, text="Subtotal:", font=('Arial', 11, 'bold'), bg='#f1f5f9').pack(side='right', padx=5)
+        self.label_subtotal = tk.Label(frame_subtotal, text="$0.00", font=('Arial', 11), bg='#f1f5f9')
         self.label_subtotal.pack(side='right', padx=5)
         
         # IVA
-        frame_iva = tk.Frame(frame_totales, bg='#ecf0f1')
+        frame_iva = tk.Frame(frame_totales, bg='#f1f5f9')
         frame_iva.pack(fill='x', pady=2)
-        tk.Label(frame_iva, text="IVA:", font=('Arial', 11, 'bold'), bg='#ecf0f1').pack(side='right', padx=5)
-        self.label_iva = tk.Label(frame_iva, text="$0.00", font=('Arial', 11), bg='#ecf0f1')
+        tk.Label(frame_iva, text="IVA:", font=('Arial', 11, 'bold'), bg='#f1f5f9').pack(side='right', padx=5)
+        self.label_iva = tk.Label(frame_iva, text="$0.00", font=('Arial', 11), bg='#f1f5f9')
         self.label_iva.pack(side='right', padx=5)
         
         # Total
-        frame_total = tk.Frame(frame_totales, bg='#ecf0f1')
+        frame_total = tk.Frame(frame_totales, bg='#f1f5f9')
         frame_total.pack(fill='x', pady=2)
-        tk.Label(frame_total, text="TOTAL:", font=('Arial', 13, 'bold'), bg='#ecf0f1').pack(side='right', padx=5)
-        self.label_total = tk.Label(frame_total, text="$0.00", font=('Arial', 13, 'bold'), fg='#27ae60', bg='#ecf0f1')
+        tk.Label(frame_total, text="TOTAL:", font=('Arial', 13, 'bold'), bg='#f1f5f9').pack(side='right', padx=5)
+        self.label_total = tk.Label(frame_total, text="$0.00", font=('Arial', 13, 'bold'), fg='#27ae60', bg='#f1f5f9')
         self.label_total.pack(side='right', padx=5)
         
         # Frame de notas
@@ -225,7 +244,7 @@ class VentanaCotizacion:
             frame_botones,
             text="❌ Cancelar",
             command=self.ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
@@ -386,7 +405,10 @@ class VentanaCotizacion:
         # Ventana simple para cliente rápido
         ventana = tk.Toplevel(self.ventana)
         ventana.title("Nuevo Cliente Rápido")
-        ventana.geometry("400x250")
+        ventana.geometry("480x320")
+        ventana.minsize(400, 240)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.parent)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
         frame.pack(fill='both', expand=True)
@@ -451,7 +473,7 @@ class VentanaCotizacion:
         
         tk.Button(frame_btn, text="💾 Guardar", command=guardar_rapido, bg='#27ae60', fg='white',
                  font=('Arial', 10, 'bold'), cursor='hand2', padx=15, pady=5).pack(side='left', padx=5)
-        tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy, bg='#95a5a6', fg='white',
+        tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy, bg='#6b7280', fg='white',
                  font=('Arial', 10, 'bold'), cursor='hand2', padx=15, pady=5).pack(side='left', padx=5)
         
         ventana.transient(self.ventana)
@@ -462,6 +484,9 @@ class VentanaCotizacion:
         ventana = tk.Toplevel(ventana_padre)
         ventana.title("Nuevo Producto Rápido")
         ventana.geometry("520x500")
+        ventana.minsize(440, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.parent)
         
         frame = tk.Frame(ventana, padx=20, pady=15)
         frame.pack(fill='both', expand=True)
@@ -642,7 +667,7 @@ class VentanaCotizacion:
                   bg='#0f7b5e', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         tk.Button(fb, text="❌ Cancelar", command=ventana.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+                  bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         
         ventana.transient(ventana_padre)
@@ -659,6 +684,9 @@ class VentanaCotizacion:
         ventana = tk.Toplevel(self.ventana)
         ventana.title("Seleccionar Producto")
         ventana.geometry("800x500")
+        ventana.minsize(720, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.parent)
         
         # Frame de búsqueda
         frame_busqueda = tk.Frame(ventana)
@@ -843,7 +871,7 @@ class VentanaCotizacion:
             frame_botones,
             text="❌ Cancelar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 10, 'bold'),
             cursor='hand2',
@@ -943,6 +971,9 @@ class VentanaCotizacion:
         ventana = tk.Toplevel(self.ventana)
         ventana.title(f"Editar Producto: {prod['nombre']}")
         ventana.geometry("500x450")
+        ventana.minsize(420, 370)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.parent)
         
         frame = tk.Frame(ventana, padx=20, pady=15)
         frame.pack(fill='both', expand=True)
@@ -1087,7 +1118,7 @@ class VentanaCotizacion:
                   bg='#0f7b5e', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         tk.Button(fb, text="❌ Cancelar", command=ventana.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+                  bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         
         ventana.transient(self.ventana)
@@ -1283,6 +1314,9 @@ class VentanaCotizacion:
         dlg = tk.Toplevel(self.ventana)
         dlg.title("⚠ Precios posiblemente desactualizados")
         dlg.geometry("700x480")
+        dlg.minsize(620, 400)
+        dlg.resizable(True, True)
+        _centrar(dlg, self.parent)
         dlg.configure(bg="#fff7ed")
         dlg.transient(self.ventana)
         dlg.grab_set()
@@ -1291,6 +1325,7 @@ class VentanaCotizacion:
         x = self.ventana.winfo_x() + (self.ventana.winfo_width()  - 700) // 2
         y = self.ventana.winfo_y() + (self.ventana.winfo_height() - 480) // 2
         dlg.geometry(f"700x480+{x}+{y}")
+        _centrar(dlg, self.parent)
 
         # Header
         hdr = tk.Frame(dlg, bg="#d97706", pady=10)

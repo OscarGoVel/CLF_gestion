@@ -13,6 +13,22 @@ except ImportError:
     _reg_entrada = None
 from datetime import datetime
 
+
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+
 class VentanaCompra:
     """Ventana para registrar compras"""
     
@@ -31,6 +47,9 @@ class VentanaCompra:
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Nueva Compra" if modo == 'nueva' else "Editar Compra")
         self.ventana.geometry("1000x650")
+        self.ventana.minsize(920, 570)
+        self.ventana.resizable(True, True)
+        _centrar(self.ventana, self.root)
         
         self.crear_interfaz()
         
@@ -153,13 +172,13 @@ class VentanaCompra:
         scroll_y.pack(side='right', fill='y')
         
         # Frame de totales
-        frame_totales = tk.Frame(frame_productos, bg='#ecf0f1')
+        frame_totales = tk.Frame(frame_productos, bg='#f1f5f9')
         frame_totales.pack(fill='x', padx=10, pady=10)
         
-        frame_total = tk.Frame(frame_totales, bg='#ecf0f1')
+        frame_total = tk.Frame(frame_totales, bg='#f1f5f9')
         frame_total.pack(fill='x', pady=2)
-        tk.Label(frame_total, text="TOTAL:", font=('Arial', 13, 'bold'), bg='#ecf0f1').pack(side='right', padx=5)
-        self.label_total = tk.Label(frame_total, text="$0.00", font=('Arial', 13, 'bold'), fg='#e74c3c', bg='#ecf0f1')
+        tk.Label(frame_total, text="TOTAL:", font=('Arial', 13, 'bold'), bg='#f1f5f9').pack(side='right', padx=5)
+        self.label_total = tk.Label(frame_total, text="$0.00", font=('Arial', 13, 'bold'), fg='#e74c3c', bg='#f1f5f9')
         self.label_total.pack(side='right', padx=5)
         
         # Notas
@@ -190,7 +209,7 @@ class VentanaCompra:
             frame_botones,
             text="❌ Cancelar",
             command=self.ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
@@ -231,6 +250,9 @@ class VentanaCompra:
         ventana = tk.Toplevel(self.ventana)
         ventana.title("Nuevo Proveedor")
         ventana.geometry("400x200")
+        ventana.minsize(340, 200)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
         frame.pack(fill='both', expand=True)
@@ -274,7 +296,7 @@ class VentanaCompra:
         
         tk.Button(frame_btn, text="💾 Guardar", command=guardar, bg='#27ae60', fg='white',
                  font=('Arial', 10, 'bold'), cursor='hand2', padx=15, pady=5).pack(side='left', padx=5)
-        tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy, bg='#95a5a6', fg='white',
+        tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy, bg='#6b7280', fg='white',
                  font=('Arial', 10, 'bold'), cursor='hand2', padx=15, pady=5).pack(side='left', padx=5)
         
         ventana.transient(self.ventana)
@@ -285,6 +307,9 @@ class VentanaCompra:
         ventana = tk.Toplevel(self.ventana)
         ventana.title("Seleccionar Producto")
         ventana.geometry("800x500")
+        ventana.minsize(720, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         
         # Frame de búsqueda
         frame_busqueda = tk.Frame(ventana)
@@ -416,7 +441,7 @@ class VentanaCompra:
             frame_botones,
             text="❌ Cancelar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 10, 'bold'),
             cursor='hand2',

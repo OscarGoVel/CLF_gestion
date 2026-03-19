@@ -131,6 +131,28 @@ class SistemaGestion:
 
         return tree
     
+    @staticmethod
+    def _centrar_ventana(win, padre=None, ancho=None, alto=None):
+        """Centra una ventana respecto a su padre o a la pantalla.
+        Si se pasan ancho/alto los aplica antes de centrar.
+        """
+        if ancho and alto:
+            win.geometry(f"{ancho}x{alto}")
+        win.update_idletasks()
+        w = win.winfo_width()
+        h = win.winfo_height()
+        if padre:
+            px = padre.winfo_rootx()
+            py = padre.winfo_rooty()
+            pw = padre.winfo_width()
+            ph = padre.winfo_height()
+            x = px + (pw - w) // 2
+            y = py + (ph - h) // 2
+        else:
+            x = (win.winfo_screenwidth()  - w) // 2
+            y = (win.winfo_screenheight() - h) // 2
+        win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
     def init_database(self, db_path=None):
         """Inicializa la base de datos SQLite.
         Delega la creación de tablas a db_init.inicializar_bd() para que
@@ -162,23 +184,44 @@ class SistemaGestion:
 
         # ── Paleta de colores ──────────────────────────────────────────────
         self.C = {
-            'nav_bg':     '#1e2d45',
-            'nav_active': '#eceff4',
-            'nav_hover':  '#2b3a55',
-            'nav_text':   '#94a3b8',
+            # ── Navegación ────────────────────────────────────────────────
+            'nav_bg':          '#1e2d45',
+            'nav_active':      '#eceff4',
+            'nav_hover':       '#2b3a55',
+            'nav_text':        '#94a3b8',
             'nav_active_text': '#1e2d45',
-            'kpi_bg':     '#f7f9fc',
-            'kpi_border': '#d0d7e4',
-            'toolbar_bg': '#d8dde8',
-            'toolbar_border': '#c5ccd8',
-            'content_bg': '#eceff4',
-            'card_bg':    'white',
-            'accent':     '#0f7b5e',
-            'accent2':    '#1a4b8c',
-            'warn':       '#d97706',
-            'danger':     '#c0392b',
-            'text_dark':  '#1e2d45',
-            'text_muted': '#6b7e99',
+            # ── Layout principal ──────────────────────────────────────────
+            'kpi_bg':          '#f7f9fc',
+            'kpi_border':      '#d0d7e4',
+            'toolbar_bg':      '#d8dde8',
+            'toolbar_border':  '#c5ccd8',
+            'content_bg':      '#eceff4',
+            'card_bg':         'white',
+            # ── Acento / acciones ─────────────────────────────────────────
+            'accent':          '#0f7b5e',   # verde principal
+            'accent2':         '#1a4b8c',   # azul medio
+            'accent3':         '#1e3a5f',   # azul oscuro
+            'accent_dark':     '#065f46',   # verde oscuro
+            'purple':          '#7c3aed',   # seguimiento / vinculación
+            'success':         '#27ae60',   # verde éxito
+            'success2':        '#16a34a',   # verde éxito alt
+            'success_alt':     '#16a085',   # teal éxito
+            'warn':            '#d97706',   # ámbar advertencia
+            'danger':          '#c0392b',   # rojo peligro
+            'danger2':         '#dc2626',   # rojo alt
+            'dark2':           '#2c3e50',   # gris oscuro
+            # ── Texto ─────────────────────────────────────────────────────
+            'text_dark':       '#1e2d45',
+            'text_secondary':  '#374151',
+            'text_muted':      '#6b7e99',
+            'text_muted2':     '#6b7280',
+            'text_faint':      '#9ca3af',
+            # ── Fondos de UI ──────────────────────────────────────────────
+            'modal_bg':        '#f1f5f9',   # fondo de modales / diálogos
+            'form_bg':         '#f8fafc',   # fondo de formularios / cards
+            'border':          '#e2e8f0',   # bordes, separadores
+            'bg_success':      '#f0fdf4',   # fondo verde claro
+            'bg_warn':         '#fef3c7',   # fondo ámbar claro
         }
 
         # ── Barra de navegación superior ───────────────────────────────────

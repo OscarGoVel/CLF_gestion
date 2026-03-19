@@ -27,6 +27,22 @@ from modules.entregas import VentanaEntregaParcial
 from modules.vinculacion import PanelVinculacion, detectar_pendientes
 
 
+
+def _centrar(win, padre=None, ancho=None, alto=None):
+    """Centra una ventana respecto a su padre o pantalla."""
+    if ancho and alto:
+        win.geometry(f"{ancho}x{alto}")
+    win.update_idletasks()
+    w, h = win.winfo_width(), win.winfo_height()
+    if padre:
+        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
+    else:
+        x = (win.winfo_screenwidth()  - w) // 2
+        y = (win.winfo_screenheight() - h) // 2
+    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+
 class CotizacionesUI:
     """
     Componente de UI que encapsula toda la sección Cotizaciones.
@@ -203,25 +219,25 @@ class CotizacionesUI:
                  font=('Arial', 9, 'bold'), bg='#1e3a5f', fg='white').pack(side='left', padx=8)
 
         # ── Fila 1: Info rápida ────────────────────────────────────────────
-        info = tk.Frame(parent, bg='#f0f4f8', pady=5, padx=10)
+        info = tk.Frame(parent, bg='#f8fafc', pady=5, padx=10)
         info.grid(row=1, column=0, columnspan=2, sticky='ew')
 
         self._pv_folio = tk.Label(info, text='—',
-                                   font=('Arial', 10, 'bold'), bg='#f0f4f8',
+                                   font=('Arial', 10, 'bold'), bg='#f8fafc',
                                    fg='#1e3a5f', anchor='w')
         self._pv_folio.pack(fill='x')
         self._pv_cliente = tk.Label(info, text='Selecciona una cotización',
-                                     font=('Arial', 8), bg='#f0f4f8',
+                                     font=('Arial', 8), bg='#f8fafc',
                                      fg='#6b7280', anchor='w')
         self._pv_cliente.pack(fill='x')
 
-        sub_row = tk.Frame(info, bg='#f0f4f8')
+        sub_row = tk.Frame(info, bg='#f8fafc')
         sub_row.pack(fill='x')
         self._pv_estado = tk.Label(sub_row, text='', font=('Arial', 8, 'bold'),
-                                    bg='#f0f4f8', fg='#374151', anchor='w')
+                                    bg='#f8fafc', fg='#374151', anchor='w')
         self._pv_estado.pack(side='left')
         self._pv_fecha = tk.Label(sub_row, text='', font=('Arial', 8),
-                                   bg='#f0f4f8', fg='#9ca3af', anchor='e')
+                                   bg='#f8fafc', fg='#9ca3af', anchor='e')
         self._pv_fecha.pack(side='right')
 
         tk.Frame(parent, bg='#e2e8f0', height=1).grid(row=2, column=0,
@@ -252,7 +268,7 @@ class CotizacionesUI:
                                                         columnspan=2, sticky='ew')
 
         # ── Fila 4: Totales ────────────────────────────────────────────────
-        tot = tk.Frame(parent, bg='#f0f4f8', pady=7, padx=10)
+        tot = tk.Frame(parent, bg='#f8fafc', pady=7, padx=10)
         tot.grid(row=4, column=0, columnspan=2, sticky='ew')
         tot.grid_columnconfigure(1, weight=1)
 
@@ -260,12 +276,12 @@ class CotizacionesUI:
             if sep:
                 tk.Frame(tot, bg='#e2e8f0', height=1).pack(fill='x', pady=3)
                 return
-            row = tk.Frame(tot, bg='#f0f4f8')
+            row = tk.Frame(tot, bg='#f8fafc')
             row.pack(fill='x', pady=1)
             tk.Label(row, text=label, font=('Arial', 8, 'bold' if bold else 'normal'),
-                     bg='#f0f4f8', fg='#9ca3af', anchor='w').pack(side='left')
+                     bg='#f8fafc', fg='#9ca3af', anchor='w').pack(side='left')
             lbl = tk.Label(row, text='—', font=('Arial', 8, 'bold' if bold else 'normal'),
-                           bg='#f0f4f8', fg=color, anchor='e')
+                           bg='#f8fafc', fg=color, anchor='e')
             lbl.pack(side='right')
             setattr(self, var_name, lbl)
 
@@ -806,12 +822,15 @@ class CotizacionesUI:
         ventana = tk.Toplevel(self.root)
         ventana.title(f"Detalle - {folio}")
         ventana.geometry("900x700")
-        ventana.configure(bg='#ecf0f1')
+        ventana.minsize(820, 620)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
+        ventana.configure(bg='#f1f5f9')
         
         # Frame principal con scroll
-        main_canvas = tk.Canvas(ventana, bg='#ecf0f1', highlightthickness=0)
+        main_canvas = tk.Canvas(ventana, bg='#f1f5f9', highlightthickness=0)
         scrollbar = ttk.Scrollbar(ventana, orient="vertical", command=main_canvas.yview)
-        scrollable_frame = tk.Frame(main_canvas, bg='#ecf0f1')
+        scrollable_frame = tk.Frame(main_canvas, bg='#f1f5f9')
         
         scrollable_frame.bind(
             "<Configure>",
@@ -825,7 +844,7 @@ class CotizacionesUI:
         scrollbar.pack(side="right", fill="y", pady=10)
         
         # Contenido
-        frame = tk.Frame(scrollable_frame, bg='#ecf0f1', padx=20, pady=20)
+        frame = tk.Frame(scrollable_frame, bg='#f1f5f9', padx=20, pady=20)
         frame.pack(fill='both', expand=True)
         
         # === ENCABEZADO ===
@@ -857,7 +876,7 @@ class CotizacionesUI:
             header_content,
             text=estado,
             font=('Arial', 12, 'bold'),
-            bg=estado_colors.get(estado, '#95a5a6'),
+            bg=estado_colors.get(estado, '#6b7280'),
             fg='white',
             padx=15,
             pady=5
@@ -893,7 +912,7 @@ class CotizacionesUI:
                 text=label,
                 font=('Arial', 10, 'bold'),
                 bg='white',
-                fg='#7f8c8d'
+                fg='#6b7280'
             ).grid(row=i, column=0, sticky='w', pady=3, padx=(0, 10))
             
             tk.Label(
@@ -935,7 +954,7 @@ class CotizacionesUI:
                 text=label,
                 font=('Arial', 9, 'bold'),
                 bg='white',
-                fg='#7f8c8d'
+                fg='#6b7280'
             ).grid(row=row, column=col, sticky='w', pady=3, padx=(0, 5))
             
             tk.Label(
@@ -970,7 +989,7 @@ class CotizacionesUI:
                     text="Límite de pago (30 días):",
                     font=('Arial', 9, 'bold'),
                     bg='white',
-                    fg='#7f8c8d'
+                    fg='#6b7280'
                 ).grid(row=3, column=0, sticky='w', pady=(10, 3), padx=(0, 5))
                 
                 tk.Label(
@@ -1051,7 +1070,7 @@ class CotizacionesUI:
         
         totales_info = [
             ("Subtotal:", subtotal, '#34495e'),
-            ("IVA:", iva, '#7f8c8d'),
+            ("IVA:", iva, '#6b7280'),
             ("TOTAL:", total, '#e74c3c')
         ]
         
@@ -1109,7 +1128,7 @@ class CotizacionesUI:
                 text=label,
                 font=('Arial', 10),
                 bg='white',
-                fg='#7f8c8d'
+                fg='#6b7280'
             ).pack(side='left')
             
             color = '#27ae60' if monto == total and label == "Monto Pagado:" else '#2c3e50'
@@ -1148,14 +1167,14 @@ class CotizacionesUI:
             ).pack(anchor='w')
         
         # Botón cerrar
-        btn_frame = tk.Frame(frame, bg='#ecf0f1')
+        btn_frame = tk.Frame(frame, bg='#f1f5f9')
         btn_frame.pack(pady=15)
         
         tk.Button(
             btn_frame,
             text="Cerrar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
@@ -1182,11 +1201,14 @@ class CotizacionesUI:
         ventana = tk.Toplevel(self.root)
         ventana.title(f"🔗 Vincular Orden de Compra - {folio}")
         ventana.geometry("600x500")
+        ventana.minsize(520, 420)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
-        ventana.configure(bg='#ecf0f1')
+        ventana.configure(bg='#f1f5f9')
         
         # Frame principal con padding
-        frame_main = tk.Frame(ventana, bg='#ecf0f1', padx=20, pady=20)
+        frame_main = tk.Frame(ventana, bg='#f1f5f9', padx=20, pady=20)
         frame_main.pack(fill='both', expand=True)
         
         # Frame contenedor blanco
@@ -1211,7 +1233,7 @@ class CotizacionesUI:
                 frame_content,
                 text=f"O.C. actual: {oc_actual}",
                 font=('Arial', 10),
-                fg='#7f8c8d',
+                fg='#6b7280',
                 bg='white'
             ).pack(pady=(0, 15))
         
@@ -1271,7 +1293,7 @@ class CotizacionesUI:
             frame_content,
             text="📅 Formato: AAAA-MM-DD (ejemplo: 2026-02-12)",
             font=('Arial', 8, 'italic'),
-            fg='#95a5a6',
+            fg='#6b7280',
             bg='white'
         ).pack(anchor='w', pady=(3, 0))
         
@@ -1336,14 +1358,14 @@ class CotizacionesUI:
             frame_btn,
             text="❌ Cancelar",
             command=ventana.destroy,
-            bg='#95a5a6',
+            bg='#6b7280',
             fg='white',
             font=('Arial', 11, 'bold'),
             cursor='hand2',
             padx=30,
             pady=12,
             relief='flat',
-            activebackground='#7f8c8d'
+            activebackground='#6b7280'
         ).pack(side='left', padx=5)
         
         ventana.transient(self.root)
@@ -1397,18 +1419,21 @@ class CotizacionesUI:
         ventana = tk.Toplevel(self.root)
         ventana.title(f"Detalle - {folio}")
         ventana.geometry("900x700")
-        ventana.configure(bg='#ecf0f1')
+        ventana.minsize(820, 620)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
+        ventana.configure(bg='#f1f5f9')
         
         # Scroll
-        canvas = tk.Canvas(ventana, bg='#ecf0f1')
+        canvas = tk.Canvas(ventana, bg='#f1f5f9')
         scrollbar = ttk.Scrollbar(ventana, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg='#ecf0f1')
+        scrollable_frame = tk.Frame(canvas, bg='#f1f5f9')
         
         scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        frame_content = tk.Frame(scrollable_frame, bg='#ecf0f1', padx=20, pady=20)
+        frame_content = tk.Frame(scrollable_frame, bg='#f1f5f9', padx=20, pady=20)
         frame_content.pack(fill='both', expand=True)
         
         # Info General
@@ -1514,7 +1539,7 @@ class CotizacionesUI:
             frame_notas.pack(fill='x', pady=(0, 15))
             tk.Label(frame_notas, text=notas, font=('Arial', 9), bg='white', justify='left', wraplength=800).pack()
         
-        tk.Button(frame_content, text="Cerrar", command=ventana.destroy, bg='#95a5a6', fg='white', font=('Arial', 11, 'bold'), padx=30, pady=10).pack(pady=10)
+        tk.Button(frame_content, text="Cerrar", command=ventana.destroy, bg='#6b7280', fg='white', font=('Arial', 11, 'bold'), padx=30, pady=10).pack(pady=10)
         
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -1702,7 +1727,10 @@ class CotizacionesUI:
         # Ventana de registro de factura
         ventana = tk.Toplevel(self.root)
         ventana.title(f"Registrar Factura - {folio}")
-        ventana.geometry("400x300")
+        ventana.geometry("480x380")
+        ventana.minsize(400, 300)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
@@ -1797,7 +1825,7 @@ class CotizacionesUI:
                   bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+                  bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         
         ventana.transient(self.root)
@@ -1822,7 +1850,10 @@ class CotizacionesUI:
         # Ventana de registro de pago
         ventana = tk.Toplevel(self.root)
         ventana.title(f"Registrar Pago - {folio}")
-        ventana.geometry("400x280")
+        ventana.geometry("480x340")
+        ventana.minsize(400, 260)
+        ventana.resizable(True, True)
+        _centrar(ventana, self.root)
         ventana.resizable(False, False)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
@@ -1837,7 +1868,7 @@ class CotizacionesUI:
         pendiente = total_cot - (pagado_actual or 0)
         
         tk.Label(frame, text=f"Total: ${total_cot:,.2f}  |  Ya pagado: ${pagado_actual or 0:,.2f}  |  Pendiente: ${pendiente:,.2f}",
-                 font=('Arial', 9), fg='#7f8c8d').grid(row=1, column=0, columnspan=2, sticky='w', pady=(0, 8))
+                 font=('Arial', 9), fg='#6b7280').grid(row=1, column=0, columnspan=2, sticky='w', pady=(0, 8))
         
         tk.Label(frame, text="Monto Pagado Ahora:", font=('Arial', 10)).grid(
             row=2, column=0, sticky='w', pady=5)
@@ -1928,7 +1959,7 @@ class CotizacionesUI:
                   bg='#27ae60', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         tk.Button(frame_btn, text="❌ Cancelar", command=ventana.destroy,
-                  bg='#95a5a6', fg='white', font=('Arial', 10, 'bold'),
+                  bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=6).pack(side='left', padx=5)
         
         ventana.transient(self.root)
@@ -2100,8 +2131,12 @@ class CotizacionesUI:
             x = self.tree_cotizaciones.winfo_rootx() + bbox[0]
             y = self.tree_cotizaciones.winfo_rooty() + bbox[1]
             popup.geometry(f"340x160+{x}+{y}")
+            _centrar(ventana, self.root)
         else:
             popup.geometry("340x160")
+            ventana.minsize(340, 200)
+            ventana.resizable(True, True)
+            _centrar(ventana, self.root)
 
         tk.Label(popup, text=f"📝  Observación — {folio}",
                  font=('Arial', 9, 'bold'), bg='#f8fafc', fg='#1e293b').pack(pady=(10, 4))
@@ -2276,6 +2311,9 @@ class CotizacionesUI:
         win = tk.Toplevel(self.root)
         win.title(f"📋 Seguimiento — {folio}")
         win.geometry("900x580")
+        win.minsize(820, 500)
+        win.resizable(True, True)
+        _centrar(win, self.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
         win.grab_set()
@@ -2504,6 +2542,9 @@ class CotizacionesUI:
         dlg = tk.Toplevel(parent)
         dlg.title(f"Editar etapa — {etapa}")
         dlg.geometry("480x400")
+        dlg.minsize(400, 320)
+        dlg.resizable(True, True)
+        _centrar(dlg, self.root)
         dlg.resizable(False, False)
         dlg.transient(parent)
         dlg.grab_set()
@@ -2769,7 +2810,10 @@ class CotizacionesUI:
         win = tk.Toplevel(self.root)
         win.title(f"📎 Documentos — {folio}")
         win.geometry("860x560")
-        win.configure(bg='#eceff4')
+        win.minsize(780, 480)
+        win.resizable(True, True)
+        _centrar(win, self.root)
+        win.configure(bg='#f1f5f9')
         win.transient(self.root)
 
         # Header
@@ -2809,7 +2853,7 @@ class CotizacionesUI:
         sc_y = ttk.Scrollbar(win, orient='vertical', command=tree.yview)
         tree.configure(yscrollcommand=sc_y.set)
 
-        frame_tree = tk.Frame(win, bg='#eceff4')
+        frame_tree = tk.Frame(win, bg='#f1f5f9')
         frame_tree.pack(fill='both', expand=True, padx=10, pady=8)
         tree.pack(in_=frame_tree, side='left', fill='both', expand=True)
         sc_y.pack(in_=frame_tree, side='right', fill='y')
@@ -2873,7 +2917,10 @@ class CotizacionesUI:
             # Diálogo para elegir tipo
             dlg = tk.Toplevel(win)
             dlg.title("Agregar Documento")
-            dlg.geometry("420x260")
+            dlg.geometry("480x320")
+            dlg.minsize(400, 240)
+            dlg.resizable(True, True)
+            _centrar(dlg, self.root)
             dlg.resizable(False, False)
             dlg.transient(win)
             dlg.grab_set()
