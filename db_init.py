@@ -393,6 +393,13 @@ def inicializar_bd(db_path):
         )
     ''')
 
+    # ── Backfill factura_cotizaciones desde facturas.cotizacion_id ──────────────
+    cursor.execute('''
+        INSERT OR IGNORE INTO factura_cotizaciones (factura_id, cotizacion_id)
+        SELECT id, cotizacion_id FROM facturas
+        WHERE cotizacion_id IS NOT NULL
+    ''')
+
     # ── Historial de precios de productos ────────────────────────────────────────
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS producto_precio_historial (

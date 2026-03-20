@@ -92,6 +92,7 @@ class Catalogos:
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
 
         hdr = tk.Frame(ventana, bg='#065f46', pady=8)
         hdr.pack(fill='x')
@@ -235,6 +236,31 @@ class Catalogos:
         nb.pack(fill='both', expand=True)
         self._notebook = nb
 
+        def _actualizar_tabs():
+            """Actualiza los contadores en los títulos de los tabs."""
+            try:
+                counts = {}
+                self.cursor.execute("SELECT COUNT(*) FROM clientes")
+                counts['cli'] = self.cursor.fetchone()[0]
+                self.cursor.execute("SELECT COUNT(*) FROM productos")
+                counts['prod'] = self.cursor.fetchone()[0]
+                self.cursor.execute("SELECT COUNT(*) FROM proveedores")
+                counts['prov'] = self.cursor.fetchone()[0]
+                self.cursor.execute("SELECT COUNT(*) FROM compras")
+                counts['comp'] = self.cursor.fetchone()[0]
+                labels = [
+                    f"👥  Clientes  [{counts['cli']}]",
+                    f"📦  Productos  [{counts['prod']}]",
+                    f"🏭  Proveedores  [{counts['prov']}]",
+                    f"🛒  Compras  [{counts['comp']}]",
+                ]
+                for i, lbl in enumerate(labels):
+                    try: nb.tab(i, text=lbl)
+                    except Exception: pass
+            except Exception:
+                pass
+        self._actualizar_tabs_catalogos = _actualizar_tabs
+
         # ── Tab Clientes ──────────────────────────────────────────────────
         tab_cli = tk.Frame(nb, bg=self.C['content_bg'])
         nb.add(tab_cli, text='👥  Clientes')
@@ -242,7 +268,7 @@ class Catalogos:
         tb_cli = tk.Frame(tab_cli, bg=self.C['toolbar_bg'])
         tb_cli.pack(fill='x')
         tk.Frame(tab_cli, bg=self.C['toolbar_border'], height=1).pack(fill='x')
-        self.sistema._toolbar_btn(tb_cli, '➕ Nuevo',    self.nuevo_cliente,   color=self.C['accent'])
+        self.sistema._toolbar_btn(tb_cli, '➕ Nuevo',    self.nuevo_cliente,   color=self.C['accent'], tip='Registrar nuevo cliente')
         self.sistema._toolbar_btn(tb_cli, '✏️ Editar',   self.editar_cliente)
         self.sistema._toolbar_btn(tb_cli, '🗑️ Eliminar', self.eliminar_cliente, peligro=True)
 
@@ -278,6 +304,10 @@ class Catalogos:
         ft_cli.grid_columnconfigure(0, weight=1)
         self.tree_clientes.bind('<Double-1>', lambda e: self.editar_cliente())
         self.sistema._configurar_sorting_treeview(self.tree_clientes)
+        # Barra de estado del tab
+        self._status_cli = tk.Label(tab_cli, text='',
+            font=('Arial', 8), bg='#dde3ec', fg='#6b7280', anchor='w', padx=8, pady=3)
+        self._status_cli.pack(fill='x', side='bottom')
         self.cargar_clientes()
 
         # ── Tab Productos ─────────────────────────────────────────────────
@@ -291,7 +321,7 @@ class Catalogos:
         self.sistema._toolbar_btn(tb_prod, '✏️ Editar',     self.editar_producto)
         self.sistema._toolbar_btn(tb_prod, '🗑️ Eliminar',   self.eliminar_producto,  peligro=True)
         self.sistema._toolbar_sep(tb_prod)
-        self.sistema._toolbar_btn(tb_prod, '📋 Categorías', self.gestionar_categorias)
+        self.sistema._toolbar_btn(tb_prod, '📋 Categorías', self.gestionar_categorias, tip='Gestionar categorías y subcategorías de productos')
 
         ff_prod = tk.Frame(tab_prod, bg=self.C['toolbar_bg'], pady=4)
         ff_prod.pack(fill='x')
@@ -304,26 +334,34 @@ class Catalogos:
         self.sistema._toolbar_sep(ff_prod)
         self.sistema._toolbar_btn(ff_prod, '📊 CSV', self.exportar_csv_productos, color='#065f46')
         self.sistema._toolbar_sep(ff_prod)
-        self._btn_precios_revisar = self.sistema._toolbar_btn(
-            ff_prod, '⚠ Precios por revisar', self.filtrar_precios_desactualizados,
-            color='#d97706')
+        self.sistema._toolbar_btn(ff_prod, '⚠ Precios por revisar', self.filtrar_precios_desactualizados,
+            color='#d97706', tip='Filtra productos cuyo precio base lleva más tiempo sin actualizarse que su umbral individual.')
 
         ft_prod = tk.Frame(tab_prod, bg=self.C['content_bg'])
         ft_prod.pack(fill='both', expand=True, padx=8, pady=8)
-        cols_prod = ('ID', 'Código', 'Nombre', 'Categoría', 'Subcategoría',
-                     'Unidad', 'Precio Base', 'IVA', 'Precio Venta',
-                     'Stock', 'Stock Mín', 'Clave SAT', 'Proveedores', 'Precio ↺')
+        cols_prod = ('ID', 'Código', 'Nombre', 'Categoría',
+                     'Unidad', 'Precio Base', 'IVA', 'P.Venta',
+                     'Stock', 'Mín', 'Proveedor ⭐', 'Precio actualizado')
         self.tree_productos = ttk.Treeview(
             ft_prod, columns=cols_prod, show='headings', selectmode='browse')
-        for col, w in zip(cols_prod,
-                          [0, 80, 190, 100, 100, 55, 88, 45, 88, 65, 65, 85, 130, 72]):
-            self.tree_productos.heading(col, text=col)
-            self.tree_productos.column(col, width=w, minwidth=w)
+        widths_prod = {'ID': 0, 'Código': 82, 'Nombre': 210, 'Categoría': 105,
+                       'Unidad': 55, 'Precio Base': 88, 'IVA': 38, 'P.Venta': 88,
+                       'Stock': 58, 'Mín': 44, 'Proveedor ⭐': 140,
+                       'Precio actualizado': 110}
+        for col in cols_prod:
+            anchor = 'e' if col in ('Precio Base', 'P.Venta', 'Stock', 'Mín') else 'w'
+            self.tree_productos.heading(col, text=col, anchor=anchor)
+            self.tree_productos.column(col, width=widths_prod[col],
+                                       minwidth=widths_prod[col],
+                                       stretch=(col == 'Nombre'), anchor=anchor)
         self.tree_productos.column('ID', stretch=False)
         # Tags de frescura de precio
         self.tree_productos.tag_configure('precio_ok',   foreground='#16a34a')
         self.tree_productos.tag_configure('precio_warn', foreground='#d97706')
         self.tree_productos.tag_configure('precio_old',  foreground='#dc2626')
+        # Tag de stock bajo
+        self.tree_productos.tag_configure('stock_bajo',
+            background='#fef3c7', foreground='#92400e')
         sc = ttk.Scrollbar(ft_prod, orient='vertical',   command=self.tree_productos.yview)
         sx = ttk.Scrollbar(ft_prod, orient='horizontal', command=self.tree_productos.xview)
         self.tree_productos.configure(yscrollcommand=sc.set, xscrollcommand=sx.set)
@@ -334,7 +372,10 @@ class Catalogos:
         ft_prod.grid_columnconfigure(0, weight=1)
         self.tree_productos.bind('<Double-1>', lambda e: self.editar_producto())
         self.sistema._configurar_sorting_treeview(self.tree_productos,
-            columnas_numericas=['Precio Base', 'Precio Venta', 'Stock', 'Stock Mín'])
+            columnas_numericas=['Precio Base', 'P.Venta', 'Stock', 'Mín'])
+        self._status_prod = tk.Label(tab_prod, text='',
+            font=('Arial', 8), bg='#dde3ec', fg='#6b7280', anchor='w', padx=8, pady=3)
+        self._status_prod.pack(fill='x', side='bottom')
         self.cargar_productos()
 
         # ── Tab Proveedores ───────────────────────────────────────────────
@@ -348,7 +389,7 @@ class Catalogos:
         self.sistema._toolbar_btn(tb_prov, '✏️ Editar',   self.editar_proveedor)
         self.sistema._toolbar_btn(tb_prov, '🗑️ Eliminar', self.eliminar_proveedor, peligro=True)
         self.sistema._toolbar_sep(tb_prov)
-        self.sistema._toolbar_btn(tb_prov, '🛒 Presupuesto Compra', self.generar_presupuesto_compra)
+        self.sistema._toolbar_btn(tb_prov, '🛒 Presupuesto Compra', self.generar_presupuesto_compra, tip='Generar presupuesto de compra basado en stock mínimo y órdenes pendientes')
 
         ff_prov = tk.Frame(tab_prov, bg=self.C['toolbar_bg'], pady=4)
         ff_prov.pack(fill='x')
@@ -459,7 +500,14 @@ class Catalogos:
         # Insertar datos
         for row in self.cursor.fetchall():
             self.tree_clientes.insert('', 'end', values=row)
-    
+
+        n = len(self.tree_clientes.get_children())
+        if hasattr(self, '_status_cli'):
+            self._status_cli.config(
+                text=f'{n} cliente{"s" if n!=1 else ""}  ·  doble clic para editar')
+        if hasattr(self, '_actualizar_tabs_catalogos'):
+            self._actualizar_tabs_catalogos()
+
     def nuevo_cliente(self):
         """Abre ventana para crear nuevo cliente"""
         self.ventana_cliente(modo='nuevo')
@@ -586,6 +634,7 @@ class Catalogos:
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
 
         # Cabecera
         hdr = tk.Frame(ventana, bg='#1e3a5f', pady=8)
@@ -809,86 +858,86 @@ class Catalogos:
                 ORDER BY p.nombre
             """)
         
-        # Insertar datos
+        # Insertar datos — columnas: ID, Código, Nombre, Categoría,
+        # Unidad, Precio Base, IVA, P.Venta, Stock, Mín, Proveedor ⭐, Precio actualizado
+        from datetime import date as _d
+        hoy = _d.today()
+        n_total = 0
+
         for row in self.cursor.fetchall():
-            producto_id = row[0]
-            row_list = list(row)
-            # Formatear precios
-            row_list[6] = f"${row[6]:,.2f}" if row[6] else "$0.00"
-            row_list[7] = "Sí" if row[7] else "No"
-            row_list[8] = f"${row[8]:,.2f}" if row[8] else "$0.00"
-            # clave_sat queda en row_list[11] como texto o vacío
-            row_list[11] = row[11] or ''
-            
-            # Obtener info de proveedores
+            pid, codigo, nombre, cat, sub, unidad, precio_base, aplica_iva,             precio_venta, stock, stock_min, clave_sat = row
+
+            # Proveedor principal
             self.cursor.execute("""
                 SELECT prov.nombre, pp.es_principal
                 FROM producto_proveedor pp
                 JOIN proveedores prov ON pp.proveedor_id = prov.id
                 WHERE pp.producto_id = ?
                 ORDER BY pp.es_principal DESC, prov.nombre
-            """, (producto_id,))
+            """, (pid,))
             provs = self.cursor.fetchall()
-            
             if provs:
-                # Mostrar proveedor principal primero (si existe) + cantidad total
-                principal = next((p[0] for p in provs if p[1]), None)
-                if principal:
-                    info_prov = f"⭐ {principal}"
-                    if len(provs) > 1:
-                        info_prov += f" (+{len(provs)-1})"
-                else:
-                    info_prov = f"{provs[0][0]}"
-                    if len(provs) > 1:
-                        info_prov += f" (+{len(provs)-1})"
+                ppal = next((p[0] for p in provs if p[1]), provs[0][0])
+                info_prov = f"⭐ {ppal[:18]}" + (f" (+{len(provs)-1})" if len(provs) > 1 else '')
             else:
-                info_prov = "Sin asignar"
-            
-            row_list.append(info_prov)
+                info_prov = '—'
 
-            # ── Indicador de frescura del precio ──────────────────────────
-            from datetime import date as _d
+            # Indicador de precio actualizado
             precio_tag = ''
             try:
-                # Buscar último cambio real (sin backfill)
                 self.cursor.execute("""
                     SELECT fecha FROM producto_precio_historial
                     WHERE producto_id = ? AND fuente != 'backfill'
-                    ORDER BY fecha DESC, fecha_registro DESC LIMIT 1
-                """, (producto_id,))
+                    ORDER BY fecha DESC LIMIT 1
+                """, (pid,))
                 ph = self.cursor.fetchone()
                 if ph:
-                    ultima = _d.fromisoformat(str(ph[0])[:10])
-                    dias = (_d.today() - ultima).days
+                    dias = (hoy - _d.fromisoformat(str(ph[0])[:10])).days
                 else:
-                    # Sin historial real — usar precio_base_fecha
                     self.cursor.execute(
-                        "SELECT precio_base_fecha FROM productos WHERE id=?", (producto_id,))
+                        "SELECT precio_base_fecha FROM productos WHERE id=?", (pid,))
                     pbf = self.cursor.fetchone()
-                    if pbf and pbf[0]:
-                        ultima = _d.fromisoformat(str(pbf[0])[:10])
-                        dias = (_d.today() - ultima).days
-                    else:
-                        dias = 9999
+                    dias = (hoy - _d.fromisoformat(str(pbf[0])[:10])).days                            if pbf and pbf[0] else 9999
 
-                if dias == 9999:
-                    precio_ind = '❓ Sin registro'
-                    precio_tag = 'precio_old'
-                elif dias <= 30:
-                    precio_ind = f'🟢 Hace {dias}d'
-                    precio_tag = 'precio_ok'
-                elif dias <= 60:
-                    precio_ind = f'🟡 Hace {dias}d'
-                    precio_tag = 'precio_warn'
-                else:
-                    precio_ind = f'🔴 Hace {dias}d'
-                    precio_tag = 'precio_old'
+                if dias == 9999:   precio_ind, precio_tag = '❓ Sin registro', 'precio_old'
+                elif dias <= 30:   precio_ind, precio_tag = f'🟢 Hace {dias}d', 'precio_ok'
+                elif dias <= 60:   precio_ind, precio_tag = f'🟡 Hace {dias}d', 'precio_warn'
+                else:              precio_ind, precio_tag = f'🔴 Hace {dias}d', 'precio_old'
             except Exception:
                 precio_ind = '—'
 
-            row_list.append(precio_ind)
-            tags = (precio_tag,) if precio_tag else ()
-            self.tree_productos.insert('', 'end', values=row_list, tags=tags)
+            # Tag de stock bajo (tiene prioridad visual sobre precio)
+            stock_bajo = stock_min and stock_min > 0 and stock <= stock_min
+            if stock_bajo:
+                tag_final = ('stock_bajo',)
+            elif precio_tag:
+                tag_final = (precio_tag,)
+            else:
+                tag_final = ()
+
+            values = (
+                pid,
+                codigo or '',
+                nombre or '',
+                cat or '',
+                unidad or '',
+                f'${precio_base:,.2f}' if precio_base else '$0.00',
+                'Sí' if aplica_iva else 'No',
+                f'${precio_venta:,.2f}' if precio_venta else '—',
+                f'{stock:g}' if stock is not None else '0',
+                f'{stock_min:g}' if stock_min else '—',
+                info_prov,
+                precio_ind,
+            )
+            self.tree_productos.insert('', 'end', values=values, tags=tag_final)
+            n_total += 1
+
+        # Actualizar barra de estado y tabs
+        if hasattr(self, '_status_prod'):
+            self._status_prod.config(
+                text=f'{n_total} producto{"s" if n_total!=1 else ""}  ·  doble clic para editar')
+        if hasattr(self, '_actualizar_tabs_catalogos'):
+            self._actualizar_tabs_catalogos()
     
     def filtrar_precios_desactualizados(self):
         """Filtra la tabla de productos mostrando solo los con precio desactualizado."""
@@ -959,11 +1008,7 @@ class Catalogos:
                 continue  # precio fresco, no mostrar
 
             # Construir row para mostrar
-            row_list = list(row[:12])
-            row_list[6] = f"${row[6]:,.2f}" if row[6] else "$0.00"
-            row_list[7] = "Sí" if row[7] else "No"
-            row_list[8] = f"${row[8]:,.2f}" if row[8] else "$0.00"
-            row_list[11] = row[11] or ''
+            pid2, codigo, nombre, cat, sub, unidad, precio_base, aplica_iva,             precio_venta, stock, stock_min, clave_sat, precio_base_fecha = row
 
             self.cursor.execute("""
                 SELECT prov.nombre, pp.es_principal FROM producto_proveedor pp
@@ -971,32 +1016,34 @@ class Catalogos:
                 WHERE pp.producto_id = ? ORDER BY pp.es_principal DESC
             """, (pid,))
             provs = self.cursor.fetchall()
-            info_prov = f"⭐ {provs[0][0]}" if provs else "Sin asignar"
-            row_list.append(info_prov)
+            ppal = next((p[0] for p in provs if p[1]), provs[0][0]) if provs else None
+            info_prov = f"⭐ {ppal[:18]}" if ppal else '—'
 
-            if dias == 9999:
-                precio_ind = '❓ Sin registro'
-            elif dias <= 60:
-                precio_ind = f'🟡 Hace {dias}d'
-            else:
-                precio_ind = f'🔴 Hace {dias}d'
-            row_list.append(precio_ind)
+            if dias == 9999:   precio_ind = '❓ Sin registro'
+            elif dias <= 60:   precio_ind = f'🟡 Hace {dias}d'
+            else:              precio_ind = f'🔴 Hace {dias}d'
 
             tag = 'precio_warn' if dias <= 60 else 'precio_old'
-            self.tree_productos.insert('', 'end', values=row_list, tags=(tag,))
+            values = (
+                pid, codigo or '', nombre or '', cat or '', unidad or '',
+                f'${precio_base:,.2f}' if precio_base else '$0.00',
+                'Sí' if aplica_iva else 'No',
+                f'${precio_venta:,.2f}' if precio_venta else '—',
+                f'{stock:g}' if stock is not None else '0',
+                f'{stock_min:g}' if stock_min else '—',
+                info_prov, precio_ind,
+            )
+            self.tree_productos.insert('', 'end', values=values, tags=(tag,))
             n_filtrados += 1
 
-        # Feedback visual
+        # Si hay productos desactualizados, abrir ventana de revisión masiva
         if n_filtrados == 0:
             messagebox.showinfo('✅ Precios al día',
                 'Todos los productos tienen precios actualizados.',
                 parent=self.sistema.root)
             self.cargar_productos()
         else:
-            messagebox.showinfo('⚠ Filtro activo',
-                f'{n_filtrados} producto(s) con precio posiblemente desactualizado.\n'
-                f'Usa "🔍" para volver a ver todos los productos.',
-                parent=self.sistema.root)
+            self._ventana_revision_masiva_precios()
 
     def nuevo_producto(self):
         """Abre ventana para crear nuevo producto"""
@@ -1039,516 +1086,631 @@ class Catalogos:
                 messagebox.showerror("Error", f"No se pudo eliminar el producto:\n{str(e)}")
     
     def ventana_producto(self, modo='nuevo', producto_id=None):
-        """Ventana para crear o editar producto"""
+        """Ventana para crear o editar producto — layout sectioned."""
+        BG  = '#f8fafc'
+        BDR = '#e2e8f0'
+        HDR = '#1e3a5f'
+
         ventana = tk.Toplevel(self.root)
         ventana.title("Nuevo Producto" if modo == 'nuevo' else "Editar Producto")
-        ventana.geometry("720x660")
-        ventana.minsize(640, 580)
+        ventana.geometry("680x600")
+        ventana.minsize(600, 520)
         ventana.resizable(True, True)
         _centrar(ventana, self.root)
-        ventana.resizable(False, False)
-        
-        # Cargar categorías y subcategorías
+        ventana.configure(bg=BG)
+
+        # ── Cargar datos ───────────────────────────────────────────────────
         self.cursor.execute("SELECT id, nombre FROM categorias ORDER BY nombre")
         categorias = self.cursor.fetchall()
-        
-        # Si es editar, cargar datos
-        datos_producto = {}
+
+        datos = {}
         if modo == 'editar' and producto_id:
             self.cursor.execute("""
-                SELECT codigo, nombre, descripcion, categoria_id, subcategoria_id, unidad_medida,
-                       precio_base, aplica_iva, precio_venta, stock_actual, stock_minimo,
-                       clave_sat, clave_unidad_sat
+                SELECT codigo, nombre, descripcion, categoria_id, subcategoria_id,
+                       unidad_medida, precio_base, aplica_iva, precio_venta,
+                       stock_actual, stock_minimo, clave_sat, clave_unidad_sat
                 FROM productos WHERE id = ?
             """, (producto_id,))
             row = self.cursor.fetchone()
             if row:
-                datos_producto = {
-                    'codigo': row[0] or '',
-                    'nombre': row[1] or '',
-                    'descripcion': row[2] or '',
-                    'categoria_id': row[3],
-                    'subcategoria_id': row[4],
-                    'unidad_medida': row[5] or '',
-                    'precio_base': row[6] or 0,
-                    'aplica_iva': row[7],
-                    'precio_venta': row[8] or 0,
-                    'stock_actual': row[9] or 0,
-                    'stock_minimo': row[10] or 0,
-                    'clave_sat': row[11] or '',
-                    'clave_unidad_sat': row[12] or '',
-                }
-        
-        # Frame principal con scroll
-        canvas = tk.Canvas(ventana)
-        scrollbar = ttk.Scrollbar(ventana, orient="vertical", command=canvas.yview)
-        frame = tk.Frame(canvas, padx=20, pady=20)
-        
-        frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Variables
-        var_aplica_iva = tk.BooleanVar(value=datos_producto.get('aplica_iva', 1))
-        
-        row = 0
-        
-        # Código
-        tk.Label(frame, text="Código/SKU:*", font=('Arial', 10, 'bold')).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_codigo = tk.Entry(frame, width=40, font=('Arial', 10))
-        entry_codigo.grid(row=row, column=1, pady=5, sticky='w')
-        entry_codigo.insert(0, datos_producto.get('codigo', ''))
-        lbl_err_codigo = tk.Label(frame, text='', font=('Arial', 8),
-                                  fg='#dc2626', bg=ventana.cget('bg'))
-        lbl_err_codigo.grid(row=row+1, column=1, sticky='w', pady=(0,2))
-        row += 1
-        
-        # Nombre
-        tk.Label(frame, text="Nombre:*", font=('Arial', 10, 'bold')).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_nombre = tk.Entry(frame, width=40, font=('Arial', 10))
-        entry_nombre.grid(row=row, column=1, pady=5, sticky='w')
-        entry_nombre.insert(0, datos_producto.get('nombre', ''))
-        lbl_err_nombre = tk.Label(frame, text='', font=('Arial', 8),
-                                  fg='#dc2626', bg=ventana.cget('bg'))
-        lbl_err_nombre.grid(row=row+1, column=1, sticky='w', pady=(0,2))
-        row += 1
-        
-        # Descripción
-        tk.Label(frame, text="Descripción:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='nw', pady=5
-        )
-        text_descripcion = tk.Text(frame, width=30, height=3, font=('Arial', 10))
-        text_descripcion.grid(row=row, column=1, pady=5, sticky='w')
-        text_descripcion.insert('1.0', datos_producto.get('descripcion', ''))
-        row += 1
-        
-        # Categoría
-        tk.Label(frame, text="Categoría:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        combo_categoria = ttk.Combobox(
-            frame,
-            values=[cat[1] for cat in categorias],
-            state='readonly',
-            width=37,
-            font=('Arial', 10)
-        )
-        combo_categoria.grid(row=row, column=1, pady=5, sticky='w')
-        
-        # Seleccionar categoría si está editando
-        if datos_producto.get('categoria_id'):
-            for i, cat in enumerate(categorias):
-                if cat[0] == datos_producto['categoria_id']:
-                    combo_categoria.current(i)
+                keys = ['codigo','nombre','descripcion','categoria_id','subcategoria_id',
+                        'unidad_medida','precio_base','aplica_iva','precio_venta',
+                        'stock_actual','stock_minimo','clave_sat','clave_unidad_sat']
+                datos = {k: (v if v is not None else '') for k, v in zip(keys, row)}
+
+        # ── Header ────────────────────────────────────────────────────────
+        hdr = tk.Frame(ventana, bg=HDR, pady=10)
+        hdr.pack(fill='x')
+        titulo = "📦  Nuevo Producto" if modo == 'nuevo' else "📦  Editar Producto"
+        tk.Label(hdr, text=titulo,
+                 font=('Arial', 11, 'bold'), bg=HDR, fg='white').pack(side='left', padx=14)
+        if modo == 'editar' and datos.get('codigo') and datos.get('nombre'):
+            tk.Label(hdr, text=f"{datos['codigo']}  ·  {str(datos['nombre'])[:38]}",
+                     font=('Arial', 9), bg=HDR, fg='#93c5fd').pack(side='left')
+
+        # ── Scrollable body ───────────────────────────────────────────────
+        body_outer = tk.Frame(ventana, bg=BG)
+        body_outer.pack(fill='both', expand=True)
+        canvas_b = tk.Canvas(body_outer, bg=BG, highlightthickness=0)
+        sc_b = ttk.Scrollbar(body_outer, orient='vertical', command=canvas_b.yview)
+        canvas_b.configure(yscrollcommand=sc_b.set)
+        canvas_b.pack(side='left', fill='both', expand=True)
+        sc_b.pack(side='right', fill='y')
+        body = tk.Frame(canvas_b, bg=BG)
+        wid_b = canvas_b.create_window((0,0), window=body, anchor='nw')
+        body.bind('<Configure>', lambda e: canvas_b.configure(scrollregion=canvas_b.bbox('all')))
+        canvas_b.bind('<Configure>', lambda e: canvas_b.itemconfig(wid_b, width=e.width))
+
+        def section(parent, titulo_sec, color=HDR):
+            tk.Frame(parent, bg=BDR, height=1).pack(fill='x')
+            hf = tk.Frame(parent, bg=color, pady=5)
+            hf.pack(fill='x')
+            tk.Label(hf, text=titulo_sec, font=('Arial', 9, 'bold'),
+                     bg=color, fg='white').pack(side='left', padx=12)
+            f = tk.Frame(parent, bg=BG, padx=14, pady=8)
+            f.pack(fill='x')
+            f.grid_columnconfigure(1, weight=1)
+            return f
+
+        # ── SEC 1: Datos generales ─────────────────────────────────────────
+        sec1 = section(body, '📋  Datos generales')
+
+        def _lbl(parent, text, row_n, bold=False):
+            tk.Label(parent, text=text, font=('Arial', 9, 'bold' if bold else 'normal'),
+                     bg=BG, fg='#374151', anchor='e', width=14
+                     ).grid(row=row_n, column=0, sticky='e', padx=(0,10), pady=4)
+
+        def _entry(parent, row_n, val='', width=38):
+            e = tk.Entry(parent, font=('Arial', 9), width=width,
+                         relief='solid', bd=1, bg='white')
+            e.insert(0, str(val))
+            e.grid(row=row_n, column=1, sticky='ew', pady=4)
+            return e
+
+        _lbl(sec1, 'Código / SKU*', 0, bold=True)
+        entry_codigo = _entry(sec1, 0, datos.get('codigo',''))
+        lbl_err_codigo = tk.Label(sec1, text='', font=('Arial', 8), fg='#dc2626', bg=BG)
+        lbl_err_codigo.grid(row=1, column=1, sticky='w')
+
+        _lbl(sec1, 'Nombre*', 2, bold=True)
+        entry_nombre = _entry(sec1, 2, datos.get('nombre',''))
+        lbl_err_nombre = tk.Label(sec1, text='', font=('Arial', 8), fg='#dc2626', bg=BG)
+        lbl_err_nombre.grid(row=3, column=1, sticky='w')
+
+        _lbl(sec1, 'Descripción', 4)
+        text_desc = tk.Text(sec1, font=('Arial', 9), width=38, height=2,
+                            relief='solid', bd=1, bg='white')
+        text_desc.insert('1.0', datos.get('descripcion',''))
+        text_desc.grid(row=4, column=1, sticky='ew', pady=4)
+
+        try:
+            self.cursor.execute("SELECT nombre FROM unidades_medida ORDER BY nombre")
+            unidades = [r[0] for r in self.cursor.fetchall()]
+        except Exception:
+            unidades = []
+        if not unidades:
+            unidades = ['Caja','Kilogramo','Litro','Pieza','Servicio']
+        _lbl(sec1, 'Unidad', 5)
+        combo_unidad = ttk.Combobox(sec1, values=unidades, state='readonly',
+                                    font=('Arial', 9), width=20)
+        ud = datos.get('unidad_medida', 'Pieza')
+        if ud in unidades: combo_unidad.set(ud)
+        combo_unidad.grid(row=5, column=1, sticky='w', pady=4)
+
+        # ── SEC 2: Categoría ───────────────────────────────────────────────
+        sec2 = section(body, '🗂  Categoría', '#374151')
+
+        nombres_cat = [c[1] for c in categorias]
+        cat_actual = ''
+        if datos.get('categoria_id'):
+            for cid, cnom in categorias:
+                if cid == datos['categoria_id']:
+                    cat_actual = cnom
                     break
-        row += 1
-        
-        # Subcategoría
-        tk.Label(frame, text="Subcategoría:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        combo_subcategoria = ttk.Combobox(
-            frame,
-            state='readonly',
-            width=37,
-            font=('Arial', 10)
-        )
-        combo_subcategoria.grid(row=row, column=1, pady=5, sticky='w')
-        row += 1
-        
-        def generar_sku_automatico():
-            """Genera un SKU automático a partir de categoría y subcategoría"""
-            if modo != 'nuevo':
-                return
-            cat_nombre = combo_categoria.get()
-            sub_nombre = combo_subcategoria.get()
-            if not cat_nombre or not sub_nombre:
-                return
-            
-            # Prefijo: primeras 3 letras de categoría + primeras 3 de subcategoría
-            cat_prefix = ''.join(c for c in cat_nombre.upper() if c.isalpha())[:3]
-            sub_prefix = ''.join(c for c in sub_nombre.upper() if c.isalpha())[:3]
-            prefijo = f"{cat_prefix}{sub_prefix}"
-            
-            # Buscar el siguiente consecutivo para ese prefijo
-            self.cursor.execute("""
-                SELECT codigo FROM productos 
-                WHERE codigo LIKE ?
-                ORDER BY codigo DESC
-            """, (f"{prefijo}%",))
-            
-            existentes = [row[0] for row in self.cursor.fetchall()]
-            
-            # Extraer números y encontrar el máximo
-            max_num = 0
-            for cod in existentes:
-                num_str = cod[len(prefijo):]
-                try:
-                    num = int(num_str)
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    pass
-            
-            nuevo_num = max_num + 1
-            nuevo_sku = f"{prefijo}{nuevo_num:04d}"
-            
-            entry_codigo.delete(0, tk.END)
-            entry_codigo.insert(0, nuevo_sku)
-        
-        def actualizar_subcategorias(event=None):
-            """Actualiza subcategorías según categoría seleccionada"""
-            categoria_nombre = combo_categoria.get()
-            if not categoria_nombre:
-                combo_subcategoria['values'] = []
-                return
-            
-            # Buscar ID de categoría
-            categoria_id = None
-            for cat in categorias:
-                if cat[1] == categoria_nombre:
-                    categoria_id = cat[0]
-                    break
-            
-            if categoria_id:
+
+        _lbl(sec2, 'Categoría', 0)
+        combo_categoria = ttk.Combobox(sec2, values=nombres_cat, state='readonly',
+                                        font=('Arial', 9), width=36)
+        if cat_actual in nombres_cat: combo_categoria.set(cat_actual)
+        combo_categoria.grid(row=0, column=1, sticky='ew', pady=4)
+
+        _lbl(sec2, 'Subcategoría', 1)
+        combo_subcat = ttk.Combobox(sec2, values=[], state='readonly',
+                                    font=('Arial', 9), width=36)
+        combo_subcat.grid(row=1, column=1, sticky='ew', pady=4)
+
+        def _on_cat_change(e=None):
+            cat_sel = combo_categoria.get()
+            cid = next((c[0] for c in categorias if c[1] == cat_sel), None)
+            if cid:
                 self.cursor.execute(
-                    "SELECT id, nombre FROM subcategorias WHERE categoria_id = ? ORDER BY nombre",
-                    (categoria_id,)
-                )
-                subcats = self.cursor.fetchall()
-                combo_subcategoria['values'] = [sub[1] for sub in subcats]
-                
-                # Seleccionar si está editando
-                if datos_producto.get('subcategoria_id'):
-                    for i, sub in enumerate(subcats):
-                        if sub[0] == datos_producto['subcategoria_id']:
-                            combo_subcategoria.current(i)
-                            break
-        
-        combo_categoria.bind('<<ComboboxSelected>>', actualizar_subcategorias)
-        combo_subcategoria.bind('<<ComboboxSelected>>', lambda e: generar_sku_automatico())
-        if modo == 'editar':
-            actualizar_subcategorias()
-        
-        # Unidad de medida
-        tk.Label(frame, text="Unidad de Medida:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        combo_unidad = ttk.Combobox(
-            frame,
-            values=['Pieza', 'Caja', 'Kg', 'Litro', 'Paquete', 'Metro', 'Otro'],
-            width=37,
-            font=('Arial', 10)
-        )
-        combo_unidad.grid(row=row, column=1, pady=5, sticky='w')
-        combo_unidad.set(datos_producto.get('unidad_medida', 'Pieza'))
-        row += 1
-        
-        # Precio base
-        tk.Label(frame, text="Precio Base:*", font=('Arial', 10, 'bold')).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_precio_base = tk.Entry(frame, width=20, font=('Arial', 10))
-        entry_precio_base.grid(row=row, column=1, pady=5, sticky='w')
-        entry_precio_base.insert(0, str(datos_producto.get('precio_base', '0.00')))
-        lbl_err_precio = tk.Label(frame, text='', font=('Arial', 8),
-                                  fg='#dc2626', bg=ventana.cget('bg'))
-        lbl_err_precio.grid(row=row+1, column=1, sticky='w', pady=(0,2))
-        row += 1
-        
-        # Aplica IVA
-        check_iva = tk.Checkbutton(
-            frame,
-            text="Aplica IVA (16%)",
-            variable=var_aplica_iva,
-            font=('Arial', 10)
-        )
-        check_iva.grid(row=row, column=1, pady=5, sticky='w')
-        row += 1
-        
-        # Precio venta
-        tk.Label(frame, text="Precio Venta:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_precio_venta = tk.Entry(frame, width=20, font=('Arial', 10))
-        entry_precio_venta.grid(row=row, column=1, pady=5, sticky='w')
-        entry_precio_venta.insert(0, str(datos_producto.get('precio_venta', '0.00')))
-        tk.Label(frame, text="(Opcional, se calcula automáticamente)", font=('Arial', 8), fg='gray').grid(
-            row=row+1, column=1, sticky='w'
-        )
-        row += 2
-        
-        # Stock actual
-        tk.Label(frame, text="Stock Actual:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_stock = tk.Entry(frame, width=20, font=('Arial', 10))
-        entry_stock.grid(row=row, column=1, pady=5, sticky='w')
-        entry_stock.insert(0, str(datos_producto.get('stock_actual', '0')))
-        row += 1
-        
-        # Stock mínimo
-        tk.Label(frame, text="Stock Mínimo:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        entry_stock_min = tk.Entry(frame, width=20, font=('Arial', 10))
-        entry_stock_min.grid(row=row, column=1, pady=5, sticky='w')
-        entry_stock_min.insert(0, str(datos_producto.get('stock_minimo', '0')))
-        row += 1
+                    "SELECT nombre FROM subcategorias WHERE categoria_id=? ORDER BY nombre", (cid,))
+                subs = [r[0] for r in self.cursor.fetchall()]
+                combo_subcat['values'] = subs
+                if datos.get('subcategoria_id'):
+                    self.cursor.execute(
+                        "SELECT nombre FROM subcategorias WHERE id=?", (datos['subcategoria_id'],))
+                    rs = self.cursor.fetchone()
+                    if rs and rs[0] in subs: combo_subcat.set(rs[0])
+            else:
+                combo_subcat['values'] = []
+                combo_subcat.set('')
 
-        # ── Separador SAT ──────────────────────────────────────────────
-        tk.Frame(frame, bg='#e2e8f0', height=1).grid(
-            row=row, column=0, columnspan=2, sticky='ew', pady=(10, 4))
-        row += 1
-        tk.Label(frame, text="🧾  Datos SAT / Facturación",
-                 font=('Arial', 9, 'bold'), fg='#0e7490').grid(
-            row=row, column=0, columnspan=2, sticky='w', pady=(0, 6))
-        row += 1
+        combo_categoria.bind('<<ComboboxSelected>>', _on_cat_change)
+        _on_cat_change()
 
-        # Clave Producto/Servicio SAT
-        tk.Label(frame, text="Clave SAT (prod/serv):", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        frame_csat = tk.Frame(frame)
-        frame_csat.grid(row=row, column=1, pady=5, sticky='w')
-        entry_clave_sat = tk.Entry(frame_csat, width=18, font=('Arial', 10))
-        entry_clave_sat.pack(side='left')
-        entry_clave_sat.insert(0, datos_producto.get('clave_sat', ''))
-        tk.Label(frame_csat, text="  ej: 43211500",
-                 font=('Arial', 8), fg='gray').pack(side='left')
-        row += 1
+        # ── SEC 3: Precios ─────────────────────────────────────────────────
+        sec3 = section(body, '💲  Precios', '#065f46')
+        sec3.grid_columnconfigure(3, weight=1)
 
-        # Clave Unidad SAT
-        tk.Label(frame, text="Clave Unidad SAT:", font=('Arial', 10)).grid(
-            row=row, column=0, sticky='w', pady=5
-        )
-        frame_usat = tk.Frame(frame)
-        frame_usat.grid(row=row, column=1, pady=5, sticky='w')
-        entry_clave_unidad_sat = tk.Entry(frame_usat, width=18, font=('Arial', 10))
-        entry_clave_unidad_sat.pack(side='left')
-        entry_clave_unidad_sat.insert(0, datos_producto.get('clave_unidad_sat', ''))
-        tk.Label(frame_usat, text="  ej: H87 (Pieza), KGM (Kilo)",
-                 font=('Arial', 8), fg='gray').pack(side='left')
-        row += 1
-        frame_botones = tk.Frame(frame)
-        frame_botones.grid(row=row, column=0, columnspan=2, pady=20)
-        
+        tk.Label(sec3, text='Precio base*', font=('Arial', 9, 'bold'),
+                 bg=BG, fg='#374151', anchor='e', width=14
+                 ).grid(row=0, column=0, sticky='e', padx=(0,10), pady=4)
+        entry_precio_base = tk.Entry(sec3, font=('Arial', 9), width=14,
+                                     relief='solid', bd=1, bg='white')
+        entry_precio_base.insert(0, str(datos.get('precio_base','0.00')))
+        entry_precio_base.grid(row=0, column=1, sticky='w', pady=4, padx=(0,20))
+        lbl_err_precio = tk.Label(sec3, text='', font=('Arial', 8), fg='#dc2626', bg=BG)
+        lbl_err_precio.grid(row=1, column=1, sticky='w')
+
+        var_iva = tk.BooleanVar(value=bool(datos.get('aplica_iva', 1)))
+        tk.Label(sec3, text='Aplica IVA', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=10
+                 ).grid(row=0, column=2, sticky='e', padx=(0,6), pady=4)
+        tk.Checkbutton(sec3, variable=var_iva, bg=BG, text='(16%)',
+                       font=('Arial', 9)).grid(row=0, column=3, sticky='w', pady=4)
+
+        tk.Label(sec3, text='Precio venta', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=14
+                 ).grid(row=2, column=0, sticky='e', padx=(0,10), pady=4)
+        entry_precio_venta = tk.Entry(sec3, font=('Arial', 9), width=14,
+                                      relief='solid', bd=1, bg='white')
+        entry_precio_venta.insert(0, str(datos.get('precio_venta','0')))
+        entry_precio_venta.grid(row=2, column=1, sticky='w', pady=4)
+        tk.Label(sec3, text='Opcional — se calcula automáticamente',
+                 font=('Arial', 8), bg=BG, fg='#9ca3af'
+                 ).grid(row=2, column=2, columnspan=2, sticky='w')
+
+        # ── SEC 4: Stock ───────────────────────────────────────────────────
+        sec4 = section(body, '📦  Stock', '#1a4b8c')
+        sec4.grid_columnconfigure(3, weight=1)
+
+        tk.Label(sec4, text='Stock actual', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=14
+                 ).grid(row=0, column=0, sticky='e', padx=(0,10), pady=4)
+        entry_stock = tk.Entry(sec4, font=('Arial', 9), width=10,
+                               relief='solid', bd=1, bg='white')
+        entry_stock.insert(0, str(datos.get('stock_actual','0')))
+        entry_stock.grid(row=0, column=1, sticky='w', pady=4, padx=(0,20))
+
+        tk.Label(sec4, text='Stock mínimo', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=12
+                 ).grid(row=0, column=2, sticky='e', padx=(0,6), pady=4)
+        entry_stock_min = tk.Entry(sec4, font=('Arial', 9), width=10,
+                                   relief='solid', bd=1, bg='white')
+        entry_stock_min.insert(0, str(datos.get('stock_minimo','0')))
+        entry_stock_min.grid(row=0, column=3, sticky='w', pady=4)
+
+        # ── SEC 5: SAT ─────────────────────────────────────────────────────
+        sec5 = section(body, '🏛  Datos SAT / Facturación', '#7c3aed')
+        sec5.grid_columnconfigure(3, weight=1)
+
+        tk.Label(sec5, text='Clave SAT', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=14
+                 ).grid(row=0, column=0, sticky='e', padx=(0,10), pady=4)
+        entry_clave_sat = tk.Entry(sec5, font=('Arial', 9), width=14,
+                                   relief='solid', bd=1, bg='white')
+        entry_clave_sat.insert(0, datos.get('clave_sat',''))
+        entry_clave_sat.grid(row=0, column=1, sticky='w', pady=4, padx=(0,12))
+        tk.Label(sec5, text='ej: 43211500',
+                 font=('Arial', 8), bg=BG, fg='#9ca3af').grid(row=0, column=2, sticky='w')
+
+        tk.Label(sec5, text='Clave Unidad', font=('Arial', 9),
+                 bg=BG, fg='#374151', anchor='e', width=14
+                 ).grid(row=1, column=0, sticky='e', padx=(0,10), pady=4)
+        entry_clave_unidad = tk.Entry(sec5, font=('Arial', 9), width=14,
+                                      relief='solid', bd=1, bg='white')
+        entry_clave_unidad.insert(0, datos.get('clave_unidad_sat',''))
+        entry_clave_unidad.grid(row=1, column=1, sticky='w', pady=4, padx=(0,12))
+        tk.Label(sec5, text='ej: H87 (Pieza), KGM (Kilo)',
+                 font=('Arial', 8), bg=BG, fg='#9ca3af').grid(row=1, column=2, sticky='w')
+
+        # ── Guardar ────────────────────────────────────────────────────────
         def guardar():
-            # Limpiar errores previos
             _campo_ok(entry_codigo, lbl_err_codigo)
             _campo_ok(entry_nombre, lbl_err_nombre)
             _campo_ok(entry_precio_base, lbl_err_precio)
 
-            # Validar campos requeridos
-            codigo = entry_codigo.get().strip()
-            nombre = entry_nombre.get().strip()
-            precio_base = entry_precio_base.get().strip()
+            codigo_val = entry_codigo.get().strip()
+            nombre_val = entry_nombre.get().strip()
+            precio_txt = entry_precio_base.get().strip()
 
             ok = True
-            if not codigo:
+            if not codigo_val:
                 _campo_error(entry_codigo, lbl_err_codigo, "El código es obligatorio")
                 ok = False
-            if not nombre:
+            if not nombre_val:
                 _campo_error(entry_nombre, lbl_err_nombre, "El nombre es obligatorio")
                 if ok: entry_nombre.focus()
                 ok = False
             precio_val = None
             try:
-                precio_val = float(precio_base)
-                if precio_val < 0:
-                    raise ValueError()
+                precio_val = float(precio_txt)
+                if precio_val < 0: raise ValueError()
             except ValueError:
-                _campo_error(entry_precio_base, lbl_err_precio,
-                             "Debe ser un número mayor o igual a 0")
+                _campo_error(entry_precio_base, lbl_err_precio, "Número mayor o igual a 0")
                 if ok: entry_precio_base.focus()
                 ok = False
-            if not ok:
-                return
-            precio_base = precio_val
-            
-            # Obtener IDs de categoría y subcategoría
-            categoria_id = None
-            if combo_categoria.get():
-                for cat in categorias:
-                    if cat[1] == combo_categoria.get():
-                        categoria_id = cat[0]
-                        break
-            
-            subcategoria_id = None
-            if combo_subcategoria.get() and categoria_id:
+            if not ok: return
+
+            cat_id = next((c[0] for c in categorias if c[1] == combo_categoria.get()), None)
+            sub_id = None
+            if combo_subcat.get() and cat_id:
                 self.cursor.execute(
-                    "SELECT id FROM subcategorias WHERE nombre = ? AND categoria_id = ?",
-                    (combo_subcategoria.get(), categoria_id)
-                )
-                result = self.cursor.fetchone()
-                if result:
-                    subcategoria_id = result[0]
-            
-            # Recopilar datos
-            datos = {
-                'codigo': codigo.upper(),
-                'nombre': nombre,
-                'descripcion': text_descripcion.get('1.0', 'end-1c').strip(),
-                'categoria_id': categoria_id,
-                'subcategoria_id': subcategoria_id,
-                'unidad_medida': combo_unidad.get(),
-                'precio_base': precio_base,
-                'aplica_iva': 1 if var_aplica_iva.get() else 0,
-                'precio_venta': float(entry_precio_venta.get() or 0),
-                'stock_actual': float(entry_stock.get() or 0),
-                'stock_minimo': float(entry_stock_min.get() or 0),
-                'clave_sat': entry_clave_sat.get().strip() or None,
-                'clave_unidad_sat': entry_clave_unidad_sat.get().strip() or None,
-            }
-            
+                    "SELECT id FROM subcategorias WHERE nombre=? AND categoria_id=?",
+                    (combo_subcat.get(), cat_id))
+                rs = self.cursor.fetchone()
+                if rs: sub_id = rs[0]
+
+            d = (codigo_val.upper(), nombre_val,
+                 text_desc.get('1.0','end-1c').strip(),
+                 cat_id, sub_id, combo_unidad.get(),
+                 precio_val, 1 if var_iva.get() else 0,
+                 float(entry_precio_venta.get() or 0),
+                 float(entry_stock.get() or 0),
+                 float(entry_stock_min.get() or 0),
+                 entry_clave_sat.get().strip() or None,
+                 entry_clave_unidad.get().strip() or None)
+
             try:
                 if modo == 'nuevo':
                     self.cursor.execute("""
-                        INSERT INTO productos (codigo, nombre, descripcion, categoria_id, subcategoria_id,
-                                             unidad_medida, precio_base, aplica_iva, precio_venta,
-                                             stock_actual, stock_minimo, clave_sat, clave_unidad_sat)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        datos['codigo'], datos['nombre'], datos['descripcion'],
-                        datos['categoria_id'], datos['subcategoria_id'], datos['unidad_medida'],
-                        datos['precio_base'], datos['aplica_iva'], datos['precio_venta'],
-                        datos['stock_actual'], datos['stock_minimo'],
-                        datos['clave_sat'], datos['clave_unidad_sat']
-                    ))
-                    mensaje = "Producto registrado correctamente"
-                    # Registrar precio inicial en historial
-                    nuevo_id = self.cursor.lastrowid
+                        INSERT INTO productos
+                        (codigo, nombre, descripcion, categoria_id, subcategoria_id,
+                         unidad_medida, precio_base, aplica_iva, precio_venta,
+                         stock_actual, stock_minimo, clave_sat, clave_unidad_sat)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, d)
                     self._registrar_precio_historial(
-                        nuevo_id, datos['precio_base'],
-                        motivo='Precio inicial al crear producto', fuente='manual')
+                        self.cursor.lastrowid, precio_val,
+                        motivo='Precio inicial', fuente='manual')
+                    msg = "Producto registrado correctamente"
                 else:
-                    self.cursor.execute("""
-                        UPDATE productos SET
-                        codigo=?, nombre=?, descripcion=?, categoria_id=?, subcategoria_id=?,
-                        unidad_medida=?, precio_base=?, aplica_iva=?, precio_venta=?,
-                        stock_actual=?, stock_minimo=?, clave_sat=?, clave_unidad_sat=?
-                        WHERE id=?
-                    """, (
-                        datos['codigo'], datos['nombre'], datos['descripcion'],
-                        datos['categoria_id'], datos['subcategoria_id'], datos['unidad_medida'],
-                        datos['precio_base'], datos['aplica_iva'], datos['precio_venta'],
-                        datos['stock_actual'], datos['stock_minimo'],
-                        datos['clave_sat'], datos['clave_unidad_sat'],
-                        producto_id
-                    ))
-                    mensaje = "Producto actualizado correctamente"
-                    # Registrar cambio de precio si cambió
                     self.cursor.execute(
                         "SELECT precio_base FROM productos WHERE id=?", (producto_id,))
-                    row_prev = self.cursor.fetchone()
-                    if row_prev:
+                    prev = self.cursor.fetchone()
+                    if prev:
                         self._registrar_precio_historial(
-                            producto_id, datos['precio_base'],
-                            precio_anterior=row_prev[0],
-                            motivo=None, fuente='manual')
+                            producto_id, precio_val, precio_anterior=prev[0], fuente='manual')
+                    self.cursor.execute("""
+                        UPDATE productos SET
+                        codigo=?, nombre=?, descripcion=?, categoria_id=?,
+                        subcategoria_id=?, unidad_medida=?, precio_base=?,
+                        aplica_iva=?, precio_venta=?, stock_actual=?,
+                        stock_minimo=?, clave_sat=?, clave_unidad_sat=?
+                        WHERE id=?
+                    """, (*d, producto_id))
+                    msg = "Producto actualizado correctamente"
 
                 self.conn.commit()
-                messagebox.showinfo("Éxito", mensaje)
+                messagebox.showinfo("Éxito", msg, parent=ventana)
                 self.cargar_productos()
                 ventana.destroy()
-                
-            except sqlite3.IntegrityError:
-                messagebox.showerror("Error", f"Ya existe un producto con el código '{codigo}'")
             except sqlite3.Error as e:
-                messagebox.showerror("Error", f"No se pudo guardar el producto:\n{str(e)}")
-        
-        tk.Button(
-            frame_botones,
-            text="💾 Guardar",
-            command=guardar,
-            bg='#27ae60',
-            fg='white',
-            font=('Arial', 11, 'bold'),
-            cursor='hand2',
-            padx=20,
-            pady=8
-        ).pack(side='left', padx=5)
-        
-        tk.Button(
-            frame_botones,
-            text="❌ Cancelar",
-            command=ventana.destroy,
-            bg='#6b7280',
-            fg='white',
-            font=('Arial', 11, 'bold'),
-            cursor='hand2',
-            padx=20,
-            pady=8
-        ).pack(side='left', padx=5)
-        
-        # Botón de gestionar proveedores
-        btn_proveedores = tk.Button(
-            frame_botones,
-            text="🏭 Gestionar Proveedores",
-            command=lambda: self.gestionar_proveedores_producto(producto_id, ventana) if producto_id else None,
-            bg='#16a085' if modo == 'editar' else '#6b7280',
-            fg='white',
-            font=('Arial', 10, 'bold'),
-            cursor='hand2' if modo == 'editar' else 'arrow',
-            padx=15,
-            pady=8,
-            state='normal' if modo == 'editar' else 'disabled'
-        )
-        btn_proveedores.pack(side='left', padx=5)
+                self.conn.rollback()
+                messagebox.showerror("Error", str(e), parent=ventana)
 
-        # Botón de historial de precios (solo en modo editar)
+        # ── Footer ─────────────────────────────────────────────────────────
+        tk.Frame(ventana, bg=BDR, height=1).pack(fill='x')
+        foot = tk.Frame(ventana, bg='#e8edf5', pady=8, padx=12)
+        foot.pack(fill='x', side='bottom')
+
+        tk.Button(foot, text='💾 Guardar', command=guardar,
+                  bg='#065f46', fg='white', font=('Arial', 10, 'bold'),
+                  cursor='hand2', padx=14, pady=6, relief='flat').pack(side='left', padx=(0,6))
+        tk.Button(foot, text='Cancelar', command=ventana.destroy,
+                  bg='#e8edf5', fg='#6b7280', font=('Arial', 9),
+                  cursor='hand2', padx=10, pady=6, relief='flat', bd=1).pack(side='left')
+
         if modo == 'editar' and producto_id:
-            tk.Button(
-                frame_botones,
-                text='📈 Historial de Precios',
-                command=lambda: self._ver_historial_precios(producto_id, ventana),
-                bg='#1a4b8c', fg='white',
-                font=('Arial', 10, 'bold'),
-                cursor='hand2', padx=15, pady=8
-            ).pack(side='left', padx=5)
+            tk.Button(foot, text='📈 Historial precios',
+                      command=lambda: self._ver_historial_precios(producto_id, ventana),
+                      bg='#1e3a5f', fg='white', font=('Arial', 9),
+                      cursor='hand2', padx=10, pady=6, relief='flat').pack(side='right', padx=(6,0))
+            tk.Button(foot, text='🏭 Proveedores',
+                      command=lambda: self.gestionar_proveedores_producto(producto_id, ventana),
+                      bg='#16a085', fg='white', font=('Arial', 9),
+                      cursor='hand2', padx=10, pady=6, relief='flat').pack(side='right', padx=(6,0))
+            tk.Button(foot, text='✅ Precio vigente',
+                      command=lambda: self._confirmar_precio_vigente(
+                          producto_id,
+                          float(entry_precio_base.get() or 0),
+                          parent=ventana,
+                          callback=lambda: [self.cargar_productos()]),
+                      bg='#0f7b5e', fg='white', font=('Arial', 9),
+                      cursor='hand2', padx=10, pady=6, relief='flat').pack(side='right', padx=(6,0))
 
-        # Tooltip para modo nuevo
-        if modo == 'nuevo':
-            def mostrar_tooltip(event):
-                tooltip = tk.Toplevel()
-                tooltip.wm_overrideredirect(True)
-                tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
-                label = tk.Label(tooltip, text="Guarda el producto primero",
-                                bg='#2c3e50', fg='white', font=('Arial', 9),
-                                padx=8, pady=4)
-                label.pack()
-                btn_proveedores._tooltip = tooltip
-                tooltip.after(2000, tooltip.destroy)
-            
-            def ocultar_tooltip(event):
-                if hasattr(btn_proveedores, '_tooltip'):
-                    try:
-                        btn_proveedores._tooltip.destroy()
-                    except:
-                        pass
-            
-            btn_proveedores.bind('<Enter>', mostrar_tooltip)
-            btn_proveedores.bind('<Leave>', ocultar_tooltip)
-        
-        # Hacer modal — Enter guarda
         ventana.bind('<Return>', lambda e: guardar())
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
         entry_codigo.focus()
-    
+
+    def _ventana_revision_masiva_precios(self):
+        """Ventana de revisión masiva de precios desactualizados con edición inline."""
+        from datetime import date as _d
+        hoy = _d.today()
+
+        # Recopilar productos desactualizados con sus datos
+        self.cursor.execute("""
+            SELECT p.id, p.codigo, p.nombre, p.precio_base, c.nombre AS cat
+            FROM productos p
+            LEFT JOIN categorias c ON c.id = p.categoria_id
+            ORDER BY p.nombre
+        """)
+        todos = self.cursor.fetchall()
+
+        pendientes = []  # (pid, codigo, nombre, precio_actual, cat, dias)
+        for pid, codigo, nombre, precio_base, cat in todos:
+            # Calcular días desde último registro real
+            self.cursor.execute("""
+                SELECT fecha FROM producto_precio_historial
+                WHERE producto_id = ? AND fuente != 'backfill'
+                ORDER BY fecha DESC LIMIT 1
+            """, (pid,))
+            ph = self.cursor.fetchone()
+            if ph:
+                try:   dias = (hoy - _d.fromisoformat(str(ph[0])[:10])).days
+                except: dias = 9999
+            else:
+                self.cursor.execute(
+                    "SELECT precio_base_fecha FROM productos WHERE id=?", (pid,))
+                pbf = self.cursor.fetchone()
+                try:   dias = (hoy - _d.fromisoformat(str(pbf[0])[:10])).days if pbf and pbf[0] else 9999
+                except: dias = 9999
+
+            # Calcular umbral dinámico
+            self.cursor.execute("""
+                SELECT fecha FROM producto_precio_historial
+                WHERE producto_id = ? AND fuente != 'backfill'
+                ORDER BY fecha ASC
+            """, (pid,))
+            fechas = [r[0] for r in self.cursor.fetchall()]
+            n = len(fechas)
+            if n >= 3:
+                deltas = []
+                for i in range(1, n):
+                    try:
+                        deltas.append((_d.fromisoformat(fechas[i]) -
+                                       _d.fromisoformat(fechas[i-1])).days)
+                    except: pass
+                umbral = max(7, int(sum(deltas)/len(deltas)*0.8)) if deltas else 30
+            else:
+                umbral = 30
+
+            if dias > umbral:
+                pendientes.append((pid, codigo or '', nombre or '',
+                                   precio_base or 0, cat or '', dias))
+
+        if not pendientes:
+            messagebox.showinfo('✅ Precios al día',
+                'Todos los productos tienen precios actualizados.',
+                parent=self.sistema.root)
+            self.cargar_productos()
+            return
+
+        # ── Ventana ───────────────────────────────────────────────────────
+        win = tk.Toplevel(self.root)
+        win.title(f'Revisión de precios — {len(pendientes)} producto(s)')
+        win.geometry('820x540')
+        win.minsize(700, 400)
+        _centrar(win, self.root)
+        win.configure(bg='#f8fafc')
+        win.transient(self.root)
+        win.grab_set()
+        win.bind('<Escape>', lambda e: win.destroy())
+
+        # Header
+        hdr = tk.Frame(win, bg='#d97706', pady=9)
+        hdr.pack(fill='x')
+        tk.Label(hdr, text='⚠  Revisión masiva de precios',
+                 font=('Arial', 11, 'bold'), bg='#d97706', fg='white').pack(side='left', padx=14)
+        tk.Label(hdr, text=f'{len(pendientes)} productos requieren revisión',
+                 font=('Arial', 9), bg='#d97706', fg='#fef3c7').pack(side='left')
+
+        # Instrucción
+        tk.Label(win,
+                 text='Edita el precio si cambió, o deja el valor para confirmar que sigue vigente. '
+                      'Al confirmar se registra la revisión de hoy.',
+                 font=('Arial', 8), bg='#f8fafc', fg='#6b7280', padx=14, pady=6).pack(fill='x')
+        tk.Frame(win, bg='#e2e8f0', height=1).pack(fill='x')
+
+        # Tabla con entries inline
+        outer = tk.Frame(win, bg='#f8fafc')
+        outer.pack(fill='both', expand=True, padx=10, pady=8)
+
+        # Cabecera
+        hdr_row = tk.Frame(outer, bg='#e8edf5')
+        hdr_row.pack(fill='x')
+        for txt, w in [('Producto', 280), ('Cat.', 90), ('Precio actual', 110),
+                        ('Nuevo precio', 110), ('Días', 55), ('', 90)]:
+            tk.Label(hdr_row, text=txt, font=('Arial', 8, 'bold'),
+                     bg='#e8edf5', fg='#374151', width=0, anchor='w',
+                     padx=6, pady=5).pack(side='left')
+
+        # Canvas scroll
+        canvas = tk.Canvas(outer, bg='#f8fafc', highlightthickness=0)
+        sb = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side='left', fill='both', expand=True)
+        sb.pack(side='right', fill='y')
+        inner = tk.Frame(canvas, bg='#f8fafc')
+        wid = canvas.create_window((0, 0), window=inner, anchor='nw')
+        inner.bind('<Configure>', lambda e: canvas.configure(
+            scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>', lambda e: canvas.itemconfig(wid, width=e.width))
+
+        entries = {}  # pid → Entry widget
+        confirmados = set()
+        estado_labels = {}  # pid → Label
+
+        def _confirmar_uno(pid, precio_actual, entry_w, lbl_estado):
+            from datetime import date as _d2
+            nuevo_txt = entry_w.get().strip()
+            try:
+                nuevo = float(nuevo_txt)
+                if nuevo <= 0: raise ValueError()
+            except ValueError:
+                entry_w.config(bg='#fee2e2')
+                return
+            entry_w.config(bg='#f0fdf4')
+            motivo = ('Precio actualizado' if abs(nuevo - precio_actual) > 0.001
+                      else 'Sin cambios — confirmado')
+            fuente = 'manual' if abs(nuevo - precio_actual) > 0.001 else 'confirmacion'
+            if abs(nuevo - precio_actual) > 0.001:
+                self.cursor.execute(
+                    "UPDATE productos SET precio_base=? WHERE id=?", (nuevo, pid))
+            self.cursor.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente)
+                VALUES (?, ?, ?, ?, ?)
+            """, (pid, nuevo, _d2.today().isoformat(), motivo, fuente))
+            self.conn.commit()
+            confirmados.add(pid)
+            lbl_estado.config(text='✅', fg='#16a34a')
+            _actualizar_contador()
+
+        def _confirmar_todo():
+            for pid, precio_actual, entry_w, lbl_e in entry_data:
+                if pid not in confirmados:
+                    _confirmar_uno(pid, precio_actual, entry_w, lbl_e)
+
+        entry_data = []
+        for i, (pid, codigo, nombre, precio_actual, cat, dias) in enumerate(pendientes):
+            bg = '#ffffff' if i % 2 == 0 else '#f8fafc'
+            row = tk.Frame(inner, bg=bg)
+            row.pack(fill='x')
+
+            dias_color = '#dc2626' if dias > 60 else '#d97706'
+            nombre_short = f'{nombre[:30]}…' if len(nombre) > 30 else nombre
+            tk.Label(row, text=nombre_short, font=('Arial', 9), bg=bg,
+                     fg='#374151', anchor='w', padx=6).pack(side='left', fill='x', expand=True)
+            tk.Label(row, text=(cat or '')[:12], font=('Arial', 8), bg=bg,
+                     fg='#6b7280', width=10, anchor='w').pack(side='left')
+            tk.Label(row, text=f'${precio_actual:,.2f}', font=('Arial', 9), bg=bg,
+                     fg='#374151', width=10, anchor='e').pack(side='left', padx=(0,4))
+            e = tk.Entry(row, font=('Arial', 9), width=10,
+                         relief='solid', bd=1, bg='white')
+            e.insert(0, f'{precio_actual:.2f}')
+            e.pack(side='left', padx=4)
+            tk.Label(row, text=f'{dias}d', font=('Arial', 8, 'bold'), bg=bg,
+                     fg=dias_color, width=5, anchor='w').pack(side='left')
+            lbl_e = tk.Label(row, text='—', font=('Arial', 9), bg=bg,
+                             fg='#9ca3af', width=4)
+            lbl_e.pack(side='left', padx=2)
+            btn = tk.Button(row, text='Confirmar',
+                            font=('Arial', 8), bg='#0f7b5e', fg='white',
+                            cursor='hand2', padx=6, pady=3, relief='flat',
+                            command=lambda p=pid, pa=precio_actual, ew=e, le=lbl_e:
+                                _confirmar_uno(p, pa, ew, le))
+            btn.pack(side='left', padx=(2,6), pady=3)
+            entries[pid] = e
+            entry_data.append((pid, precio_actual, e, lbl_e))
+            e.bind('<Return>', lambda ev, p=pid, pa=precio_actual, ew=e, le=lbl_e:
+                   _confirmar_uno(p, pa, ew, le))
+
+        # Footer
+        tk.Frame(win, bg='#e2e8f0', height=1).pack(fill='x')
+        foot = tk.Frame(win, bg='#eef1f8', pady=8, padx=12)
+        foot.pack(fill='x')
+
+        lbl_conteo = tk.Label(foot, text=f'0 / {len(pendientes)} confirmados',
+                              font=('Arial', 9), bg='#eef1f8', fg='#6b7280')
+        lbl_conteo.pack(side='left', padx=(0,12))
+
+        def _actualizar_contador():
+            n = len(confirmados)
+            lbl_conteo.config(text=f'{n} / {len(pendientes)} confirmados',
+                              fg='#16a34a' if n == len(pendientes) else '#6b7280')
+
+        tk.Button(foot, text='✅ Confirmar todos sin cambios',
+                  command=_confirmar_todo,
+                  bg='#065f46', fg='white', font=('Arial', 9, 'bold'),
+                  cursor='hand2', padx=12, pady=5, relief='flat').pack(side='left')
+        tk.Button(foot, text='Cerrar y recargar',
+                  command=lambda: [win.destroy(), self.cargar_productos()],
+                  bg='#1e3a5f', fg='white', font=('Arial', 9),
+                  cursor='hand2', padx=12, pady=5, relief='flat').pack(side='right')
+
+    def _confirmar_precio_vigente(self, producto_id, precio_actual, parent=None, callback=None):
+        """Registra confirmación de precio vigente sin modificarlo."""
+        from datetime import date as _d
+        win = tk.Toplevel(parent or self.root)
+        win.title('Confirmar precio vigente')
+        win.geometry('420x220')
+        win.resizable(False, False)
+        _centrar(win, parent or self.root)
+        win.configure(bg='#f8fafc')
+        win.transient(parent or self.root)
+        win.grab_set()
+
+        hdr = tk.Frame(win, bg='#065f46', pady=8)
+        hdr.pack(fill='x')
+        tk.Label(hdr, text='✅  Confirmar precio vigente',
+                 font=('Arial', 10, 'bold'), bg='#065f46', fg='white').pack(side='left', padx=12)
+
+        body = tk.Frame(win, bg='#f8fafc', padx=18, pady=14)
+        body.pack(fill='both', expand=True)
+
+        tk.Label(body, text=f'Precio actual:  ${precio_actual:,.2f}',
+                 font=('Arial', 10, 'bold'), bg='#f8fafc', fg='#065f46').pack(anchor='w')
+        tk.Label(body, text='Este precio se marcará como revisado hoy.',
+                 font=('Arial', 8), bg='#f8fafc', fg='#6b7280').pack(anchor='w', pady=(2,10))
+
+        row_mot = tk.Frame(body, bg='#f8fafc')
+        row_mot.pack(fill='x')
+        tk.Label(row_mot, text='Motivo (opcional):',
+                 font=('Arial', 9), bg='#f8fafc', fg='#374151').pack(side='left')
+        entry_mot = tk.Entry(row_mot, font=('Arial', 9), width=28,
+                             relief='solid', bd=1, bg='white')
+        entry_mot.pack(side='left', padx=(8,0))
+
+        motivos = ['Sin cambios', 'Cotización proveedor', 'Revisión mensual',
+                   'Precio de mercado confirmado', 'Otro']
+        combo_mot = ttk.Combobox(body, values=motivos, font=('Arial', 9), width=38)
+        combo_mot.pack(fill='x', pady=(4,0))
+        combo_mot.set('Sin cambios')
+
+        tk.Frame(win, bg='#e2e8f0', height=1).pack(fill='x')
+        foot = tk.Frame(win, bg='#eef1f8', pady=7, padx=12)
+        foot.pack(fill='x')
+
+        def _confirmar():
+            motivo = entry_mot.get().strip() or combo_mot.get() or 'Sin cambios'
+            self.cursor.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente)
+                VALUES (?, ?, ?, ?, 'confirmacion')
+            """, (producto_id, float(precio_actual), _d.today().isoformat(), motivo))
+            self.conn.commit()
+            win.destroy()
+            if callback:
+                callback()
+            self.sistema._set_status(f'Precio confirmado — ${precio_actual:,.2f}', 'ok')
+
+        tk.Button(foot, text='✅ Confirmar precio vigente', command=_confirmar,
+                  bg='#065f46', fg='white', font=('Arial', 9, 'bold'),
+                  cursor='hand2', padx=12, pady=5, relief='flat').pack(side='left')
+        tk.Button(foot, text='Cancelar', command=win.destroy,
+                  bg='#eef1f8', fg='#6b7280', font=('Arial', 9),
+                  cursor='hand2', padx=10, pady=5, relief='flat', bd=1).pack(side='left', padx=8)
+        win.bind('<Escape>', lambda e: win.destroy())
+        entry_mot.focus()
+
     def _ver_historial_precios(self, producto_id, parent):
-        """Muestra ventana con el historial completo de precios del producto."""
+        """Historial de precios mejorado: días entre movimientos, íconos fuente,
+        notas editables, botón nuevo registro manual y confirmación vigente."""
+        from datetime import date as _d
         self.cursor.execute(
             "SELECT nombre, precio_base FROM productos WHERE id=?", (producto_id,))
         prod = self.cursor.fetchone()
@@ -1556,86 +1718,222 @@ class Catalogos:
             return
         nombre_prod, precio_actual = prod
 
-        self.cursor.execute("""
-            SELECT fecha, precio, motivo, fuente, fecha_registro
-            FROM producto_precio_historial
-            WHERE producto_id = ?
-            ORDER BY fecha DESC, fecha_registro DESC
-        """, (producto_id,))
-        registros = self.cursor.fetchall()
+        def _reload():
+            self.cursor.execute("""
+                SELECT id, fecha, precio, motivo, fuente, fecha_registro
+                FROM producto_precio_historial
+                WHERE producto_id = ?
+                ORDER BY fecha DESC, fecha_registro DESC
+            """, (producto_id,))
+            return self.cursor.fetchall()
+
+        BG  = "#f8fafc"
+        HDR = "#1a4b8c"
 
         win = tk.Toplevel(parent)
-        win.title(f"📈 Historial de Precios — {nombre_prod}")
-        win.geometry("680x460")
-        win.minsize(600, 380)
+        win.title(f"Historial de Precios — {nombre_prod}")
+        win.geometry("780x520")
+        win.minsize(660, 400)
         win.resizable(True, True)
         _centrar(win, self.root)
-        win.configure(bg="#f1f5f9")
+        win.configure(bg=BG)
         win.transient(parent)
         win.grab_set()
+        win.bind("<Escape>", lambda e: win.destroy())
 
         # Header
-        hdr = tk.Frame(win, bg="#1a4b8c", pady=10)
+        hdr = tk.Frame(win, bg=HDR, pady=9)
         hdr.pack(fill="x")
-        tk.Label(hdr, text=f"📈  Historial de Precios",
-                 font=("Arial", 11, "bold"), bg="#1a4b8c", fg="white").pack()
-        tk.Label(hdr, text=f"{nombre_prod}   •   Precio actual: ${precio_actual:,.2f}",
-                 font=("Arial", 9), bg="#1a4b8c", fg="#bfdbfe").pack()
+        tk.Label(hdr, text="📈  Historial de Precios",
+                 font=("Arial", 11, "bold"), bg=HDR, fg="white").pack(side="left", padx=14)
+        tk.Label(hdr, text=f"{nombre_prod[:40]}   •   ${precio_actual:,.2f} actual",
+                 font=("Arial", 9), bg=HDR, fg="#bfdbfe").pack(side="left")
 
         # Tabla
-        frame_tbl = tk.Frame(win, bg="#f1f5f9")
-        frame_tbl.pack(fill="both", expand=True, padx=16, pady=12)
+        frame_tbl = tk.Frame(win, bg=BG)
+        frame_tbl.pack(fill="both", expand=True, padx=12, pady=(10,0))
 
-        cols = ("Fecha", "Precio", "Variación", "Motivo", "Fuente")
+        fuente_ico = {
+            "manual":       "✏️",
+            "compra":       "🛒",
+            "confirmacion": "✅",
+            "backfill":     "🔄",
+        }
+        cols = ("Fecha", "Precio", "Variación", "Días ant.", "Fuente", "Motivo")
         tree = ttk.Treeview(frame_tbl, columns=cols, show="headings", height=14)
-        widths = [90, 100, 90, 280, 80]
-        for col, w in zip(cols, widths):
-            tree.heading(col, text=col)
-            tree.column(col, width=w, minwidth=40,
-                        anchor="e" if col in ("Precio","Variación") else "w")
+        for col, w, anc in [
+            ("Fecha",    88,  "w"), ("Precio",   92, "e"),
+            ("Variación",88,  "e"), ("Días ant.", 70, "e"),
+            ("Fuente",   90,  "w"), ("Motivo",   240,"w"),
+        ]:
+            tree.heading(col, text=col, anchor=anc)
+            tree.column(col, width=w, minwidth=40, anchor=anc,
+                        stretch=(col == "Motivo"))
 
-        tree.tag_configure("subida",  foreground="#dc2626")
-        tree.tag_configure("bajada",  foreground="#16a34a")
-        tree.tag_configure("neutro",  foreground="#374151")
-        tree.tag_configure("par",     background="#f8fafc")
-        tree.tag_configure("impar",   background="white")
+        tree.tag_configure("subida",       foreground="#dc2626")
+        tree.tag_configure("bajada",       foreground="#16a34a")
+        tree.tag_configure("confirmacion", foreground="#0f7b5e")
+        tree.tag_configure("neutro",       foreground="#374151")
+        tree.tag_configure("par",          background="#f8fafc")
+        tree.tag_configure("impar",        background="white")
 
         sc = ttk.Scrollbar(frame_tbl, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=sc.set)
         tree.pack(side="left", fill="both", expand=True)
         sc.pack(side="right", fill="y")
 
-        precio_prev = None
-        for i, (fecha, precio, motivo, fuente, _) in enumerate(registros):
-            if precio_prev is not None:
-                diff = precio - precio_prev
-                var_txt = f"{'▲' if diff > 0 else '▼'} ${abs(diff):,.2f}"
-                tag_var = "subida" if diff > 0 else "bajada"
-            else:
-                var_txt = "—"
-                tag_var = "neutro"
-            fila_tag = "par" if i % 2 == 0 else "impar"
-            tree.insert("", "end", tags=(tag_var, fila_tag), values=(
-                (fecha or "")[:10],
-                f"${precio:,.2f}",
-                var_txt,
-                motivo or "—",
-                fuente or "manual",
-            ))
-            precio_prev = precio
+        def _poblar():
+            tree.delete(*tree.get_children())
+            registros = _reload()
+            precio_prev = None
+            fecha_prev  = None
+            for i, (rid, fecha, precio, motivo, fuente, _) in enumerate(registros):
+                # Variación de precio
+                if precio_prev is not None:
+                    diff = precio - precio_prev
+                    var_txt = f"{'▲' if diff > 0 else '▼'} ${abs(diff):,.2f}"
+                    tag_var = "subida" if diff > 0 else ("bajada" if diff < 0 else "neutro")
+                else:
+                    var_txt, tag_var = "—", "neutro"
 
-        if not registros:
-            tree.insert("", "end", values=("—", "—", "—", "Sin registros aún", "—"))
+                # Días desde registro anterior
+                if fecha_prev:
+                    try:
+                        d_ant = (_d.fromisoformat(str(fecha_prev)[:10]) -
+                                 _d.fromisoformat(str(fecha)[:10])).days
+                        dias_txt = f"{d_ant}d"
+                    except Exception:
+                        dias_txt = "—"
+                else:
+                    dias_txt = "—"
 
-        # Footer info
-        foot = tk.Frame(win, bg="#e2e8f0", pady=8)
+                fuente_txt = fuente or "manual"
+                if fuente_txt == "confirmacion":
+                    tag_var = "confirmacion"
+                fila_tag = "par" if i % 2 == 0 else "impar"
+                ico = fuente_ico.get(fuente_txt, "✏️")
+
+                tree.insert("", "end", iid=str(rid), tags=(tag_var, fila_tag), values=(
+                    (fecha or "")[:10],
+                    f"${precio:,.2f}",
+                    var_txt,
+                    dias_txt,
+                    f"{ico} {fuente_txt}",
+                    motivo or "—",
+                ))
+                precio_prev = precio
+                fecha_prev  = fecha
+
+            if not registros:
+                tree.insert("", "end", values=("—","—","—","—","—","Sin registros aún"))
+
+        _poblar()
+
+        # Doble clic → editar nota
+        def _editar_nota(event):
+            iid = tree.focus()
+            if not iid:
+                return
+            vals = tree.item(iid)["values"]
+            motivo_actual = vals[5] if vals[5] != "—" else ""
+            nueva = tk.simpledialog.askstring(
+                "Editar nota",
+                f"Nota para registro del {vals[0]}:",
+                initialvalue=motivo_actual,
+                parent=win)
+            if nueva is not None:
+                self.cursor.execute(
+                    "UPDATE producto_precio_historial SET motivo=? WHERE id=?",
+                    (nueva, int(iid)))
+                self.conn.commit()
+                _poblar()
+
+        tree.bind("<Double-1>", _editar_nota)
+
+        # Footer
+        tk.Frame(win, bg="#e2e8f0", height=1).pack(fill="x")
+        foot = tk.Frame(win, bg="#e8edf5", pady=7, padx=12)
         foot.pack(fill="x")
-        n = len(registros)
-        tk.Label(foot, text=f"{n} registro{'s' if n!=1 else ''} en historial",
-                 font=("Arial", 8), bg="#e2e8f0", fg="#6b7280").pack(side="left", padx=12)
+
+        registros_n = len(_reload())
+        tk.Label(foot, text=f"{registros_n} registro{'s' if registros_n!=1 else ''}  •  doble clic para editar nota",
+                 font=("Arial", 8), bg="#e8edf5", fg="#6b7280").pack(side="left")
+
+        # Nuevo registro manual con fecha pasada
+        def _nuevo_manual():
+            win2 = tk.Toplevel(win)
+            win2.title("Nuevo registro manual")
+            win2.geometry("360x210")
+            win2.resizable(False, False)
+            _centrar(win2, win)
+            win2.configure(bg=BG)
+            win2.transient(win)
+            win2.grab_set()
+            win2.bind("<Escape>", lambda e: win2.destroy())
+
+            tk.Label(win2, text="Agregar precio con fecha pasada",
+                     font=("Arial", 10, "bold"), bg=BG, fg="#1e3a5f"
+                     ).pack(pady=(12,6))
+
+            fr = tk.Frame(win2, bg=BG, padx=16)
+            fr.pack(fill="x")
+            for lbl, attr, default in [
+                ("Fecha (YYYY-MM-DD)", "e_fecha", _d.today().isoformat()),
+                ("Precio",             "e_precio", ""),
+                ("Motivo",             "e_motivo", "Registro manual histórico"),
+            ]:
+                row = tk.Frame(fr, bg=BG)
+                row.pack(fill="x", pady=3)
+                tk.Label(row, text=lbl, font=("Arial", 9), bg=BG,
+                         fg="#374151", width=18, anchor="e").pack(side="left")
+                e = tk.Entry(row, font=("Arial", 9), width=20,
+                             relief="solid", bd=1, bg="white")
+                e.insert(0, default)
+                e.pack(side="left", padx=(6,0))
+                setattr(win2, attr, e)
+
+            def _guardar_manual():
+                try:
+                    fecha_v = win2.e_fecha.get().strip()
+                    _d.fromisoformat(fecha_v)
+                    precio_v = float(win2.e_precio.get().strip())
+                    if precio_v <= 0: raise ValueError()
+                except ValueError:
+                    messagebox.showwarning("Datos inválidos",
+                        "Verifica fecha (YYYY-MM-DD) y precio.", parent=win2)
+                    return
+                self.cursor.execute("""
+                    INSERT INTO producto_precio_historial
+                        (producto_id, precio, fecha, motivo, fuente)
+                    VALUES (?, ?, ?, ?, 'manual')
+                """, (producto_id, precio_v, fecha_v, win2.e_motivo.get().strip()))
+                self.conn.commit()
+                win2.destroy()
+                _poblar()
+
+            tk.Frame(win2, bg="#e2e8f0", height=1).pack(fill="x", pady=(8,0))
+            foot2 = tk.Frame(win2, bg="#eef1f8", pady=6, padx=12)
+            foot2.pack(fill="x")
+            tk.Button(foot2, text="💾 Guardar", command=_guardar_manual,
+                      bg="#065f46", fg="white", font=("Arial", 9, "bold"),
+                      cursor="hand2", padx=10, pady=4, relief="flat").pack(side="left")
+            tk.Button(foot2, text="Cancelar", command=win2.destroy,
+                      bg="#eef1f8", fg="#6b7280", font=("Arial", 9),
+                      cursor="hand2", padx=8, pady=4, relief="flat", bd=1
+                      ).pack(side="left", padx=6)
+
+        tk.Button(foot, text="➕ Registro manual",
+                  command=_nuevo_manual,
+                  bg="#374151", fg="white", font=("Arial", 9),
+                  cursor="hand2", padx=10, pady=4, relief="flat").pack(side="right", padx=(6,0))
+        tk.Button(foot, text="✅ Confirmar precio vigente",
+                  command=lambda: self._confirmar_precio_vigente(
+                      producto_id, precio_actual, parent=win, callback=_poblar),
+                  bg="#0f7b5e", fg="white", font=("Arial", 9),
+                  cursor="hand2", padx=10, pady=4, relief="flat").pack(side="right", padx=(6,0))
         tk.Button(foot, text="Cerrar", command=win.destroy,
-                  bg="#6b7280", fg="white", font=("Arial", 9),
-                  cursor="hand2", padx=12, pady=4, relief="flat").pack(side="right", padx=12)
+                  bg="#e8edf5", fg="#6b7280", font=("Arial", 9),
+                  cursor="hand2", padx=10, pady=4, relief="flat", bd=1).pack(side="right", padx=(6,0))
 
     def gestionar_proveedores_producto(self, producto_id, ventana_padre):
         """Gestiona los proveedores asociados a un producto"""
@@ -1927,6 +2225,7 @@ class Catalogos:
         
         ventana.transient(ventana_padre)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def generar_presupuesto_compra(self):
         """
@@ -2012,6 +2311,7 @@ class Catalogos:
         _centrar(ventana, self.root)
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
 
         # Cabecera informativa
         frame_info = tk.Frame(ventana, bg='#16a085', pady=8)
@@ -2352,6 +2652,7 @@ class Catalogos:
         ventana.configure(bg='#f1f5f9')
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
 
         hdr = tk.Frame(ventana, bg='#92400e', pady=8)
         hdr.pack(fill='x')
@@ -2698,6 +2999,7 @@ class Catalogos:
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def cargar_lista_categorias(self):
         """Carga las categorías en el listbox"""
@@ -3126,8 +3428,10 @@ PRODUCTOS:"""
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
 

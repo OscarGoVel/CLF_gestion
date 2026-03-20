@@ -52,6 +52,7 @@ class VentanaEntregaParcial:
         # Hacer modal
         self.ventana.transient(parent)
         self.ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def cargar_datos_cotizacion(self):
         """Carga los datos de la cotización"""

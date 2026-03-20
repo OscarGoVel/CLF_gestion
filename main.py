@@ -324,6 +324,18 @@ class SistemaGestion:
 
         # Mostrar dashboard al inicio
         self._navegar('dashboard')
+
+        # ── Atajos de teclado globales ─────────────────────────────────────
+        atajos = [
+            ('<F5>',         lambda e: self._navegar(self._seccion_actual.get())),
+            ('<Control-1>',  lambda e: self._navegar('dashboard')),
+            ('<Control-2>',  lambda e: self._navegar('cotizaciones')),
+            ('<Control-3>',  lambda e: self._navegar('facturacion')),
+            ('<Control-4>',  lambda e: self._navegar('catalogos')),
+            ('<Control-5>',  lambda e: self._navegar('stock')),
+        ]
+        for seq, cmd in atajos:
+            self.root.bind(seq, cmd)
         self.actualizar_dashboard()
 
 
@@ -384,6 +396,43 @@ class SistemaGestion:
         """Delega al componente Dashboard."""
         if hasattr(self, 'dashboard'):
             self.dashboard.actualizar_dashboard()
+
+    @staticmethod
+    def _tip(widget, texto, delay=600):
+        """Añade tooltip oscuro a cualquier widget. Aparece tras delay ms."""
+        _state = {'win': None, 'after': None}
+
+        def _show(e=None):
+            def _create():
+                if _state['win']:
+                    return
+                x = widget.winfo_rootx() + widget.winfo_width() // 2
+                y = widget.winfo_rooty() + widget.winfo_height() + 4
+                t = tk.Toplevel()
+                t.wm_overrideredirect(True)
+                t.wm_geometry(f'+{x}+{y}')
+                t.configure(bg='#1e2d45')
+                tk.Label(t, text=texto, font=('Arial', 8),
+                         bg='#1e2d45', fg='#e2e8f0',
+                         padx=8, pady=4, wraplength=280,
+                         justify='left').pack()
+                _state['win'] = t
+            _state['after'] = widget.after(delay, _create)
+
+        def _hide(e=None):
+            if _state['after']:
+                try: widget.after_cancel(_state['after'])
+                except Exception: pass
+                _state['after'] = None
+            if _state['win']:
+                try: _state['win'].destroy()
+                except Exception: pass
+                _state['win'] = None
+
+        widget.bind('<Enter>',       _show, add='+')
+        widget.bind('<Leave>',       _hide, add='+')
+        widget.bind('<ButtonPress>', _hide, add='+')
+        return widget
 
     def _set_status(self, texto, tipo='info', count=None):
         """Actualiza la barra de estado inferior.
@@ -469,7 +518,7 @@ class SistemaGestion:
         tk.Frame(parent, bg=self.C['toolbar_border'],
                  width=1).pack(side='left', fill='y', pady=4, padx=4)
 
-    def _toolbar_btn(self, parent, texto, comando, color=None, peligro=False):
+    def _toolbar_btn(self, parent, texto, comando, color=None, peligro=False, tip=None):
         """Botón estilo toolbar ERP"""
         bg = color or self.C['toolbar_bg']
         fg = 'white' if color else self.C['text_dark']
@@ -485,6 +534,8 @@ class SistemaGestion:
             cursor='hand2', padx=8, pady=3
         )
         b.pack(side='left', padx=2, pady=3)
+        if tip:
+            SistemaGestion._tip(b, tip)
         return b
 
     def _toolbar_menu(self, parent, texto, opciones, color=None):

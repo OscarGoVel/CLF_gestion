@@ -104,8 +104,8 @@ class CotizacionesUI:
         tb.pack(fill='x')
         tk.Frame(sec, bg=self.C['toolbar_border'], height=1).pack(fill='x')
 
-        self.sistema._toolbar_btn(tb, '➕ Nueva', self.nueva_cotizacion, color=self.C['accent'])
-        self.sistema._toolbar_btn(tb, '✏️ Editar', self.editar_cotizacion)
+        self.sistema._toolbar_btn(tb, '➕ Nueva', self.nueva_cotizacion, color=self.C['accent'], tip='Nueva cotización (Ctrl+N)')
+        self.sistema._toolbar_btn(tb, '✏️ Editar', self.editar_cotizacion, tip='Editar cotización seleccionada')
         self.sistema._toolbar_sep(tb)
         self.sistema._toolbar_menu(tb, '📄 PDF ▾', [
             ('Cotización PDF', self.generar_pdf_cotizacion_nueva),
@@ -121,14 +121,40 @@ class CotizacionesUI:
             ('Cancelar',                self.cancelar_cotizacion),
         ])
         self.sistema._toolbar_sep(tb)
-        self.sistema._toolbar_btn(tb, '📋 Seguimiento', self.ver_seguimiento_cotizacion, color='#7c3aed')
+        self.sistema._toolbar_btn(tb, '📋 Seguimiento', self.ver_seguimiento_cotizacion, color='#7c3aed', tip='Ver y editar etapas de seguimiento: OC, Entrega, Factura, Complemento y Pago')
         self.sistema._toolbar_sep(tb)
-        self.sistema._toolbar_btn(tb, '📊 Estado de Cuenta', self.ver_estado_cuenta, color='#0e7490')
+        self.sistema._toolbar_btn(tb, '📊 Estado de Cuenta', self.ver_estado_cuenta, color='#0e7490', tip='Generar estado de cuenta del cliente con detalle de pedidos y saldos')
         self.sistema._toolbar_sep(tb)
-        self._btn_vincular = self.sistema._toolbar_btn(tb, '🔗 Vincular', self._abrir_centro_vinculacion, color='#7c3aed')
+        self._btn_vincular = self.sistema._toolbar_btn(tb, '🔗 Vincular', self._abrir_centro_vinculacion, color='#7c3aed', tip='Vincular facturas XML a cotizaciones. Muestra el número de facturas pendientes de vincular')
         self._actualizar_badge_vinculacion()
+
+        # ── Atajos de sección ──────────────────────────────────────────────
+        def _atajos_cot(event):
+            key = event.keysym.lower()
+            state = event.state
+            ctrl = (state & 0x4) != 0
+            if ctrl and key == 'n':
+                self.nueva_cotizacion()
+            elif ctrl and key == 'e':
+                self.editar_cotizacion()
+            elif ctrl and key == 'f':
+                self.entry_buscar_cotizacion.focus()
+                self.entry_buscar_cotizacion.select_range(0, 'end')
+            elif key == 'escape':
+                # Limpiar búsqueda y filtro
+                self.entry_buscar_cotizacion.delete(0, 'end')
+                if self._filtro_estado_cot:
+                    self._filtro_estado_cot.set('Todos')
+                self.cargar_cotizaciones()
+            elif key == 'f5':
+                self.cargar_cotizaciones()
+            return 'break' if ctrl and key in ('n','e','f') else None
+
+        sec.bind('<Key>', _atajos_cot)
+        sec.bind_all('<Key>', lambda e: _atajos_cot(e)
+                     if self.sistema._seccion_actual.get() == 'cotizaciones' else None)
         self.sistema._toolbar_sep(tb)
-        self.sistema._toolbar_btn(tb, '📊 Exportar CSV', self.exportar_csv, color='#065f46')
+        self.sistema._toolbar_btn(tb, '📊 Exportar CSV', self.exportar_csv, color='#065f46', tip='Exportar vista actual a CSV (respeta filtros activos)')
 
         # Barra de filtros
         ff = tk.Frame(sec, bg=self.C['toolbar_bg'], pady=4)
@@ -209,6 +235,33 @@ class CotizacionesUI:
         ft.grid_columnconfigure(0, weight=1)
 
         self.tree_cotizaciones.bind('<Double-1>', self._doble_clic_cotizacion)
+
+        # Tooltips para columnas de íconos
+        _tip_tree = [None]
+        def _tree_tooltip(event):
+            col = self.tree_cotizaciones.identify_column(event.x)
+            tips = {
+                '#9':  '📋 Documentos de OC\nClic para ver/adjuntar archivos',
+                '#11': '🧾 Facturas XML vinculadas\nClic para ver detalle',
+            }
+            txt = tips.get(col)
+            if _tip_tree[0]:
+                try: _tip_tree[0].destroy()
+                except: pass
+                _tip_tree[0] = None
+            if txt:
+                t = tk.Toplevel()
+                t.wm_overrideredirect(True)
+                t.wm_geometry(f'+{event.x_root+10}+{event.y_root+18}')
+                t.configure(bg='#1e2d45')
+                tk.Label(t, text=txt, font=('Arial', 8), bg='#1e2d45',
+                         fg='#e2e8f0', padx=8, pady=4, justify='left').pack()
+                _tip_tree[0] = t
+                t.after(2200, lambda _t=t: _t.destroy() if _tip_tree[0] == _t else None)
+        self.tree_cotizaciones.bind('<Motion>', _tree_tooltip)
+        self.tree_cotizaciones.bind('<Leave>',
+            lambda e: [_tip_tree[0].destroy(), _tip_tree.__setitem__(0, None)]
+            if _tip_tree[0] else None)
         self.tree_cotizaciones.bind('<Button-1>',
                                    self._click_icono_documento_cotizacion)
         self.tree_cotizaciones.bind('<Motion>',
@@ -1538,9 +1591,11 @@ class CotizacionesUI:
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def ver_detalle_cotizacion(self):
         """Muestra el detalle completo de la cotización seleccionada"""
@@ -1714,6 +1769,7 @@ class CotizacionesUI:
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     # (removed - rebuilt in new ERP UI)
     def generar_pdf_cotizacion_nueva(self):
@@ -2001,6 +2057,7 @@ class CotizacionesUI:
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def marcar_pagada(self):
         """Registra el pago de una cotización"""
@@ -2138,6 +2195,7 @@ class CotizacionesUI:
         
         ventana.transient(self.root)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def marcar_entregada_completa(self):
         """Marca la cotización como entregada completamente"""

@@ -254,12 +254,15 @@ class SeccionFacturacion:
         tk.Frame(sec, bg=self.C['toolbar_border'], height=1).pack(fill='x')
 
         self.sistema._toolbar_btn(tb, '📥 Importar XML',
-                                  self.importar_xml, color='#0f7b5e')
+                                  self.importar_xml, color='#0f7b5e',
+                                  tip='Importar factura CFDI desde archivo .xml')
         self.sistema._toolbar_btn(tb, '🔗 Vincular Cotización',
-                                  self.vincular_cotizacion)
+                                  self.vincular_cotizacion,
+                                  tip='Vincular la factura seleccionada a una o más cotizaciones')
         self.sistema._toolbar_sep(tb)
         self.sistema._toolbar_btn(tb, '🔍 Ver Detalle',
-                                  self.ver_detalle_factura)
+                                  self.ver_detalle_factura,
+                                  tip='Ver datos completos del CFDI seleccionado')
         self.sistema._toolbar_btn(tb, '📄 Abrir XML',
                                   self.abrir_xml)
         self.sistema._toolbar_sep(tb)
@@ -268,7 +271,7 @@ class SeccionFacturacion:
         self.sistema._toolbar_sep(tb)
         self.sistema._toolbar_btn(tb, '🔗 Centro de Vinculación',
                                   self.sistema._abrir_centro_vinculacion, color='#dc2626')
-        self.sistema._toolbar_btn(tb, '🔄', self.cargar_facturas)
+        self.sistema._toolbar_btn(tb, '🔄', self.cargar_facturas, tip='Recargar lista de facturas')
         self.sistema._toolbar_sep(tb)
         self.sistema._toolbar_btn(tb, '📊 Exportar CSV', self.exportar_csv,
                                   color='#065f46')
@@ -302,21 +305,26 @@ class SeccionFacturacion:
         self.tree = ttk.Treeview(ft, columns=cols, show='headings',
                                   selectmode='browse')
         wcfg = {
-            'ID': 0, 'UUID': 260, 'Serie-Folio': 90, 'Fecha': 90,
-            'RFC Receptor': 110, 'Receptor': 170,
-            'Subtotal': 90, 'IVA': 75, 'Total': 90,
-            'Moneda': 55, 'Tipo': 60, 'Cotización': 110, 'Estado': 90,
+            'ID': 0, 'UUID': 110, 'Serie-Folio': 95, 'Fecha': 90,
+            'RFC Receptor': 115, 'Receptor': 190,
+            'Subtotal': 90, 'IVA': 70, 'Total': 90,
+            'Moneda': 52, 'Tipo': 58, 'Cotización': 120, 'Estado': 88,
         }
+        anchors = {'Subtotal':'e','IVA':'e','Total':'e'}
         for col in cols:
-            self.tree.heading(col, text=col)
+            self.tree.heading(col, text=col, anchor=anchors.get(col,'w'))
             self.tree.column(col, width=wcfg[col], minwidth=wcfg[col],
-                             stretch=(col not in ('ID', 'Moneda', 'Tipo')))
+                             stretch=(col not in ('ID','Moneda','Tipo','UUID')),
+                             anchor=anchors.get(col,'w'))
         self.tree.column('ID', stretch=False)
 
-        self.tree.tag_configure('vinculada',    background='#d4edda', foreground='#1a6b3a')
-        self.tree.tag_configure('sin_vincular', background='#fff3cd', foreground='#856404')
+        # Sin fondo de color — indicadores en columna Estado y Tipo
+        self.tree.tag_configure('vinculada',    foreground='#16a34a')
+        self.tree.tag_configure('sin_vincular', foreground='#d97706')
         self.tree.tag_configure('ingreso',      foreground='#1a4b8c')
         self.tree.tag_configure('egreso',       foreground='#c0392b')
+        self.tree.tag_configure('fila_par',     background='#ffffff')
+        self.tree.tag_configure('fila_impar',   background='#f8fafc')
 
         sc_y = ttk.Scrollbar(ft, orient='vertical',   command=self.tree.yview)
         sc_x = ttk.Scrollbar(ft, orient='horizontal', command=self.tree.xview)
@@ -330,6 +338,12 @@ class SeccionFacturacion:
         self.tree.bind('<Double-1>', lambda e: self.ver_detalle_factura())
         self.sistema._configurar_sorting_treeview(
             self.tree, columnas_numericas=['Subtotal', 'IVA', 'Total'])
+
+        # Barra de estado
+        self._status_fac = tk.Label(sec, text='',
+            font=('Arial', 8), bg='#dde3ec', fg='#6b7280',
+            anchor='w', padx=8, pady=3)
+        self._status_fac.pack(fill='x', side='bottom')
 
         self.cargar_facturas()
 
@@ -352,12 +366,15 @@ class SeccionFacturacion:
 
         if vinc == 'Vinculadas':
             where_parts.append("""(
-                EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
+                f.cotizacion_id IS NOT NULL
+                OR EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
                 OR EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
             )""")
         elif vinc == 'Sin vincular':
             where_parts.append("""(
-                NOT EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
+                f.cotizacion_id IS NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
                 AND NOT EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
             )""")
 
@@ -443,45 +460,92 @@ class SeccionFacturacion:
         buscar = self._entry_buscar.get().strip()
         vinc   = self._filtro_vinc.get()
 
+        # ── Verificar si existe factura_cotizaciones ───────────────────────
+        self.cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='factura_cotizaciones'")
+        tiene_junction = bool(self.cursor.fetchone())
+
+        # ── WHERE con filtros ──────────────────────────────────────────────
         where_parts = []
         params      = []
 
         if vinc == 'Vinculadas':
-            where_parts.append("""(
-                EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
-                OR EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
-            )""")
+            if tiene_junction:
+                where_parts.append("""(
+                    EXISTS (SELECT 1 FROM factura_cotizaciones fc2 WHERE fc2.factura_id = f.id)
+                    OR f.cotizacion_id IS NOT NULL
+                    OR EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+                )""")
+            else:
+                where_parts.append("""(
+                    f.cotizacion_id IS NOT NULL
+                    OR EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+                )""")
         elif vinc == 'Sin vincular':
-            where_parts.append("""(
-                NOT EXISTS (SELECT 1 FROM factura_cotizaciones fc WHERE fc.factura_id = f.id)
-                AND NOT EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
-            )""")
+            if tiene_junction:
+                where_parts.append("""(
+                    NOT EXISTS (SELECT 1 FROM factura_cotizaciones fc2 WHERE fc2.factura_id = f.id)
+                    AND f.cotizacion_id IS NULL
+                    AND NOT EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+                )""")
+            else:
+                where_parts.append("""(
+                    f.cotizacion_id IS NULL
+                    AND NOT EXISTS (SELECT 1 FROM compras co WHERE co.factura_xml_id = f.id)
+                )""")
 
         if buscar:
             where_parts.append(
                 '(f.uuid LIKE ? OR f.rfc_receptor LIKE ? '
                 'OR f.nombre_receptor LIKE ? OR f.folio_factura LIKE ? '
-                'OR c.folio LIKE ?)')
+                'OR f.serie LIKE ?)')
             p = f'%{buscar}%'
             params += [p, p, p, p, p]
 
         where_sql = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
 
-        self.cursor.execute(f"""
-            SELECT f.id, f.uuid, f.serie, f.folio_factura, f.fecha,
-                   f.rfc_receptor, f.nombre_receptor,
-                   f.subtotal, f.iva, f.total, f.moneda, f.tipo,
-                   GROUP_CONCAT(c.folio, ', ') AS cot_folios,
-                   COUNT(fc.cotizacion_id)      AS n_cotizaciones,
-                   COUNT(comp.id)               AS n_compras
-            FROM facturas f
-            LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
-            LEFT JOIN cotizaciones c          ON c.id = fc.cotizacion_id
-            LEFT JOIN compras comp            ON comp.factura_xml_id = f.id
-            {where_sql}
-            GROUP BY f.id
-            ORDER BY f.fecha DESC, f.fecha_registro DESC
-        """, params)
+        # ── Query principal ────────────────────────────────────────────────
+        if tiene_junction:
+            self.cursor.execute(f"""
+                SELECT f.id, f.uuid, f.serie, f.folio_factura, f.fecha,
+                       f.rfc_receptor, f.nombre_receptor,
+                       f.subtotal, f.iva, f.total, f.moneda, f.tipo,
+                       COALESCE(
+                           GROUP_CONCAT(DISTINCT c_junc.folio),
+                           c_leg.folio
+                       )                        AS cot_folios,
+                       COUNT(DISTINCT fc.cotizacion_id) +
+                           CASE WHEN f.cotizacion_id IS NOT NULL
+                                 AND NOT EXISTS (
+                                     SELECT 1 FROM factura_cotizaciones fc3
+                                     WHERE fc3.factura_id = f.id)
+                                THEN 1 ELSE 0 END AS n_cotizaciones,
+                       COUNT(DISTINCT comp.id)  AS n_compras
+                FROM facturas f
+                LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
+                LEFT JOIN cotizaciones c_junc     ON c_junc.id = fc.cotizacion_id
+                LEFT JOIN cotizaciones c_leg      ON c_leg.id = f.cotizacion_id
+                LEFT JOIN compras comp            ON comp.factura_xml_id = f.id
+                {where_sql}
+                GROUP BY f.id
+                ORDER BY f.fecha DESC, f.fecha_registro DESC
+            """, params)
+        else:
+            # Fallback: solo usa la columna legacy cotizacion_id
+            self.cursor.execute(f"""
+                SELECT f.id, f.uuid, f.serie, f.folio_factura, f.fecha,
+                       f.rfc_receptor, f.nombre_receptor,
+                       f.subtotal, f.iva, f.total, f.moneda, f.tipo,
+                       c.folio                 AS cot_folios,
+                       CASE WHEN f.cotizacion_id IS NOT NULL THEN 1 ELSE 0 END AS n_cotizaciones,
+                       COUNT(DISTINCT comp.id)  AS n_compras
+                FROM facturas f
+                LEFT JOIN cotizaciones c   ON c.id = f.cotizacion_id
+                LEFT JOIN compras comp     ON comp.factura_xml_id = f.id
+                {where_sql}
+                GROUP BY f.id
+                ORDER BY f.fecha DESC, f.fecha_registro DESC
+            """, params)
 
         for row in self.cursor.fetchall():
             (fid, uuid, serie, folio_f, fecha, rfc_rec, nombre_rec,
@@ -489,32 +553,52 @@ class SeccionFacturacion:
 
             serie_folio = f"{serie}-{folio_f}" if serie else (folio_f or '—')
             tipo_txt    = {'I': 'Ingreso', 'E': 'Egreso', 'P': 'Pago',
-                           'N': 'Nómina', 'T': 'Traslado'}.get(tipo, tipo or '—')
+                           'N': 'Nómina',  'T': 'Traslado'}.get(tipo, tipo or '—')
 
-            # ── Determinar estado y referencia de vínculo ──────────────────
-            if n_cots:
-                # Factura de venta vinculada a cotización(es)
+            # Estado y referencia de vínculo
+            if n_cots and n_cots > 0:
                 vinculada = cot_folios or '—'
                 estado    = 'Vinculada'
-            elif n_compras:
-                # Factura de compra registrada como compra en inventario
+            elif n_compras and n_compras > 0:
                 vinculada = '🛒 Compra'
                 estado    = 'Vinculada'
             else:
                 vinculada = '—'
                 estado    = 'Sin vincular'
 
-            tags = ['vinculada' if estado == 'Vinculada' else 'sin_vincular']
-            if tipo == 'I':   tags.append('ingreso')
-            elif tipo == 'E': tags.append('egreso')
+            # Alternación de filas
+            idx      = len(self.tree.get_children())
+            fila_tag = 'fila_par' if idx % 2 == 0 else 'fila_impar'
+            est_tag  = 'vinculada' if estado == 'Vinculada' else 'sin_vincular'
+            tipo_tag = 'ingreso' if tipo == 'I' else ('egreso' if tipo == 'E' else '')
+            tags     = [fila_tag, est_tag] + ([tipo_tag] if tipo_tag else [])
+
+            uuid_short = (uuid or '')[:13] + '…' if len(uuid or '') > 13 else (uuid or '')
 
             self.tree.insert('', 'end', tags=tuple(tags), values=(
-                fid, uuid, serie_folio, (fecha or '')[:10],
+                fid, uuid_short, serie_folio, (fecha or '')[:10],
                 rfc_rec, nombre_rec,
-                f'${subtotal:,.2f}', f'${iva:,.2f}', f'${total:,.2f}',
+                f'${subtotal:,.2f}' if subtotal else '$0.00',
+                f'${iva:,.2f}'      if iva      else '$0.00',
+                f'${total:,.2f}'    if total    else '$0.00',
                 moneda, tipo_txt, vinculada, estado,
             ))
 
+        # Actualizar barra de estado
+        n      = len(self.tree.get_children())
+        vinc_n = sum(1 for iid in self.tree.get_children()
+                     if 'vinculada' in self.tree.item(iid, 'tags'))
+        if hasattr(self, '_status_fac'):
+            self._status_fac.config(
+                text=f'{n} factura{"s" if n!=1 else ""}  ·  '
+                     f'{vinc_n} vinculada{"s" if vinc_n!=1 else ""}  ·  '
+                     f'doble clic para ver detalle')
+
+        # Actualizar badge vinculación
+        try:
+            self.sistema._actualizar_badge_vinculacion()
+        except Exception:
+            pass
     # ── Importar XML ───────────────────────────────────────────────────────────
         # Actualizar badge de pendientes en cotizaciones
         try:
@@ -604,7 +688,9 @@ class SeccionFacturacion:
                 self._intentar_autovinculo(factura_id, datos)
 
                 # Si CLF es receptor → es una factura de compra → confirmar stock
-                if datos.get('rfc_receptor', '').upper() == CLF_RFC.upper():
+                # Si el RFC receptor coincide con la empresa activa → es factura de compra
+                rfc_empresa = (self.sistema.empresa.get('rfc', '') or '').upper()
+                if rfc_empresa and datos.get('rfc_receptor', '').upper() == rfc_empresa:
                     self._confirmar_stock_compra(factura_id, datos)
 
             except sqlite3.IntegrityError:
@@ -1024,7 +1110,8 @@ class SeccionFacturacion:
 
         for estado, bg in [('Pendiente', '#fff3cd'), ('Programada', '#cce5ff'),
                             ('Parcialmente Entregada', '#e8d5ff'),
-                            ('Entregada', '#d4edda')]:
+                            ('Entregada', '#d4edda'),
+                            ('Facturada', '#cffafe'), ('Pagada', '#d1fae5')]:
             tree_c.tag_configure(estado, background=bg)
 
         # Preview derecho
@@ -1107,21 +1194,30 @@ class SeccionFacturacion:
         def _cargar_cots(buscar=''):
             tree_c.delete(*tree_c.get_children())
             like = f'%{buscar}%'
+            # Get cotizaciones already linked to this factura
+            self.cursor.execute(
+                "SELECT cotizacion_id FROM factura_cotizaciones WHERE factura_id=?",
+                (factura_id,))
+            ya_vinculadas = {r[0] for r in self.cursor.fetchall()}
+            # Also check legacy
+            if cot_actual:
+                ya_vinculadas.add(cot_actual)
+
             self.cursor.execute("""
                 SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, c.total, c.estado
                 FROM cotizaciones c
                 JOIN clientes cl ON cl.id = c.cliente_id
-                WHERE c.estado NOT IN ('Cancelada')
-                  AND (c.folio LIKE ? OR cl.nombre_comercial LIKE ?)
+                WHERE (c.folio LIKE ? OR cl.nombre_comercial LIKE ?)
                 ORDER BY c.folio DESC
             """, (like, like))
             for r in self.cursor.fetchall():
                 cid, folio, fecha, cli, total, estado = r
+                vinculada_marca = ' 🔗' if cid in ya_vinculadas else ''
                 tag = estado if estado in ('Pendiente', 'Programada',
-                                           'Parcialmente Entregada', 'Entregada') else ''
-                marca = ' ◀' if cid == cot_actual else ''
+                                           'Parcialmente Entregada', 'Entregada',
+                                           'Facturada', 'Pagada') else ''
                 tree_c.insert('', 'end', tags=(tag,), values=(
-                    cid, folio + marca, (fecha or '')[:10],
+                    cid, folio + vinculada_marca, (fecha or '')[:10],
                     cli, f'${total:,.2f}', estado))
 
         _cargar_cots()
@@ -1151,14 +1247,22 @@ class SeccionFacturacion:
             self.sistema.actualizar_dashboard()
 
         def _desvincular():
-            if not cot_actual:
+            # Check both legacy column and junction table
+            self.cursor.execute(
+                "SELECT COUNT(*) FROM factura_cotizaciones WHERE factura_id=?", (factura_id,))
+            n_junc = self.cursor.fetchone()[0]
+            if not cot_actual and n_junc == 0:
                 messagebox.showinfo('Info', 'La factura no tiene cotización vinculada.',
                                     parent=win)
                 return
-            if messagebox.askyesno('Confirmar', 'deseas desvincular la factura de la cotización?',
+            if messagebox.askyesno('Confirmar', '¿Desvincular la factura de todas sus cotizaciones?',
                                    parent=win):
+                # Limpiar junction table
                 self.cursor.execute(
-                    'UPDATE facturas SET cotizacion_id=NULL WHERE id=?', (factura_id,))
+                    "DELETE FROM factura_cotizaciones WHERE factura_id=?", (factura_id,))
+                # Limpiar legacy
+                self.cursor.execute(
+                    "UPDATE facturas SET cotizacion_id=NULL WHERE id=?", (factura_id,))
                 self.conn.commit()
                 win.destroy()
                 self.cargar_facturas()
@@ -1184,13 +1288,24 @@ class SeccionFacturacion:
             fecha_etapa = (fecha_fac or '')[:10] or datetime.now().strftime('%Y-%m-%d')
 
             for cot_id in cot_ids:
-                # 1. Junction table (fuente de verdad)
+                # 1. Junction table — crear si no existe y luego insertar
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS factura_cotizaciones (
+                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                        factura_id    INTEGER NOT NULL,
+                        cotizacion_id INTEGER NOT NULL,
+                        fecha_vinculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (factura_id)    REFERENCES facturas(id),
+                        FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
+                        UNIQUE(factura_id, cotizacion_id)
+                    )
+                ''')
                 self.cursor.execute("""
                     INSERT OR IGNORE INTO factura_cotizaciones (factura_id, cotizacion_id)
                     VALUES (?, ?)
                 """, (factura_id, cot_id))
 
-                # 2. Columna legacy (compatibilidad — apunta a la primera/única cotización)
+                # 2. Columna legacy (compatibilidad)
                 if cot_ids.index(cot_id) == 0:
                     self.cursor.execute(
                         'UPDATE facturas SET cotizacion_id=? WHERE id=?',
@@ -1273,10 +1388,30 @@ class SeccionFacturacion:
 
         hdr = tk.Frame(win, bg='#1a4b8c', pady=10)
         hdr.pack(fill='x')
-        tk.Label(hdr, text='🧾  Detalle de Factura CFDI',
-                 font=('Arial', 12, 'bold'), bg='#1a4b8c', fg='white').pack()
-        tk.Label(hdr, text=f['uuid'], font=('Arial', 8),
-                 bg='#1a4b8c', fg='#bfdbfe').pack()
+        # Fila 1: tipo + serie-folio + total
+        top_row = tk.Frame(hdr, bg='#1a4b8c')
+        top_row.pack(fill='x', padx=14)
+        serie_folio_disp = ''
+        if f.get('serie') and f.get('folio_factura'):
+            serie_folio_disp = f"{f['serie']}-{f['folio_factura']}"
+        elif f.get('folio_factura'):
+            serie_folio_disp = str(f['folio_factura'])
+        tipo_txt = {'I': '📥 Ingreso', 'E': '📤 Egreso', 'P': '💳 Pago',
+                    'T': '🔄 Traslado'}.get(f.get('tipo_comprobante',''), '🧾 CFDI')
+        tk.Label(top_row, text=f"{tipo_txt}  {serie_folio_disp}",
+                 font=('Arial', 12, 'bold'), bg='#1a4b8c', fg='white').pack(side='left')
+        total_disp = f.get('total', 0) or 0
+        moneda_disp = f.get('moneda', 'MXN') or 'MXN'
+        tk.Label(top_row, text=f"${total_disp:,.2f} {moneda_disp}",
+                 font=('Arial', 12, 'bold'), bg='#1a4b8c', fg='#6ee7b7').pack(side='right')
+        # Fila 2: RFC emisor y receptor
+        tk.Label(hdr, text=f"Emisor: {f.get('rfc_emisor','')}  {f.get('nombre_emisor','')[:35]}",
+                 font=('Arial', 9), bg='#1a4b8c', fg='#bfdbfe').pack(anchor='w', padx=14)
+        tk.Label(hdr, text=f"Receptor: {f.get('rfc_receptor','')}  {f.get('nombre_receptor','')[:35]}",
+                 font=('Arial', 9), bg='#1a4b8c', fg='#bfdbfe').pack(anchor='w', padx=14)
+        # Fila 3: UUID truncado
+        tk.Label(hdr, text=f"UUID: {(f.get('uuid',''))[:36]}",
+                 font=('Arial', 8), bg='#1a4b8c', fg='#7dd3fc').pack(anchor='w', padx=14)
 
         # Scroll
         canvas = tk.Canvas(win, bg='#f1f5f9', highlightthickness=0)

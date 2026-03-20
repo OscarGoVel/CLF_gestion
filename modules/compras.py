@@ -56,6 +56,7 @@ class VentanaCompra:
         # Hacer modal
         self.ventana.transient(parent)
         self.ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def crear_interfaz(self):
         """Crea la interfaz de la ventana"""
@@ -301,6 +302,7 @@ class VentanaCompra:
         
         ventana.transient(self.ventana)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def agregar_producto(self):
         """Agrega un producto a la compra"""
@@ -451,6 +453,7 @@ class VentanaCompra:
         
         ventana.transient(self.ventana)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def quitar_producto(self):
         """Quita un producto de la compra"""

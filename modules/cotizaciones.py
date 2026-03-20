@@ -77,6 +77,7 @@ class VentanaCotizacion:
         # Hacer modal
         self.ventana.transient(parent)
         self.ventana.grab_set()
+        self.ventana.bind('<Escape>', lambda e: self.ventana.destroy())
     
     def crear_interfaz(self):
         """Crea la interfaz de la ventana"""
@@ -500,6 +501,7 @@ class VentanaCotizacion:
         
         ventana.transient(self.ventana)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def nuevo_producto_rapido(self, ventana_padre, callback_recargar):
         """Crea un nuevo producto de forma rápida desde la ventana de cotización"""
@@ -694,6 +696,7 @@ class VentanaCotizacion:
         
         ventana.transient(ventana_padre)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def agregar_producto(self):
         """Abre ventana para seleccionar y agregar un producto"""
@@ -903,6 +906,7 @@ class VentanaCotizacion:
         
         ventana.transient(self.ventana)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def editar_cantidad_producto(self):
         """Permite editar la cantidad de un producto ya agregado a la cotización"""
@@ -1145,6 +1149,7 @@ class VentanaCotizacion:
         
         ventana.transient(self.ventana)
         ventana.grab_set()
+        ventana.bind('<Escape>', lambda e: ventana.destroy())
     
     def quitar_producto(self):
         """Quita el producto seleccionado de la cotización"""

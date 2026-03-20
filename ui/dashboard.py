@@ -91,6 +91,14 @@ class Dashboard:
                            bg='white', fg=color)
             lbl.pack(anchor='w', padx=12, pady=(2, 10))
             self._kpi_labels[attr] = lbl
+            _tips = {
+                'kpi_prog':   'Cotizaciones programadas o con entrega parcial pendiente',
+                'kpi_pend':   'Cotizaciones en estado Pendiente — sin fecha de entrega',
+                'kpi_cobrar': 'Saldo pendiente de pago de cotizaciones activas',
+                'kpi_stock':  'Productos con stock ≤ stock mínimo configurado',
+            }
+            if attr in _tips:
+                self.sistema._tip(card, _tips[attr])
 
         # ── FILA 2: izquierda (60%) + derecha (40%) ───────────────────────────
         main_row = tk.Frame(inner, bg=self.C['content_bg'])
