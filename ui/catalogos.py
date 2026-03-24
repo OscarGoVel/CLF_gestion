@@ -20,38 +20,7 @@ from ui.generador_pdf_cly import GeneradorPDFCLY
 
 
 
-def _campo_error(entry, msg_label, mensaje):
-    """Marca un Entry con borde rojo y muestra mensaje de error en msg_label.
-    Devuelve False para usar en: if not _campo_error(...): return
-    """
-    entry.configure(highlightbackground='#dc2626', highlightcolor='#dc2626',
-                    highlightthickness=2)
-    if msg_label:
-        msg_label.configure(text=mensaje, fg='#dc2626')
-    entry.focus()
-    return False
-
-
-def _campo_ok(entry, msg_label=None):
-    """Limpia el estado de error de un Entry."""
-    entry.configure(highlightthickness=0)
-    if msg_label:
-        msg_label.configure(text='')
-
-
-def _centrar(win, padre=None, ancho=None, alto=None):
-    """Centra una ventana respecto a su padre o pantalla."""
-    if ancho and alto:
-        win.geometry(f"{ancho}x{alto}")
-    win.update_idletasks()
-    w, h = win.winfo_width(), win.winfo_height()
-    if padre:
-        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
-        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
-    else:
-        x = (win.winfo_screenwidth()  - w) // 2
-        y = (win.winfo_screenheight() - h) // 2
-    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+from ui.utils import centrar_ventana as _centrar, campo_error as _campo_error, campo_ok as _campo_ok
 
 
 class Catalogos:
@@ -334,8 +303,15 @@ class Catalogos:
         self.sistema._toolbar_sep(ff_prod)
         self.sistema._toolbar_btn(ff_prod, '📊 CSV', self.exportar_csv_productos, color='#065f46')
         self.sistema._toolbar_sep(ff_prod)
+        tk.Label(ff_prod, text='Usados en:', bg=self.C['toolbar_bg'],
+                 font=('Arial', 9)).pack(side='left', padx=(6, 2))
+        self._precio_revision_periodo = ttk.Combobox(ff_prod, values=[
+            'Últimos 3 meses', 'Últimos 6 meses', 'Últimos 12 meses', 'Todo el tiempo'
+        ], state='readonly', width=16, font=('Arial', 9))
+        self._precio_revision_periodo.set('Últimos 6 meses')
+        self._precio_revision_periodo.pack(side='left', padx=(0, 4))
         self.sistema._toolbar_btn(ff_prod, '⚠ Precios por revisar', self.filtrar_precios_desactualizados,
-            color='#d97706', tip='Filtra productos cuyo precio base lleva más tiempo sin actualizarse que su umbral individual.')
+            color='#d97706', tip='Solo productos usados en cotizaciones recientes con precio desactualizado.')
 
         ft_prod = tk.Frame(tab_prod, bg=self.C['content_bg'])
         ft_prod.pack(fill='both', expand=True, padx=8, pady=8)
@@ -940,21 +916,48 @@ class Catalogos:
             self._actualizar_tabs_catalogos()
     
     def filtrar_precios_desactualizados(self):
-        """Filtra la tabla de productos mostrando solo los con precio desactualizado."""
+        """Filtra la tabla mostrando solo productos usados recientemente con precio desactualizado."""
         from datetime import date as _d
         hoy = _d.today()
 
+        # Calcular fecha_desde según el período seleccionado
+        periodo = self._precio_revision_periodo.get() \
+            if hasattr(self, '_precio_revision_periodo') else 'Últimos 6 meses'
+        if periodo == 'Últimos 3 meses':
+            fecha_desde = hoy.replace(day=1)
+            for _ in range(3):
+                fecha_desde = (fecha_desde.replace(day=1) -
+                               __import__('datetime').timedelta(days=1)).replace(day=1)
+            fecha_desde = fecha_desde.isoformat()
+        elif periodo == 'Últimos 12 meses':
+            fecha_desde = hoy.replace(year=hoy.year - 1).isoformat()
+        elif periodo == 'Todo el tiempo':
+            fecha_desde = '2000-01-01'
+        else:  # Últimos 6 meses (default)
+            m = hoy.month - 6
+            y = hoy.year + (m - 1) // 12
+            m = ((m - 1) % 12) + 1
+            fecha_desde = hoy.replace(year=y, month=m, day=1).isoformat()
+
         self.tree_productos.delete(*self.tree_productos.get_children())
 
+        # Solo productos que aparecen en cotizaciones no canceladas dentro del período
         self.cursor.execute("""
             SELECT p.id, p.codigo, p.nombre, c.nombre, s.nombre, p.unidad_medida,
                    p.precio_base, p.aplica_iva, p.precio_venta, p.stock_actual,
                    p.stock_minimo, p.clave_sat, p.precio_base_fecha
             FROM productos p
-            LEFT JOIN categorias c   ON p.categoria_id    = c.id
+            LEFT JOIN categorias c    ON p.categoria_id    = c.id
             LEFT JOIN subcategorias s ON p.subcategoria_id = s.id
+            WHERE p.id IN (
+                SELECT DISTINCT cd.producto_id
+                FROM cotizacion_detalle cd
+                JOIN cotizaciones cot ON cot.id = cd.cotizacion_id
+                WHERE cot.estado NOT IN ('Cancelada')
+                  AND cot.fecha >= ?
+            )
             ORDER BY p.nombre
-        """)
+        """, (fecha_desde,))
         rows = self.cursor.fetchall()
 
         n_filtrados = 0
@@ -1219,6 +1222,40 @@ class Catalogos:
                                     font=('Arial', 9), width=36)
         combo_subcat.grid(row=1, column=1, sticky='ew', pady=4)
 
+        # Flag: True mientras el código fue puesto por auto-generación (no por el usuario)
+        _sku_auto = [modo == 'nuevo']
+
+        def _generar_sku():
+            """Genera y rellena el SKU solo si el campo está vacío o fue auto-generado."""
+            if modo != 'nuevo' or not _sku_auto[0]:
+                return
+            cat_sel = combo_categoria.get()
+            sub_sel = combo_subcat.get()
+            if not cat_sel:
+                return
+            prefix = cat_sel[:3].upper()
+            prefix += sub_sel[:3].upper() if sub_sel else 'GEN'
+            self.cursor.execute(
+                "SELECT codigo FROM productos WHERE codigo LIKE ? ORDER BY codigo DESC LIMIT 1",
+                (f'{prefix}%',))
+            ultimo = self.cursor.fetchone()
+            if ultimo:
+                try:
+                    num = int(ultimo[0][len(prefix):]) + 1
+                except Exception:
+                    num = 1
+            else:
+                num = 1
+            nuevo_sku = f"{prefix}{num:04d}"
+            entry_codigo.delete(0, 'end')
+            entry_codigo.insert(0, nuevo_sku)
+
+        def _on_codigo_edit(e=None):
+            """Si el usuario escribe manualmente, desactiva la auto-generación."""
+            _sku_auto[0] = False
+
+        entry_codigo.bind('<Key>', _on_codigo_edit)
+
         def _on_cat_change(e=None):
             cat_sel = combo_categoria.get()
             cid = next((c[0] for c in categorias if c[1] == cat_sel), None)
@@ -1231,12 +1268,22 @@ class Catalogos:
                     self.cursor.execute(
                         "SELECT nombre FROM subcategorias WHERE id=?", (datos['subcategoria_id'],))
                     rs = self.cursor.fetchone()
-                    if rs and rs[0] in subs: combo_subcat.set(rs[0])
+                    if rs and rs[0] in subs:
+                        combo_subcat.set(rs[0])
+                    else:
+                        combo_subcat.set('')
+                else:
+                    combo_subcat.set('')
             else:
                 combo_subcat['values'] = []
                 combo_subcat.set('')
+            _generar_sku()
+
+        def _on_subcat_change(e=None):
+            _generar_sku()
 
         combo_categoria.bind('<<ComboboxSelected>>', _on_cat_change)
+        combo_subcat.bind('<<ComboboxSelected>>', _on_subcat_change)
         _on_cat_change()
 
         # ── SEC 3: Precios ─────────────────────────────────────────────────
@@ -1441,17 +1488,42 @@ class Catalogos:
         from datetime import date as _d
         hoy = _d.today()
 
-        # Recopilar productos desactualizados con sus datos
+        # Período de uso reciente (mismo que el selector del toolbar)
+        periodo = self._precio_revision_periodo.get() \
+            if hasattr(self, '_precio_revision_periodo') else 'Últimos 6 meses'
+        if periodo == 'Últimos 3 meses':
+            fd = hoy.replace(day=1)
+            for _ in range(3):
+                fd = (fd.replace(day=1) -
+                      __import__('datetime').timedelta(days=1)).replace(day=1)
+            fecha_desde = fd.isoformat()
+        elif periodo == 'Últimos 12 meses':
+            fecha_desde = hoy.replace(year=hoy.year - 1).isoformat()
+        elif periodo == 'Todo el tiempo':
+            fecha_desde = '2000-01-01'
+        else:
+            m = hoy.month - 6
+            y = hoy.year + (m - 1) // 12
+            m = ((m - 1) % 12) + 1
+            fecha_desde = hoy.replace(year=y, month=m, day=1).isoformat()
+
+        # Solo productos usados en el período, con su última fecha de cotización
         self.cursor.execute("""
-            SELECT p.id, p.codigo, p.nombre, p.precio_base, c.nombre AS cat
+            SELECT p.id, p.codigo, p.nombre, p.precio_base, c.nombre AS cat,
+                   MAX(cot.fecha) AS ultima_cot
             FROM productos p
             LEFT JOIN categorias c ON c.id = p.categoria_id
+            JOIN cotizacion_detalle cd  ON cd.producto_id = p.id
+            JOIN cotizaciones cot       ON cot.id = cd.cotizacion_id
+            WHERE cot.estado NOT IN ('Cancelada')
+              AND cot.fecha >= ?
+            GROUP BY p.id
             ORDER BY p.nombre
-        """)
+        """, (fecha_desde,))
         todos = self.cursor.fetchall()
 
-        pendientes = []  # (pid, codigo, nombre, precio_actual, cat, dias)
-        for pid, codigo, nombre, precio_base, cat in todos:
+        pendientes = []  # (pid, codigo, nombre, precio_actual, cat, dias, ultima_cot)
+        for pid, codigo, nombre, precio_base, cat, ultima_cot in todos:
             # Calcular días desde último registro real
             self.cursor.execute("""
                 SELECT fecha FROM producto_precio_historial
@@ -1490,19 +1562,20 @@ class Catalogos:
 
             if dias > umbral:
                 pendientes.append((pid, codigo or '', nombre or '',
-                                   precio_base or 0, cat or '', dias))
+                                   precio_base or 0, cat or '', dias,
+                                   ultima_cot or ''))
 
         if not pendientes:
             messagebox.showinfo('✅ Precios al día',
-                'Todos los productos tienen precios actualizados.',
+                f'Todos los productos usados en "{periodo}" tienen precios actualizados.',
                 parent=self.sistema.root)
             self.cargar_productos()
             return
 
         # ── Ventana ───────────────────────────────────────────────────────
         win = tk.Toplevel(self.root)
-        win.title(f'Revisión de precios — {len(pendientes)} producto(s)')
-        win.geometry('820x540')
+        win.title(f'Revisión de precios — {len(pendientes)} producto(s) ({periodo})')
+        win.geometry('940x540')
         win.minsize(700, 400)
         _centrar(win, self.root)
         win.configure(bg='#f8fafc')
@@ -1515,7 +1588,7 @@ class Catalogos:
         hdr.pack(fill='x')
         tk.Label(hdr, text='⚠  Revisión masiva de precios',
                  font=('Arial', 11, 'bold'), bg='#d97706', fg='white').pack(side='left', padx=14)
-        tk.Label(hdr, text=f'{len(pendientes)} productos requieren revisión',
+        tk.Label(hdr, text=f'{len(pendientes)} productos requieren revisión  ·  {periodo}',
                  font=('Arial', 9), bg='#d97706', fg='#fef3c7').pack(side='left')
 
         # Instrucción
@@ -1532,8 +1605,9 @@ class Catalogos:
         # Cabecera
         hdr_row = tk.Frame(outer, bg='#e8edf5')
         hdr_row.pack(fill='x')
-        for txt, w in [('Producto', 280), ('Cat.', 90), ('Precio actual', 110),
-                        ('Nuevo precio', 110), ('Días', 55), ('', 90)]:
+        for txt, w in [('Producto', 260), ('Cat.', 80), ('Precio actual', 100),
+                        ('Nuevo precio', 100), ('Días sin act.', 70),
+                        ('Última cot.', 85), ('', 80)]:
             tk.Label(hdr_row, text=txt, font=('Arial', 8, 'bold'),
                      bg='#e8edf5', fg='#374151', width=0, anchor='w',
                      padx=6, pady=5).pack(side='left')
@@ -1586,17 +1660,24 @@ class Catalogos:
                     _confirmar_uno(pid, precio_actual, entry_w, lbl_e)
 
         entry_data = []
-        for i, (pid, codigo, nombre, precio_actual, cat, dias) in enumerate(pendientes):
+        for i, (pid, codigo, nombre, precio_actual, cat, dias, ultima_cot) in enumerate(pendientes):
             bg = '#ffffff' if i % 2 == 0 else '#f8fafc'
             row = tk.Frame(inner, bg=bg)
             row.pack(fill='x')
 
             dias_color = '#dc2626' if dias > 60 else '#d97706'
-            nombre_short = f'{nombre[:30]}…' if len(nombre) > 30 else nombre
+            nombre_short = f'{nombre[:28]}…' if len(nombre) > 28 else nombre
+            # Formatear última cotización como dd/mm/yy
+            try:
+                from datetime import date as _d2
+                ult_cot_fmt = _d2.fromisoformat(str(ultima_cot)[:10]).strftime('%d/%m/%y')
+            except Exception:
+                ult_cot_fmt = '—'
+
             tk.Label(row, text=nombre_short, font=('Arial', 9), bg=bg,
                      fg='#374151', anchor='w', padx=6).pack(side='left', fill='x', expand=True)
-            tk.Label(row, text=(cat or '')[:12], font=('Arial', 8), bg=bg,
-                     fg='#6b7280', width=10, anchor='w').pack(side='left')
+            tk.Label(row, text=(cat or '')[:10], font=('Arial', 8), bg=bg,
+                     fg='#6b7280', width=9, anchor='w').pack(side='left')
             tk.Label(row, text=f'${precio_actual:,.2f}', font=('Arial', 9), bg=bg,
                      fg='#374151', width=10, anchor='e').pack(side='left', padx=(0,4))
             e = tk.Entry(row, font=('Arial', 9), width=10,
@@ -1604,12 +1685,14 @@ class Catalogos:
             e.insert(0, f'{precio_actual:.2f}')
             e.pack(side='left', padx=4)
             tk.Label(row, text=f'{dias}d', font=('Arial', 8, 'bold'), bg=bg,
-                     fg=dias_color, width=5, anchor='w').pack(side='left')
+                     fg=dias_color, width=6, anchor='w').pack(side='left')
+            tk.Label(row, text=ult_cot_fmt, font=('Arial', 8), bg=bg,
+                     fg='#6b7280', width=8, anchor='w').pack(side='left')
             lbl_e = tk.Label(row, text='—', font=('Arial', 9), bg=bg,
                              fg='#9ca3af', width=4)
             lbl_e.pack(side='left', padx=2)
-            btn = tk.Button(row, text='Confirmar',
-                            font=('Arial', 8), bg='#0f7b5e', fg='white',
+            btn = tk.Button(row, text='✓',
+                            font=('Arial', 8, 'bold'), bg='#0f7b5e', fg='white',
                             cursor='hand2', padx=6, pady=3, relief='flat',
                             command=lambda p=pid, pa=precio_actual, ew=e, le=lbl_e:
                                 _confirmar_uno(p, pa, ew, le))

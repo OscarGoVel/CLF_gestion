@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import sqlite3
 from datetime import datetime
+import sesion
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -772,12 +773,14 @@ class VentanaSalida:
         self.productos_salida = []   # lista de dicts igual que VentanaCompra
 
         self.ventana = tk.Toplevel(parent)
+        self.ventana.withdraw()
         self.ventana.title('Nueva Salida de Stock')
         self.ventana.geometry('1000x650')
         self.ventana.transient(parent)
         self.ventana.grab_set()
 
         self._crear_interfaz()
+        self.ventana.after(0, self.ventana.deiconify)
 
     # ── Interfaz ──────────────────────────────────────────────────────────────
     def _crear_interfaz(self):
@@ -901,6 +904,7 @@ class VentanaSalida:
     # ── Agregar producto ──────────────────────────────────────────────────────
     def _agregar_producto(self):
         win = tk.Toplevel(self.ventana)
+        win.withdraw()
         win.title('Seleccionar Producto')
         win.geometry('800x500')
         win.transient(self.ventana)
@@ -1011,6 +1015,7 @@ class VentanaSalida:
         tk.Button(fb2, text='❌ Cancelar', command=win.destroy,
                   bg='#6b7280', fg='white', font=('Arial', 10, 'bold'),
                   cursor='hand2', padx=15, pady=8).pack(side='left', padx=5)
+        win.after(0, win.deiconify)
 
     def _quitar_producto(self):
         sel = self.tree.selection()
@@ -1072,11 +1077,12 @@ class VentanaSalida:
                 self.cursor.execute("""
                     INSERT INTO movimientos_stock
                     (producto_id, tipo, motivo, cantidad,
-                     stock_antes, stock_despues, referencia, notas, fecha)
-                    VALUES (?, 'salida', ?, ?, ?, ?, ?, ?, ?)
+                     stock_antes, stock_despues, referencia, notas, fecha, usuario)
+                    VALUES (?, 'salida', ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (p['producto_id'], motivo, p['cantidad'],
                       stock_antes, stock_nuevo,
-                      referencia or None, notas or None, fecha))
+                      referencia or None, notas or None, fecha,
+                      sesion.nombre_display()))
 
             self.conn.commit()
             messagebox.showinfo('Éxito', 'Salida registrada y stock actualizado.')
@@ -1103,8 +1109,8 @@ def registrar_entrada_movimiento(cursor, conn, producto_id, cantidad,
     cursor.execute("""
         INSERT INTO movimientos_stock
         (producto_id, tipo, motivo, cantidad,
-         stock_antes, stock_despues, referencia)
-        VALUES (?, 'entrada', 'Compra', ?, ?, ?, ?)
+         stock_antes, stock_despues, referencia, usuario)
+        VALUES (?, 'entrada', 'Compra', ?, ?, ?, ?, ?)
     """, (producto_id, cantidad, stock_antes, stock_despues,
-          folio_compra or None))
+          folio_compra or None, sesion.nombre_display()))
     conn.commit()

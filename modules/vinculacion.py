@@ -147,6 +147,8 @@ def _cargar_productos(cursor):
 
 
 def _cargar_cotizaciones(cursor, factura_id):
+    # Permite vincular si la cotización aún no tiene una factura del mismo tipo
+    # (permite ingreso + egreso en la misma cotización)
     cursor.execute("""
         SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, cl.rfc,
                c.total, c.estado, c.monto_entregado
@@ -154,11 +156,14 @@ def _cargar_cotizaciones(cursor, factura_id):
         JOIN clientes cl ON cl.id = c.cliente_id
         WHERE c.estado NOT IN ('Cancelada')
           AND c.id NOT IN (
-              SELECT cotizacion_id FROM factura_cotizaciones
-              WHERE factura_id != ?
+              SELECT fc.cotizacion_id
+              FROM factura_cotizaciones fc
+              JOIN facturas f ON f.id = fc.factura_id
+              WHERE fc.factura_id != ?
+                AND f.tipo = (SELECT tipo FROM facturas WHERE id = ?)
           )
         ORDER BY c.folio DESC
-    """, (factura_id,))
+    """, (factura_id, factura_id))
     return cursor.fetchall()
 
 
@@ -191,6 +196,7 @@ class PanelVinculacion:
         total = sum(len(v) for v in self._pendientes.values())
 
         win = tk.Toplevel(self.root)
+        win.withdraw()
         win.title("🔗  Centro de Vinculacion")
         win.geometry("820x680")
         win.configure(bg="#f1f5f9")
@@ -235,10 +241,12 @@ class PanelVinculacion:
         for key, icono, titulo, desc, color, bg_card in self.CATS:
             items = self._pendientes[key]
             self._tarjeta(inner, key, icono, titulo, desc, color, bg_card, items, win)
+        win.after(0, win.deiconify)
 
     def _abrir_desvincular(self, win_padre):
         """Diálogo para desvincular una factura de su cotización."""
         win = tk.Toplevel(self.root)
+        win.withdraw()
         win.title("🔓 Desvincular Factura de Cotización")
         win.geometry("980x580")
         win.configure(bg="#f1f5f9")
@@ -414,6 +422,7 @@ class PanelVinculacion:
                   bg="#6b7280", fg="white", cursor="hand2",
                   padx=12, pady=6, relief="flat",
                   command=win.destroy).pack(side="right", padx=4)
+        win.after(0, win.deiconify)
 
     def _tarjeta(self, parent, key, icono, titulo, desc, color, bg_card, items, win):
         card = tk.Frame(parent, bg=bg_card, highlightbackground=color, highlightthickness=2)
@@ -1386,6 +1395,7 @@ class DialogoVinculacion:
             self._todos = _cargar_cotizaciones(self.cursor, self.origen["factura_id"])
 
         win = tk.Toplevel(self.panel.root)
+        win.withdraw()
         win.title(f"Vincular — {titulo}")
         # Cotizaciones necesitan más espacio para las tablas de productos
         geo = "1300x720" if tipo in ("cotizacion",) else "1060x680"
@@ -1450,6 +1460,7 @@ class DialogoVinculacion:
                   bg="#6b7280", fg="white", cursor="hand2",
                   padx=12, pady=6, relief="flat",
                   command=win.destroy).pack(side="right", padx=12)
+        win.after(0, win.deiconify)
 
     # ── Panel izquierdo ────────────────────────────────────────────────────────
 

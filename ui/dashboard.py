@@ -656,37 +656,39 @@ class Dashboard:
             fecha_ini = '2000-01-01'
             fecha_fin = '2099-12-31'
 
-        estados = ('Entregada', 'Facturada', 'Pagada')
+        # Estados que confirman entrega (independientemente de si ya se facturó o pagó)
+        _estados_entregados = (
+            'Entregada', 'Parcialmente Entregada', 'Facturada', 'Pagada'
+        )
+        _placeholders = ','.join('?' * len(_estados_entregados))
 
         # ── Monto Entregado Neto (total vendido, con o sin pago) ──────────────
-        # Incluye Entregada y Parcialmente Entregada para reflejar todo lo que
-        # ya fue entregado al cliente, independientemente de si está pagado.
-        self.cursor.execute("""
+        # Incluye todos los estados post-entrega para no perder cotizaciones
+        # que ya avanzaron a Facturada o Pagada.
+        self.cursor.execute(f"""
             SELECT COALESCE(SUM(total), 0)
             FROM cotizaciones
-            WHERE estado IN ('Entregada', 'Parcialmente Entregada')
+            WHERE estado IN ({_placeholders})
               AND fecha BETWEEN ? AND ?
-        """, (fecha_ini, fecha_fin))
+        """, (*_estados_entregados, fecha_ini, fecha_fin))
         monto_entregado = self.cursor.fetchone()[0] or 0
 
         # ── Costo Directo Presupuestado (precio_base × cantidad cotizada) ─────
-        # = lo que costaba según el catálogo cuando se hizo la cotización
-        self.cursor.execute("""
+        self.cursor.execute(f"""
             SELECT COALESCE(SUM(cd.cantidad * p.precio_base), 0)
             FROM cotizacion_detalle cd
             JOIN cotizaciones c  ON c.id  = cd.cotizacion_id
             JOIN productos p     ON p.id  = cd.producto_id
-            WHERE c.estado IN ('Entregada', 'Parcialmente Entregada')
+            WHERE c.estado IN ({_placeholders})
               AND c.fecha BETWEEN ? AND ?
-        """, (fecha_ini, fecha_fin))
+        """, (*_estados_entregados, fecha_ini, fecha_fin))
         costo_presupuestado = self.cursor.fetchone()[0] or 0
 
         # ── Utilidad Esperada = Venta - Costo Presupuestado ───────────────────
         u_esperada = monto_entregado - costo_presupuestado
 
         # ── Costo Directo Real (último costo de compra × cantidad entregada) ──
-        # Por producto: busca el costo unitario más reciente en compras
-        self.cursor.execute("""
+        self.cursor.execute(f"""
             SELECT COALESCE(SUM(cd.cantidad * (
                 SELECT cp2.costo_unitario
                 FROM compra_detalle cp2
@@ -697,9 +699,9 @@ class Dashboard:
             )), 0)
             FROM cotizacion_detalle cd
             JOIN cotizaciones c ON c.id = cd.cotizacion_id
-            WHERE c.estado IN ('Entregada', 'Parcialmente Entregada')
+            WHERE c.estado IN ({_placeholders})
               AND c.fecha BETWEEN ? AND ?
-        """, (fecha_ini, fecha_fin))
+        """, (*_estados_entregados, fecha_ini, fecha_fin))
         costo_real = self.cursor.fetchone()[0] or 0
 
         # ── Utilidad Real = Venta - Costo Real ───────────────────────────────

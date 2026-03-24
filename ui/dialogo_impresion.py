@@ -174,6 +174,7 @@ class DialogoImpresion:
         # ── Crear ventana ────────────────────────────────────────────
         titulo = "Imprimir Cotización" if tipo == 'cotizacion' else "Imprimir Nota de Remisión"
         self.ventana = tk.Toplevel(parent)
+        self.ventana.withdraw()
         self.ventana.title(titulo)
         self.ventana.geometry("860x560")
         self.ventana.resizable(True, True)
@@ -184,6 +185,7 @@ class DialogoImpresion:
         self.ventana.transient(parent)
         self.ventana.grab_set()
         self.ventana.focus_set()
+        self.ventana.after(0, self.ventana.deiconify)
 
     # ── Carga de datos desde BD ──────────────────────────────────────────────
     def _cargar_datos(self):

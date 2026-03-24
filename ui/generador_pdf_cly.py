@@ -12,24 +12,17 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import os
-
-# Términos por default
-TERMINOS_DEFAULT = {
-    'vigencia': '30 DÍAS',
-    'lugar_entrega': 'MÉRIDA',
-    'tiempo_entrega': '15 DÍAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA',
-    'moneda': 'TODOS LOS PRECIOS DE ESTA COTIZACIÓN SON EN MONEDA NACIONAL',
-    'cambios': 'PRECIO SUJETO A CAMBIO SIN PREVIO AVISO'
-}
+import app_config
 
 class GeneradorPDFCLY:
     """Genera PDFs con formato CLY que se ajustan automáticamente a 1 página"""
-    
+
     def __init__(self):
         self.color_oro = colors.HexColor('#D4AF37')
         self.color_negro = colors.HexColor('#1a1a1a')
         self.color_gris = colors.HexColor('#4a4a4a')
-        self.logo_path = 'logo_clf.jpg'
+        # Logo y términos se leen de la configuración activa
+        self.logo_path = app_config.PDF_CONFIG.get('logo_path', 'logo_clf.jpg')
         
         # Dimensiones de página
         self.ancho_pagina, self.alto_pagina = letter
@@ -244,7 +237,7 @@ class GeneradorPDFCLY:
         from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
         from reportlab.lib.units import inch
 
-        terminos = terminos_personalizados or TERMINOS_DEFAULT
+        terminos = terminos_personalizados or app_config.PDF_CONFIG
 
         # Función que dibuja el footer en cada página
         def _footer(canvas, doc):

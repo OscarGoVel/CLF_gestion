@@ -24,6 +24,11 @@ from db_init import inicializar_bd
 from ui.dashboard import Dashboard
 from ui.catalogos import Catalogos
 from ui.cotizaciones_ui import CotizacionesUI
+from ui.analisis import Analisis
+from app_config import UTILIDAD
+from ui.configuracion import Configuracion
+import sesion
+from ui.login import mostrar_login
 
 # Información de la empresa activa (se llena al seleccionar empresa al arrancar)
 EMPRESA = {
@@ -32,12 +37,6 @@ EMPRESA = {
     'email':  '',
     'telefono': '',
     'direccion': '',
-}
-
-# Porcentajes de utilidad por tipo de cliente
-UTILIDAD = {
-    'Gobierno': 40,
-    'Hotel': 35
 }
 
 class SistemaGestion:
@@ -62,6 +61,10 @@ class SistemaGestion:
 
         # Inicializar base de datos (usa la ruta de la empresa seleccionada)
         self.init_database(empresa.get('db_path') if empresa else None)
+
+        # Cargar preferencias de la empresa activa
+        import app_config as _cfg
+        _cfg.cargar_preferencias(empresa.get('id', '') if empresa else '')
 
         # Crear interfaz
         self.crear_interfaz()
@@ -136,6 +139,7 @@ class SistemaGestion:
         """Centra una ventana respecto a su padre o a la pantalla.
         Si se pasan ancho/alto los aplica antes de centrar.
         """
+        win.withdraw()
         if ancho and alto:
             win.geometry(f"{ancho}x{alto}")
         win.update_idletasks()
@@ -152,6 +156,7 @@ class SistemaGestion:
             x = (win.winfo_screenwidth()  - w) // 2
             y = (win.winfo_screenheight() - h) // 2
         win.geometry(f"+{max(0,x)}+{max(0,y)}")
+        win.after(0, win.deiconify)
 
     def init_database(self, db_path=None):
         """Inicializa la base de datos SQLite.
@@ -243,11 +248,13 @@ class SistemaGestion:
         self._seccion_actual = tk.StringVar(value='dashboard')
 
         secciones = [
-            ('dashboard',   '📊  Dashboard'),
-            ('cotizaciones','📄  Cotizaciones'),
-            ('facturacion', '🧾  Facturación'),
-            ('catalogos',   '📚  Catálogos'),
-            ('stock',       '📦  Stock'),
+            ('dashboard',      '📊  Dashboard'),
+            ('cotizaciones',   '📄  Cotizaciones'),
+            ('facturacion',    '🧾  Facturación'),
+            ('catalogos',      '📚  Catálogos'),
+            ('stock',          '📦  Stock'),
+            ('analisis',       '📈  Análisis'),
+            ('configuracion',  '⚙  Configuración'),
         ]
 
         for key, texto in secciones:
@@ -278,6 +285,21 @@ class SistemaGestion:
             command=self._cambiar_empresa
         )
         btn_cambiar.pack(side='right', fill='y', padx=(0, 4))
+
+        # Botón cerrar sesión
+        tk.Button(
+            nav, text='🔒  Cerrar sesión',
+            font=('Arial', 8), bg='#141f30', fg='#64748b',
+            activebackground='#1e2d45', activeforeground='#94a3b8',
+            bd=0, padx=10, pady=0, cursor='hand2', relief='flat',
+            command=self._cerrar_sesion
+        ).pack(side='right', fill='y')
+
+        # Separador + nombre de usuario activo
+        tk.Frame(nav, bg='#2b3a55', width=1).pack(side='right', fill='y', pady=4)
+        tk.Label(nav, text=f'👤  {sesion.nombre_display()}',
+                 font=('Arial', 8, 'bold'), bg=self.C['nav_bg'],
+                 fg='#94a3b8').pack(side='right', padx=8)
 
         nombre_emp = self.empresa.get('nombre', '') if self.empresa else ''
         if nombre_emp:
@@ -321,6 +343,10 @@ class SistemaGestion:
         self.catalogos.crear_seccion()
         self._facturacion = SeccionFacturacion(self)
         self._stock = SeccionStock(self)
+        self._analisis = Analisis(self)
+        self._analisis.crear_seccion()
+        self._configuracion = Configuracion(self)
+        self._configuracion.crear_seccion()
 
         # Mostrar dashboard al inicio
         self._navegar('dashboard')
@@ -333,6 +359,8 @@ class SistemaGestion:
             ('<Control-3>',  lambda e: self._navegar('facturacion')),
             ('<Control-4>',  lambda e: self._navegar('catalogos')),
             ('<Control-5>',  lambda e: self._navegar('stock')),
+            ('<Control-6>',  lambda e: self._navegar('analisis')),
+            ('<Control-7>',  lambda e: self._navegar('configuracion')),
         ]
         for seq, cmd in atajos:
             self.root.bind(seq, cmd)
@@ -475,11 +503,13 @@ class SistemaGestion:
 
         # ── Refrescar datos de la sección al navegar ───────────────────────
         nombres = {
-            'dashboard':   'Dashboard',
-            'cotizaciones':'Cotizaciones',
-            'facturacion': 'Facturación',
-            'catalogos':   'Catálogos',
-            'stock':       'Stock',
+            'dashboard':     'Dashboard',
+            'cotizaciones':  'Cotizaciones',
+            'facturacion':   'Facturación',
+            'catalogos':     'Catálogos',
+            'stock':         'Stock',
+            'analisis':      'Análisis',
+            'configuracion': 'Configuración',
         }
         self._set_status(f'Cargando {nombres.get(seccion, seccion)}…', 'busy')
         self.root.config(cursor='watch')
@@ -508,6 +538,14 @@ class SistemaGestion:
                     self._stock.cargar_vista_stock()
                     self._stock.cargar_historial()
                 self._set_status('Stock actualizado', 'ok')
+            elif seccion == 'analisis':
+                if hasattr(self, '_analisis'):
+                    self._analisis.refresh()
+                self._set_status('Análisis actualizado', 'ok')
+            elif seccion == 'configuracion':
+                if hasattr(self, '_configuracion'):
+                    self._configuracion.recargar()
+                self._set_status('Configuración', 'ok')
         except Exception:
             self._set_status('Error al cargar sección', 'warn')
         finally:
@@ -662,30 +700,31 @@ class SistemaGestion:
     def _sync_estado_desde_seguimiento(self, cotizacion_id, etapa, completada):
         self.cotizaciones_ui._sync_estado_desde_seguimiento(cotizacion_id, etapa, completada)
 
+    def _cerrar_sesion(self):
+        """Cierra la sesión del usuario actual; el loop en __main__ vuelve a pedir login."""
+        if not messagebox.askyesno('Cerrar sesión',
+                                   '¿Deseas cerrar la sesión actual?',
+                                   parent=self.root):
+            return
+        sesion.cerrar_sesion()
+        sesion.ACCION_REINICIO[0] = 'cerrar_sesion'
+        self.root.quit()   # Sale del mainloop sin destruir widgets
+
     def _cambiar_empresa(self):
-        """Cierra la sesión actual y regresa al selector de empresa."""
+        """Regresa al selector de empresa; el loop en __main__ lo gestiona."""
         if not messagebox.askyesno(
             'Cambiar empresa',
-            '¿Deseas cerrar la sesión actual y regresar al selector de empresa?',
+            '¿Deseas regresar al selector de empresa?',
             parent=self.root
         ):
             return
-        # Cerrar BD actual
         try:
             self.conn.close()
         except Exception:
             pass
-        # Destruir ventana principal
-        self.root.destroy()
-        # Abrir selector de empresa de nuevo
-        from selector_empresa import mostrar_selector
-        empresa = mostrar_selector()
-        if empresa is None:
-            return  # Cerró sin elegir → terminar
-        # Abrir sistema con la nueva empresa
-        new_root = tk.Tk()
-        SistemaGestion(new_root, empresa=empresa)
-        new_root.mainloop()
+        sesion.cerrar_sesion()
+        sesion.ACCION_REINICIO[0] = 'cambiar_empresa'
+        self.root.quit()
 
     # ── SECCIÓN: DASHBOARD ─────────────────────────────────────────────────
     def __del__(self):
@@ -694,15 +733,41 @@ class SistemaGestion:
             self.conn.close()
 
 if __name__ == '__main__':
-    # ── Selector de empresa ───────────────────────────────────────────────────
-    empresa = mostrar_selector()
+    import sys
 
-    if empresa is None:
-        # Usuario cerró el selector sin elegir → no arrancar
-        import sys
-        sys.exit(0)
+    empresa = None   # empresa activa en el loop
 
-    # ── Sistema principal ─────────────────────────────────────────────────────
-    root = tk.Tk()
-    app  = SistemaGestion(root, empresa=empresa)
-    root.mainloop()
+    while True:
+        sesion.ACCION_REINICIO[0] = None
+
+        # ── 1. Login ──────────────────────────────────────────────────────
+        usuario = mostrar_login()          # usa app_usuarios.db central
+        if usuario is None:
+            break                          # cerró el login → salir
+        sesion.USUARIO_ACTUAL.update(usuario)
+
+        # ── 2. Selector de empresa ────────────────────────────────────────
+        # Solo se muestra si no hay empresa activa o se pidió cambiar
+        if empresa is None or sesion.ACCION_REINICIO[0] == 'cambiar_empresa':
+            empresa = mostrar_selector()
+            if empresa is None:
+                break                      # cerró el selector → salir
+
+        # ── 3. Sistema principal ──────────────────────────────────────────
+        root = tk.Tk()
+        SistemaGestion(root, empresa=empresa)
+        root.mainloop()
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+        # ── 4. Decidir qué hacer tras salir del mainloop ──────────────────
+        accion = sesion.ACCION_REINICIO[0]
+        if accion == 'cerrar_sesion':
+            continue                       # volver a pedir login (misma empresa)
+        elif accion == 'cambiar_empresa':
+            empresa = None                 # forzar selector en la próxima iteración
+            continue
+        else:
+            break                          # salida normal (ventana cerrada con X)

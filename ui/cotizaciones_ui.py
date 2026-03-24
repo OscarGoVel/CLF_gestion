@@ -25,41 +25,11 @@ from ui.dialogo_impresion import DialogoImpresion
 from modules.estado_de_cuenta import VentanaEstadoCuenta
 from modules.entregas import VentanaEntregaParcial
 from modules.vinculacion import PanelVinculacion, detectar_pendientes
+from app_config import UTILIDAD, DOCUMENTOS_DIR
 
 
 
-def _campo_error(entry, msg_label, mensaje):
-    """Marca un Entry con borde rojo y muestra mensaje de error en msg_label.
-    Devuelve False para usar en: if not _campo_error(...): return
-    """
-    entry.configure(highlightbackground='#dc2626', highlightcolor='#dc2626',
-                    highlightthickness=2)
-    if msg_label:
-        msg_label.configure(text=mensaje, fg='#dc2626')
-    entry.focus()
-    return False
-
-
-def _campo_ok(entry, msg_label=None):
-    """Limpia el estado de error de un Entry."""
-    entry.configure(highlightthickness=0)
-    if msg_label:
-        msg_label.configure(text='')
-
-
-def _centrar(win, padre=None, ancho=None, alto=None):
-    """Centra una ventana respecto a su padre o pantalla."""
-    if ancho and alto:
-        win.geometry(f"{ancho}x{alto}")
-    win.update_idletasks()
-    w, h = win.winfo_width(), win.winfo_height()
-    if padre:
-        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
-        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
-    else:
-        x = (win.winfo_screenwidth()  - w) // 2
-        y = (win.winfo_screenheight() - h) // 2
-    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+from ui.utils import centrar_ventana as _centrar, campo_error as _campo_error, campo_ok as _campo_ok
 
 
 class CotizacionesUI:
@@ -75,11 +45,6 @@ class CotizacionesUI:
         ('Complemento de Pago', '💳', '#92400e', '#fef3c7'),
         ('Pagada',              '✅', '#6b21a8', '#f3e8ff'),
     ]
-
-    UTILIDAD = {
-        'Gobierno': 40,
-        'Hotel': 35
-    }
 
     def __init__(self, sistema):
         self.sistema = sistema
@@ -781,7 +746,7 @@ class CotizacionesUI:
             except Exception:
                 pass
 
-        ventana_cot = VentanaCotizacion(self.root, self.conn, self.cursor, self.UTILIDAD,
+        ventana_cot = VentanaCotizacion(self.root, self.conn, self.cursor, UTILIDAD,
                                         modo='nueva', on_ir_catalogo=_ir_catalogo_nueva)
         self.root.wait_window(ventana_cot.ventana)
         # Recargar cotizaciones y dashboard
@@ -821,7 +786,7 @@ class CotizacionesUI:
                 pass
 
         ventana_cot = VentanaCotizacion(
-            self.root, self.conn, self.cursor, self.UTILIDAD,
+            self.root, self.conn, self.cursor, UTILIDAD,
             modo='editar', cotizacion_id=cotizacion_id,
             on_ir_catalogo=_ir_catalogo_editar
         )
@@ -1609,23 +1574,23 @@ class CotizacionesUI:
         
         # Obtener datos completos
         self.cursor.execute("""
-            SELECT c.folio, c.fecha, cl.nombre_comercial, cl.tipo, c.orden_compra, 
+            SELECT c.folio, c.fecha, cl.nombre_comercial, cl.tipo, c.orden_compra,
                    c.fecha_orden_compra, c.subtotal, c.iva, c.total, c.estado,
-                   c.notas, c.fecha_entrega, c.monto_entregado, c.monto_facturado, 
-                   c.monto_pagado, cl.contacto, cl.telefono, cl.email
+                   c.notas, c.fecha_entrega, c.monto_entregado, c.monto_facturado,
+                   c.monto_pagado, cl.contacto, cl.telefono, cl.email, cl.rfc
             FROM cotizaciones c
             JOIN clientes cl ON c.cliente_id = cl.id
             WHERE c.id = ?
         """, (cotizacion_id,))
-        
+
         cotizacion = self.cursor.fetchone()
         if not cotizacion:
             return
-        
-        (folio, fecha, cliente, tipo_cliente, orden_compra, fecha_oc, 
-         subtotal, iva, total, estado, notas, fecha_entrega, 
+
+        (folio, fecha, cliente, tipo_cliente, orden_compra, fecha_oc,
+         subtotal, iva, total, estado, notas, fecha_entrega,
          monto_entregado, monto_facturado, monto_pagado,
-         contacto, telefono, email) = cotizacion
+         contacto, telefono, email, rfc_cliente) = cotizacion
         
         # Obtener productos
         self.cursor.execute("""
@@ -1762,15 +1727,219 @@ class CotizacionesUI:
             frame_notas.pack(fill='x', pady=(0, 15))
             tk.Label(frame_notas, text=notas, font=('Arial', 9), bg='white', justify='left', wraplength=800).pack()
         
-        tk.Button(frame_content, text="Cerrar", command=ventana.destroy, bg='#6b7280', fg='white', font=('Arial', 11, 'bold'), padx=30, pady=10).pack(pady=10)
-        
+        # === FACTURAS VINCULADAS ===
+        frame_facturas_cont = tk.LabelFrame(
+            frame_content, text="📎 Facturas Vinculadas",
+            font=('Arial', 11, 'bold'), bg='white', padx=10, pady=10)
+        frame_facturas_cont.pack(fill='x', pady=(0, 15))
+
+        _tipo_map_fac  = {'I': '📥 Ingreso', 'E': '📤 Egreso',
+                          'P': '💳 Pago',   'N': '📋 Nómina', 'T': '🔄 Traslado'}
+        _tipo_color    = {'I': '#1a4b8c', 'E': '#c0392b'}
+        _tipo_bg       = {'I': '#eff6ff',  'E': '#fff1f2'}
+
+        def _build_facturas_section():
+            for w in frame_facturas_cont.winfo_children():
+                w.destroy()
+            self.cursor.execute("""
+                SELECT f.id, f.serie, f.folio_factura, f.tipo, f.total, f.fecha, f.uuid
+                FROM facturas f
+                JOIN factura_cotizaciones fc ON fc.factura_id = f.id
+                WHERE fc.cotizacion_id = ?
+                ORDER BY f.tipo, f.fecha
+            """, (cotizacion_id,))
+            vinculadas = self.cursor.fetchall()
+            if vinculadas:
+                for fid, serie, folio_f, tipo, ftotal, ffecha, uuid in vinculadas:
+                    sf = f"{serie}-{folio_f}" if serie else (folio_f or (uuid or '')[:8])
+                    color  = _tipo_color.get(tipo, '#374151')
+                    bgc    = _tipo_bg.get(tipo, '#f9fafb')
+                    tipo_t = _tipo_map_fac.get(tipo, tipo)
+                    row = tk.Frame(frame_facturas_cont, bg=bgc, pady=3)
+                    row.pack(fill='x', padx=4, pady=2)
+                    tk.Label(row, text=tipo_t, font=('Arial', 9, 'bold'),
+                             bg=bgc, fg=color, width=14, anchor='w').pack(side='left', padx=(8, 4))
+                    tk.Label(row, text=sf, font=('Arial', 9),
+                             bg=bgc, fg='#1e2d45', width=14).pack(side='left', padx=4)
+                    tk.Label(row, text=f"${ftotal:,.2f}" if ftotal else '$0.00',
+                             font=('Arial', 9, 'bold'), bg=bgc, fg=color).pack(side='left', padx=4)
+                    tk.Label(row, text=(ffecha or '')[:10],
+                             font=('Arial', 8), bg=bgc, fg='#6b7280').pack(side='left', padx=8)
+            else:
+                tk.Label(frame_facturas_cont, text="Sin facturas vinculadas",
+                         font=('Arial', 9, 'italic'), bg='white', fg='#9ca3af').pack(anchor='w', padx=4, pady=4)
+
+            tk.Button(frame_facturas_cont, text="🔗 Vincular Factura",
+                      command=lambda: self._vincular_factura_a_cot(
+                          cotizacion_id, rfc_cliente, _build_facturas_section, ventana),
+                      bg='#1a4b8c', fg='white', font=('Arial', 9, 'bold'),
+                      cursor='hand2', padx=10, pady=4, relief='flat').pack(anchor='w', padx=4, pady=(8, 2))
+
+        _build_facturas_section()
+
+        tk.Button(frame_content, text="Cerrar", command=ventana.destroy,
+                  bg='#6b7280', fg='white', font=('Arial', 11, 'bold'),
+                  padx=30, pady=10).pack(pady=10)
+
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
+
         ventana.transient(self.root)
         ventana.grab_set()
         ventana.bind('<Escape>', lambda e: ventana.destroy())
-    
+
+    def _vincular_factura_a_cot(self, cotizacion_id, rfc_cliente, on_refresh=None, parent_win=None):
+        """Diálogo simple para vincular una factura directamente desde el detalle de cotización."""
+        dlg = tk.Toplevel(parent_win or self.root)
+        dlg.withdraw()
+        dlg.title("🔗 Vincular Factura")
+        dlg.geometry("880x460")
+        _centrar(dlg, parent_win or self.root)
+        dlg.configure(bg='#f1f5f9')
+        dlg.transient(parent_win or self.root)
+        dlg.grab_set()
+        dlg.resizable(True, True)
+
+        # Header
+        hdr = tk.Frame(dlg, bg='#1a4b8c', pady=8)
+        hdr.pack(fill='x')
+        tk.Label(hdr, text="🔗  Vincular Factura a Cotización",
+                 font=('Arial', 11, 'bold'), bg='#1a4b8c', fg='white').pack(side='left', padx=12)
+        if rfc_cliente:
+            tk.Label(hdr, text=f"RFC cliente: {rfc_cliente}",
+                     font=('Arial', 8), bg='#1a4b8c', fg='#93c5fd').pack(side='right', padx=12)
+
+        # Barra de búsqueda y filtro
+        sf = tk.Frame(dlg, bg='#f1f5f9', pady=6)
+        sf.pack(fill='x', padx=12)
+        tk.Label(sf, text="🔍", font=('Arial', 10), bg='#f1f5f9').pack(side='left')
+        entry_bus = tk.Entry(sf, font=('Arial', 9), width=28, relief='solid', bd=1)
+        entry_bus.pack(side='left', padx=6)
+        var_todas = tk.BooleanVar(value=not bool(rfc_cliente))
+        tk.Checkbutton(sf, text="Mostrar todas (sin filtrar por RFC del cliente)",
+                       variable=var_todas, bg='#f1f5f9', font=('Arial', 8),
+                       command=lambda: _cargar(entry_bus.get())).pack(side='left', padx=8)
+
+        # Footer (pack antes que la tabla para que quede siempre visible)
+        foot = tk.Frame(dlg, bg='#e8edf4', pady=8)
+        foot.pack(side='bottom', fill='x')
+
+        def _vincular():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("Sin selección", "Selecciona una factura de la lista.", parent=dlg)
+                return
+            fac_id = int(tree.item(sel[0])['values'][0])
+            self.cursor.execute("SELECT uuid, fecha FROM facturas WHERE id=?", (fac_id,))
+            row = self.cursor.fetchone()
+            if not row:
+                return
+            uuid, fecha_fac = row
+            if hasattr(self.sistema, '_facturacion'):
+                self.sistema._facturacion._vincular_factura_a_cotizacion(
+                    fac_id, cotizacion_id, uuid, fecha_fac)
+            else:
+                try:
+                    self.cursor.execute("""
+                        INSERT OR IGNORE INTO factura_cotizaciones (factura_id, cotizacion_id)
+                        VALUES (?,?)
+                    """, (fac_id, cotizacion_id))
+                    self.cursor.execute("""
+                        INSERT INTO seguimiento_etapas
+                            (cotizacion_id, etapa, completada, referencia, fecha_etapa)
+                        VALUES (?, 'Facturada', 1, ?, ?)
+                        ON CONFLICT(cotizacion_id, etapa) DO UPDATE SET
+                            completada=1, referencia=excluded.referencia,
+                            fecha_etapa=excluded.fecha_etapa
+                    """, (cotizacion_id, uuid, (fecha_fac or '')[:10]))
+                    self.conn.commit()
+                    messagebox.showinfo("Éxito", "Factura vinculada.", parent=dlg)
+                except sqlite3.Error as e:
+                    self.conn.rollback()
+                    messagebox.showerror("Error", str(e), parent=dlg)
+                    return
+            if on_refresh:
+                on_refresh()
+            dlg.destroy()
+
+        tk.Button(foot, text="✅ Vincular seleccionada", command=_vincular,
+                  bg='#16a34a', fg='white', font=('Arial', 9, 'bold'),
+                  cursor='hand2', padx=14, pady=5, relief='flat').pack(side='left', padx=12)
+        tk.Button(foot, text="Cancelar", command=dlg.destroy,
+                  bg='#6b7280', fg='white', font=('Arial', 9),
+                  cursor='hand2', padx=12, pady=5, relief='flat').pack(side='right', padx=12)
+
+        # Tabla de facturas
+        cols = ('_id', 'Tipo', 'Serie-Folio', 'Total', 'Fecha', 'RFC Receptor')
+        frm_tree = tk.Frame(dlg, bg='#f1f5f9')
+        frm_tree.pack(fill='both', expand=True, padx=12, pady=(0, 4))
+        tree = ttk.Treeview(frm_tree, columns=cols, show='headings',
+                             height=10, selectmode='browse')
+        tree.column('_id',         width=0,   stretch=False)
+        tree.column('Tipo',        width=110)
+        tree.column('Serie-Folio', width=120)
+        tree.column('Total',       width=110, anchor='e')
+        tree.column('Fecha',       width=90)
+        tree.column('RFC Receptor',width=180)
+        for col in cols[1:]:
+            tree.heading(col, text=col)
+        tree.tag_configure('ingreso', foreground='#1a4b8c')
+        tree.tag_configure('egreso',  foreground='#c0392b')
+        sc_y = ttk.Scrollbar(frm_tree, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=sc_y.set)
+        sc_y.pack(side='right', fill='y')
+        tree.pack(fill='both', expand=True)
+        tree.bind('<Double-1>', lambda e: _vincular())
+
+        tipo_map_d = {'I': '📥 Ingreso', 'E': '📤 Egreso',
+                      'P': '💳 Pago',   'N': '📋 Nómina', 'T': '🔄 Traslado'}
+
+        def _cargar(buscar=''):
+            tree.delete(*tree.get_children())
+            like = f'%{buscar}%'
+            if not var_todas.get() and rfc_cliente:
+                self.cursor.execute("""
+                    SELECT f.id, f.tipo, f.serie, f.folio_factura,
+                           f.total, f.fecha, f.rfc_receptor
+                    FROM facturas f
+                    WHERE UPPER(f.rfc_receptor) = UPPER(?)
+                      AND f.id NOT IN (
+                          SELECT factura_id FROM factura_cotizaciones
+                          WHERE cotizacion_id = ?)
+                      AND f.tipo IN ('I','E')
+                      AND (f.folio_factura LIKE ? OR COALESCE(f.serie,'') LIKE ?
+                           OR f.uuid LIKE ?)
+                    ORDER BY f.tipo, f.fecha DESC
+                """, (rfc_cliente, cotizacion_id, like, like, like))
+            else:
+                self.cursor.execute("""
+                    SELECT f.id, f.tipo, f.serie, f.folio_factura,
+                           f.total, f.fecha, f.rfc_receptor
+                    FROM facturas f
+                    WHERE f.id NOT IN (
+                              SELECT factura_id FROM factura_cotizaciones
+                              WHERE cotizacion_id = ?)
+                      AND f.tipo IN ('I','E')
+                      AND (f.folio_factura LIKE ? OR COALESCE(f.serie,'') LIKE ?
+                           OR f.uuid LIKE ?)
+                    ORDER BY f.tipo, f.fecha DESC
+                """, (cotizacion_id, like, like, like))
+            for row in self.cursor.fetchall():
+                fid, tipo, serie, folio_f, ftotal, ffecha, rfc_rec = row
+                sf_disp = f"{serie}-{folio_f}" if serie else (folio_f or '—')
+                tag = 'ingreso' if tipo == 'I' else ('egreso' if tipo == 'E' else '')
+                tree.insert('', 'end', tags=(tag,), values=(
+                    fid,
+                    tipo_map_d.get(tipo, tipo),
+                    sf_disp,
+                    f"${ftotal:,.2f}" if ftotal else '$0.00',
+                    (ffecha or '')[:10],
+                    rfc_rec or '—',
+                ))
+
+        entry_bus.bind('<KeyRelease>', lambda e: _cargar(entry_bus.get()))
+        _cargar()
+
     # (removed - rebuilt in new ERP UI)
     def generar_pdf_cotizacion_nueva(self):
         """Genera PDF de cotización con nuevo formato CLY (con opción de impresión parcial)"""
@@ -2536,8 +2705,7 @@ class CotizacionesUI:
         cot_estado = info[3] if info else ''
 
         # Carpeta de documentos de esta cotización
-        base_docs = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 'documentos', folio)
+        base_docs = os.path.join(DOCUMENTOS_DIR, folio)
 
         # ── Ventana principal ────────────────────────────────────────────────
         win = tk.Toplevel(self.root)
@@ -2827,9 +2995,7 @@ class CotizacionesUI:
         if tipo_doc:
             lbl(5, 'Documento:')
             def _adjuntar():
-                base_docs = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)), 'documentos',
-                )
+                base_docs = DOCUMENTOS_DIR
                 # Obtener folio para la carpeta
                 self.cursor.execute("SELECT folio FROM cotizaciones WHERE id=?", (cot_id,))
                 folio = self.cursor.fetchone()[0]
@@ -3027,8 +3193,7 @@ class CotizacionesUI:
         folio  = item['values'][1]
 
         # Directorio base de documentos junto a la BD
-        base_docs = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 'documentos', folio)
+        base_docs = os.path.join(DOCUMENTOS_DIR, folio)
         tipos_carpeta = {
             'Orden de Compra':       os.path.join(base_docs, 'OC'),
             'Factura':               os.path.join(base_docs, 'Facturas'),

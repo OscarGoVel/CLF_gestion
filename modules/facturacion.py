@@ -11,22 +11,8 @@ import sqlite3
 import os
 import xml.etree.ElementTree as ET
 from datetime import datetime
-
-
-
-def _centrar(win, padre=None, ancho=None, alto=None):
-    """Centra una ventana respecto a su padre o pantalla."""
-    if ancho and alto:
-        win.geometry(f"{ancho}x{alto}")
-    win.update_idletasks()
-    w, h = win.winfo_width(), win.winfo_height()
-    if padre:
-        x = padre.winfo_rootx() + (padre.winfo_width()  - w) // 2
-        y = padre.winfo_rooty() + (padre.winfo_height() - h) // 2
-    else:
-        x = (win.winfo_screenwidth()  - w) // 2
-        y = (win.winfo_screenheight() - h) // 2
-    win.geometry(f"+{max(0,x)}+{max(0,y)}")
+from ui.utils import centrar_ventana as _centrar
+from app_config import FACTURAS_XML_DIR
 
 
 def _attr(element, name, default=''):
@@ -628,8 +614,7 @@ class SeccionFacturacion:
                 continue
 
             # Copiar XML a carpeta de facturas del sistema
-            carpeta_dest = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), 'facturas_xml')
+            carpeta_dest = FACTURAS_XML_DIR
             os.makedirs(carpeta_dest, exist_ok=True)
             dest = os.path.join(carpeta_dest, nombre)
             base, ext = os.path.splitext(nombre)
@@ -1381,134 +1366,206 @@ class SeccionFacturacion:
         # ── Ventana ───────────────────────────────────────────────────────────
         win = tk.Toplevel(self.root)
         win.title(f"Detalle Factura — {f['uuid']}")
-        win.geometry('920x640')
+        win.geometry('960x700')
+        win.minsize(860, 620)
         _centrar(win, self.sistema.root)
         win.configure(bg='#f1f5f9')
         win.transient(self.root)
 
-        hdr = tk.Frame(win, bg='#1a4b8c', pady=10)
+        tipo_map_hdr = {'I': '📥 Ingreso', 'E': '📤 Egreso', 'P': '💳 Pago',
+                        'N': '📋 Nómina', 'T': '🔄 Traslado'}
+        tipo_map     = {'I': 'Ingreso', 'E': 'Egreso', 'P': 'Pago de Complemento',
+                        'N': 'Nómina',  'T': 'Traslado'}
+
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = tk.Frame(win, bg='#1a4b8c', pady=8)
         hdr.pack(fill='x')
-        # Fila 1: tipo + serie-folio + total
-        top_row = tk.Frame(hdr, bg='#1a4b8c')
-        top_row.pack(fill='x', padx=14)
+
         serie_folio_disp = ''
         if f.get('serie') and f.get('folio_factura'):
             serie_folio_disp = f"{f['serie']}-{f['folio_factura']}"
         elif f.get('folio_factura'):
             serie_folio_disp = str(f['folio_factura'])
-        tipo_txt = {'I': '📥 Ingreso', 'E': '📤 Egreso', 'P': '💳 Pago',
-                    'T': '🔄 Traslado'}.get(f.get('tipo_comprobante',''), '🧾 CFDI')
-        tk.Label(top_row, text=f"{tipo_txt}  {serie_folio_disp}",
-                 font=('Arial', 12, 'bold'), bg='#1a4b8c', fg='white').pack(side='left')
-        total_disp = f.get('total', 0) or 0
+
+        tipo_txt = tipo_map_hdr.get(f.get('tipo', ''), '🧾 CFDI')
+        top_row  = tk.Frame(hdr, bg='#1a4b8c')
+        top_row.pack(fill='x', padx=14)
+        lbl_tipo_hdr = tk.Label(top_row, text=f"{tipo_txt}  {serie_folio_disp}",
+                                font=('Arial', 11, 'bold'), bg='#1a4b8c', fg='white')
+        lbl_tipo_hdr.pack(side='left')
+        total_disp  = f.get('total', 0) or 0
         moneda_disp = f.get('moneda', 'MXN') or 'MXN'
         tk.Label(top_row, text=f"${total_disp:,.2f} {moneda_disp}",
-                 font=('Arial', 12, 'bold'), bg='#1a4b8c', fg='#6ee7b7').pack(side='right')
-        # Fila 2: RFC emisor y receptor
-        tk.Label(hdr, text=f"Emisor: {f.get('rfc_emisor','')}  {f.get('nombre_emisor','')[:35]}",
-                 font=('Arial', 9), bg='#1a4b8c', fg='#bfdbfe').pack(anchor='w', padx=14)
-        tk.Label(hdr, text=f"Receptor: {f.get('rfc_receptor','')}  {f.get('nombre_receptor','')[:35]}",
-                 font=('Arial', 9), bg='#1a4b8c', fg='#bfdbfe').pack(anchor='w', padx=14)
-        # Fila 3: UUID truncado
+                 font=('Arial', 11, 'bold'), bg='#1a4b8c', fg='#6ee7b7').pack(side='right')
+
+        info_row = tk.Frame(hdr, bg='#1a4b8c')
+        info_row.pack(fill='x', padx=14, pady=(2, 0))
+        tk.Label(info_row,
+                 text=f"Emisor: {f.get('rfc_emisor','')}  {f.get('nombre_emisor','')[:40]}",
+                 font=('Arial', 8), bg='#1a4b8c', fg='#bfdbfe').pack(side='left')
+        tk.Label(info_row,
+                 text=f"Receptor: {f.get('rfc_receptor','')}  {f.get('nombre_receptor','')[:40]}",
+                 font=('Arial', 8), bg='#1a4b8c', fg='#bfdbfe').pack(side='right')
         tk.Label(hdr, text=f"UUID: {(f.get('uuid',''))[:36]}",
                  font=('Arial', 8), bg='#1a4b8c', fg='#7dd3fc').pack(anchor='w', padx=14)
 
-        # Scroll
-        canvas = tk.Canvas(win, bg='#f1f5f9', highlightthickness=0)
-        sb     = ttk.Scrollbar(win, orient='vertical', command=canvas.yview)
-        canvas.configure(yscrollcommand=sb.set)
-        sb.pack(side='right', fill='y')
-        canvas.pack(fill='both', expand=True)
-        inner = tk.Frame(canvas, bg='#f1f5f9')
-        wid = canvas.create_window((0, 0), window=inner, anchor='nw')
-        inner.bind('<Configure>', lambda e: canvas.configure(
-            scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>', lambda e: canvas.itemconfig(wid, width=e.width))
+        # ── Footer (fijo, fuera del contenido) ───────────────────────────────
+        foot = tk.Frame(win, bg='#e8edf4', pady=8)
+        foot.pack(side='bottom', fill='x')
 
+        tk.Button(foot, text='📄 Abrir XML',
+                  command=lambda: self._abrir_archivo(f['ruta_xml']),
+                  bg='#1a4b8c', fg='white', font=('Arial', 9, 'bold'),
+                  cursor='hand2', padx=12, pady=4).pack(side='left', padx=12)
+
+        def _on_tipo_cambiado(nuevo_tipo):
+            f['tipo'] = nuevo_tipo
+            lbl_tipo_hdr.config(text=f"{tipo_map_hdr.get(nuevo_tipo, '🧾 CFDI')}  {serie_folio_disp}")
+
+        tk.Button(foot, text='✏️ Cambiar Tipo',
+                  command=lambda: self._cambiar_tipo_factura(
+                      f['id'], f.get('tipo', ''), _on_tipo_cambiado, win),
+                  bg='#d97706', fg='white', font=('Arial', 9, 'bold'),
+                  cursor='hand2', padx=12, pady=4).pack(side='left', padx=4)
+
+        tk.Button(foot, text='Cerrar', command=win.destroy,
+                  bg='#6b7280', fg='white', font=('Arial', 9),
+                  cursor='hand2', padx=12, pady=4).pack(side='right', padx=12)
+
+        # ── Helpers ───────────────────────────────────────────────────────────
         def card(parent, titulo):
-            f2 = tk.LabelFrame(parent, text=f'  {titulo}  ',
-                                font=('Arial', 9, 'bold'),
-                                bg='#f1f5f9', fg='#1e2d45',
-                                relief='flat', bd=1)
-            f2.pack(fill='x', padx=12, pady=(6, 0))
-            return f2
+            lf = tk.LabelFrame(parent, text=f'  {titulo}  ',
+                               font=('Arial', 9, 'bold'),
+                               bg='#f1f5f9', fg='#1e2d45',
+                               relief='flat', bd=1)
+            lf.pack(fill='x', padx=8, pady=(5, 0))
+            return lf
 
         def fila(parent, label, valor, color='#1e2d45'):
             r = tk.Frame(parent, bg='#f1f5f9')
-            r.pack(fill='x', padx=10, pady=1)
+            r.pack(fill='x', padx=8, pady=1)
             tk.Label(r, text=label, font=('Arial', 9, 'bold'), bg='#f1f5f9',
-                     fg='#6b7e99', width=22, anchor='w').pack(side='left')
+                     fg='#6b7e99', width=20, anchor='w').pack(side='left')
             tk.Label(r, text=str(valor) if valor else '—', font=('Arial', 9),
-                     bg='#f1f5f9', fg=color).pack(side='left')
+                     bg='#f1f5f9', fg=color, anchor='w').pack(side='left', fill='x', expand=True)
 
-        # Datos generales
-        c1 = card(inner, '📄  Datos Generales')
-        tipo_map = {'I': 'Ingreso', 'E': 'Egreso', 'P': 'Pago de Complemento',
-                    'N': 'Nómina', 'T': 'Traslado'}
+        # ── Cuerpo: dos columnas ──────────────────────────────────────────────
+        body = tk.Frame(win, bg='#f1f5f9')
+        body.pack(fill='both', expand=True, padx=6, pady=6)
+        body.columnconfigure(0, weight=3)
+        body.columnconfigure(1, weight=2)
+
+        # Columna izquierda: Datos Generales
+        col_izq = tk.Frame(body, bg='#f1f5f9')
+        col_izq.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
+
+        c1 = card(col_izq, '📄  Datos Generales')
         fila(c1, 'UUID:', f['uuid'])
-        fila(c1, 'Versión CFDI:', f['version'] if 'version' in f else '—')
+        fila(c1, 'Versión CFDI:', f.get('version') or '—')
         fila(c1, 'Serie - Folio:',
-             f"{f['serie']}-{f['folio_factura']}" if f['serie'] else f['folio_factura'])
-        fila(c1, 'Fecha:', (f['fecha'] or '')[:19])
-        fila(c1, 'Fecha timbrado:', (f['fecha_timbrado'] or '')[:19])
-        fila(c1, 'Tipo:', tipo_map.get(f['tipo'], f['tipo']))
-        fila(c1, 'Método de pago:', f['metodo_pago'])
-        fila(c1, 'Forma de pago:', f['forma_pago'])
-        fila(c1, 'Moneda:', f['moneda'])
-        fila(c1, 'Cotización vinculada:', f.get('cot_folio') or '—',
+             f"{f['serie']}-{f['folio_factura']}" if f.get('serie') else (f.get('folio_factura') or '—'))
+        fila(c1, 'Fecha:', (f.get('fecha') or '')[:19])
+        fila(c1, 'Fecha timbrado:', (f.get('fecha_timbrado') or '')[:19])
+        fila(c1, 'Tipo:', tipo_map.get(f.get('tipo', ''), f.get('tipo') or '—'))
+        fila(c1, 'Método de pago:', f.get('metodo_pago') or '—')
+        fila(c1, 'Forma de pago:', f.get('forma_pago') or '—')
+        fila(c1, 'Moneda:', f.get('moneda') or '—')
+        fila(c1, 'Cotización:', f.get('cot_folio') or '—',
              '#1a6b3a' if f.get('cot_folio') else '#d97706')
-        fila(c1, 'Archivo XML:', os.path.basename(f['ruta_xml']) if f['ruta_xml'] else '—')
+        fila(c1, 'Archivo XML:', os.path.basename(f['ruta_xml']) if f.get('ruta_xml') else '—')
 
-        # Emisor
-        c2 = card(inner, '🏢  Emisor')
-        fila(c2, 'RFC:', f['rfc_emisor'])
-        fila(c2, 'Nombre:', f['nombre_emisor'])
-        fila(c2, 'Régimen fiscal:', f.get('regimen_fiscal', ''))
+        # Columna derecha: Emisor + Receptor + Totales
+        col_der = tk.Frame(body, bg='#f1f5f9')
+        col_der.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
 
-        # Receptor
-        c3 = card(inner, '🏛️  Receptor')
-        fila(c3, 'RFC:', f['rfc_receptor'])
-        fila(c3, 'Nombre:', f['nombre_receptor'])
-        fila(c3, 'Uso CFDI:', f['uso_cfdi'])
+        c2 = card(col_der, '🏢  Emisor')
+        fila(c2, 'RFC:', f.get('rfc_emisor') or '—')
+        fila(c2, 'Nombre:', f.get('nombre_emisor') or '—')
+        fila(c2, 'Régimen fiscal:', f.get('regimen_fiscal') or '—')
 
-        # Totales
-        c4 = card(inner, '💰  Totales')
-        fila(c4, 'Subtotal:', f'${f["subtotal"]:,.2f}')
-        if f['descuento']:
+        c3 = card(col_der, '🏛️  Receptor')
+        fila(c3, 'RFC:', f.get('rfc_receptor') or '—')
+        fila(c3, 'Nombre:', f.get('nombre_receptor') or '—')
+        fila(c3, 'Uso CFDI:', f.get('uso_cfdi') or '—')
+
+        c4 = card(col_der, '💰  Totales')
+        fila(c4, 'Subtotal:', f'${f["subtotal"]:,.2f}' if f.get('subtotal') else '$0.00')
+        if f.get('descuento'):
             fila(c4, 'Descuento:', f'${f["descuento"]:,.2f}', '#c0392b')
-        fila(c4, 'IVA:', f'${f["iva"]:,.2f}')
-        fila(c4, 'TOTAL:', f'${f["total"]:,.2f}', '#1a4b8c')
+        fila(c4, 'IVA:', f'${f["iva"]:,.2f}' if f.get('iva') is not None else '$0.00')
+        fila(c4, 'TOTAL:', f'${f["total"]:,.2f}' if f.get('total') is not None else '$0.00',
+             '#1a4b8c')
 
-        # Conceptos
+        # ── Conceptos (fila completa) ─────────────────────────────────────────
         if conceptos:
-            c5 = card(inner, '📦  Conceptos')
+            frm_conc = tk.LabelFrame(win, text='  📦  Conceptos  ',
+                                     font=('Arial', 9, 'bold'),
+                                     bg='#f1f5f9', fg='#1e2d45',
+                                     relief='flat', bd=1)
+            frm_conc.pack(fill='x', padx=14, pady=(0, 4))
+
             cols_conc = ('Clave SAT', 'No. ID', 'Cantidad', 'Clave Unidad',
                          'Descripción', 'Valor Unit.', 'Importe')
-            tree_conc = ttk.Treeview(c5, columns=cols_conc, show='headings', height=6)
-            for col, w in zip(cols_conc, [90, 90, 70, 90, 280, 100, 100]):
+            tree_conc = ttk.Treeview(frm_conc, columns=cols_conc, show='headings', height=4)
+            for col, w in zip(cols_conc, [85, 85, 60, 85, 260, 95, 95]):
                 tree_conc.heading(col, text=col)
-                tree_conc.column(col, width=w)
+                tree_conc.column(col, width=w, minwidth=40)
             for conc in conceptos:
                 tree_conc.insert('', 'end', values=(
                     conc[0], conc[1], f'{conc[2]:g}', conc[3],
                     conc[5], f'${conc[6]:,.2f}', f'${conc[7]:,.2f}',
                 ))
-            sc_c = ttk.Scrollbar(c5, orient='vertical', command=tree_conc.yview)
-            tree_conc.configure(yscrollcommand=sc_c.set)
-            sc_x_c = ttk.Scrollbar(c5, orient='horizontal', command=tree_conc.xview)
-            tree_conc.configure(xscrollcommand=sc_x_c.set)
-            tree_conc.pack(fill='x', padx=8, pady=4)
-            sc_c.place(relx=1, rely=0, relheight=1, anchor='ne')
+            sc_c   = ttk.Scrollbar(frm_conc, orient='vertical',   command=tree_conc.yview)
+            sc_x_c = ttk.Scrollbar(frm_conc, orient='horizontal', command=tree_conc.xview)
+            tree_conc.configure(yscrollcommand=sc_c.set, xscrollcommand=sc_x_c.set)
+            sc_c.pack(side='right', fill='y')
+            sc_x_c.pack(side='bottom', fill='x')
+            tree_conc.pack(fill='x', padx=4, pady=4)
 
-        # Botones
-        foot = tk.Frame(inner, bg='#f1f5f9', pady=10)
-        foot.pack(fill='x')
-        tk.Button(foot, text='📄 Abrir XML', command=lambda: self._abrir_archivo(f['ruta_xml']),
+    # ── Cambiar tipo de comprobante ────────────────────────────────────────────
+    def _cambiar_tipo_factura(self, factura_id, tipo_actual, on_cambio=None, parent_win=None):
+        """Diálogo para cambiar el TipoDeComprobante de una factura ya importada."""
+        dlg = tk.Toplevel(parent_win or self.root)
+        dlg.title('Cambiar Tipo de Comprobante')
+        dlg.geometry('300x270')
+        _centrar(dlg, parent_win or self.root)
+        dlg.configure(bg='#f1f5f9')
+        dlg.transient(parent_win or self.root)
+        dlg.grab_set()
+        dlg.resizable(False, False)
+
+        tk.Label(dlg, text='Selecciona el tipo de comprobante:',
+                 font=('Arial', 10, 'bold'), bg='#f1f5f9', fg='#1e2d45').pack(pady=(16, 8))
+
+        tipos = [('I', '📥 Ingreso'), ('E', '📤 Egreso'), ('P', '💳 Pago'),
+                 ('N', '📋 Nómina'),  ('T', '🔄 Traslado')]
+        var = tk.StringVar(value=tipo_actual)
+        for codigo, etiqueta in tipos:
+            tk.Radiobutton(dlg, text=etiqueta, variable=var, value=codigo,
+                           font=('Arial', 10), bg='#f1f5f9', fg='#1e2d45',
+                           activebackground='#f1f5f9').pack(anchor='w', padx=36, pady=2)
+
+        def guardar():
+            nuevo_tipo = var.get()
+            try:
+                self.cursor.execute('UPDATE facturas SET tipo=? WHERE id=?',
+                                    (nuevo_tipo, factura_id))
+                self.conn.commit()
+                self.cargar_facturas()
+                if on_cambio:
+                    on_cambio(nuevo_tipo)
+                dlg.destroy()
+            except sqlite3.Error as e:
+                messagebox.showerror('Error', str(e), parent=dlg)
+
+        btn_frame = tk.Frame(dlg, bg='#f1f5f9')
+        btn_frame.pack(pady=14)
+        tk.Button(btn_frame, text='Guardar', command=guardar,
                   bg='#1a4b8c', fg='white', font=('Arial', 9, 'bold'),
-                  cursor='hand2', padx=12, pady=5).pack(side='left', padx=12)
-        tk.Button(foot, text='Cerrar', command=win.destroy,
+                  cursor='hand2', padx=16, pady=5).pack(side='left', padx=8)
+        tk.Button(btn_frame, text='Cancelar', command=dlg.destroy,
                   bg='#6b7280', fg='white', font=('Arial', 9),
-                  cursor='hand2', padx=12, pady=5).pack(side='right', padx=12)
+                  cursor='hand2', padx=12, pady=5).pack(side='left', padx=8)
 
     # ── Abrir XML ─────────────────────────────────────────────────────────────
     def abrir_xml(self):

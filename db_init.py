@@ -414,11 +414,26 @@ def inicializar_bd(db_path):
         )
     ''')
 
+    # ── Usuarios ──────────────────────────────────────────────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            username         TEXT UNIQUE NOT NULL,
+            nombre           TEXT NOT NULL,
+            password_hash    TEXT NOT NULL,
+            rol              TEXT NOT NULL DEFAULT 'Operador',
+            activo           INTEGER NOT NULL DEFAULT 1,
+            fecha_creacion   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ultimo_acceso    TIMESTAMP
+        )
+    ''')
+
     # ── Migraciones columnas faltantes ───────────────────────────────────────────
     for tabla, cols in [
-        ('cotizacion_detalle', [('costo_snapshot', 'REAL')]),
-        ('compras',            [('cotizacion_id',  'INTEGER'),
-                                ('factura_xml_id', 'INTEGER')]),
+        ('cotizacion_detalle', [('costo_snapshot',  'REAL')]),
+        ('compras',            [('cotizacion_id',   'INTEGER'),
+                                ('factura_xml_id',  'INTEGER')]),
+        ('movimientos_stock',  [('usuario',         'TEXT')]),
     ]:
         for col, tipo in cols:
             try:

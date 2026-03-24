@@ -424,6 +424,7 @@ class DialogoEmpresa:
         self.on_guardar = on_guardar
 
         self.win = tk.Toplevel(parent)
+        self.win.withdraw()
         self.win.title('Nueva empresa' if modo == 'nueva' else 'Agregar empresa existente')
         self.win.geometry('480x380')
         self.win.configure(bg='#1e2d45')
@@ -432,12 +433,12 @@ class DialogoEmpresa:
         self.win.grab_set()
 
         # Centrar
-        self.win.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width()  - 480) // 2
         y = parent.winfo_y() + (parent.winfo_height() - 380) // 2
         self.win.geometry(f'480x380+{x}+{y}')
 
         self._build(db_path_inicial)
+        self.win.after(0, self.win.deiconify)
 
     def _build(self, db_path_inicial):
         # Cabecera
