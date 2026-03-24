@@ -13,8 +13,9 @@ import sqlite3
 import hashlib
 import os
 from ui.utils import centrar_ventana
+import db_connection
 
-# Ruta de la BD central de usuarios (junto a main.py / app_config.py)
+# Ruta de la BD central de usuarios (solo se usa en modo SQLite)
 _BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USERS_DB   = os.path.join(_BASE_DIR, 'app_usuarios.db')
 
@@ -35,8 +36,7 @@ def verificar_password(password: str, stored_hash: str) -> bool:
 # ── Inicialización de la BD central ──────────────────────────────────────────
 
 def _abrir_users_db():
-    conn   = sqlite3.connect(USERS_DB)
-    cursor = conn.cursor()
+    conn, cursor = db_connection.conectar_usuarios()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +47,14 @@ def _abrir_users_db():
             activo         INTEGER NOT NULL DEFAULT 1,
             fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             ultimo_acceso  TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS preferencias_usuario (
+            usuario_id  INTEGER NOT NULL,
+            clave       TEXT    NOT NULL,
+            valor       TEXT    NOT NULL DEFAULT '',
+            PRIMARY KEY (usuario_id, clave)
         )
     ''')
     conn.commit()

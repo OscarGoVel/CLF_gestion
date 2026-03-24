@@ -13,6 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import os
 import app_config
+import sesion
 
 class GeneradorPDFCLY:
     """Genera PDFs con formato CLY que se ajustan automáticamente a 1 página"""
@@ -228,8 +229,10 @@ class GeneradorPDFCLY:
         # Calcular parámetros de tabla
         fuente_tabla, alto_fila = self.calcular_parametros_tabla(len(productos))
 
-        # Rutas de salida
-        CARPETA_COTIZACIONES = r'C:\Users\oscar\OneDrive\Documentos\CLF Sistema\cotizaciones'
+        # Rutas de salida — usa la ruta del usuario o el default
+        _prefs_u = app_config.cargar_prefs_usuario(sesion.USUARIO_ACTUAL.get('id'))
+        CARPETA_COTIZACIONES = _prefs_u.get('ruta_cotizaciones',
+            r'C:\Users\oscar\OneDrive\Documentos\CLF Sistema\cotizaciones')
         os.makedirs(CARPETA_COTIZACIONES, exist_ok=True)
         nombre_archivo = os.path.join(CARPETA_COTIZACIONES, f"Cotizacion_{folio}.pdf")
 
@@ -512,8 +515,10 @@ class GeneradorPDFCLY:
         # Generar número de nota (basado en folio)
         num_nota = folio.replace('COT-', 'REM-')
         
-        # Crear PDF
-        CARPETA_REMISIONES = r'C:\Users\oscar\OneDrive\Documentos\Gestion CLF\notas de remision'
+        # Crear PDF — usa la ruta del usuario o el default
+        _prefs_u = app_config.cargar_prefs_usuario(sesion.USUARIO_ACTUAL.get('id'))
+        CARPETA_REMISIONES = _prefs_u.get('ruta_remisiones',
+            r'C:\Users\oscar\OneDrive\Documentos\Gestion CLF\notas de remision')
         os.makedirs(CARPETA_REMISIONES, exist_ok=True)
         nombre_archivo = os.path.join(CARPETA_REMISIONES, f"NotaRemision_{num_nota}.pdf")
         doc = SimpleDocTemplate(

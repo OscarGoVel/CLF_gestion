@@ -14,6 +14,7 @@ from datetime import datetime
 import sqlite3
 import app_config
 import sesion
+import db_connection
 from ui.login import hash_nuevo, verificar_password, USERS_DB
 
 
@@ -37,8 +38,7 @@ class Configuracion:
         self._frame = tk.Frame(self.sistema._content_area, bg=self.C['content_bg'])
         self.sistema._secciones['configuracion'] = self._frame
         # Conexión a la BD central de usuarios (independiente de la empresa)
-        self._uconn   = sqlite3.connect(USERS_DB)
-        self._ucursor = self._uconn.cursor()
+        self._uconn, self._ucursor = db_connection.conectar_usuarios()
         self._construir()
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -67,18 +67,21 @@ class Configuracion:
         self._tab_pdf       = tk.Frame(nb, bg=C['form_bg'])
         self._tab_respaldo  = tk.Frame(nb, bg=C['form_bg'])
         self._tab_usuarios  = tk.Frame(nb, bg=C['form_bg'])
+        self._tab_mis_rutas = tk.Frame(nb, bg=C['form_bg'])
 
         nb.add(self._tab_empresa,   text='🏢  Empresa')
         nb.add(self._tab_comercial, text='💰  Comercial')
         nb.add(self._tab_pdf,       text='📄  PDF / Documentos')
         nb.add(self._tab_respaldo,  text='💾  Respaldo')
         nb.add(self._tab_usuarios,  text='👤  Usuarios')
+        nb.add(self._tab_mis_rutas, text='📁  Mis Rutas PDF')
 
         self._build_tab_empresa()
         self._build_tab_comercial()
         self._build_tab_pdf()
         self._build_tab_respaldo()
         self._build_tab_usuarios()
+        self._build_tab_mis_rutas()
 
     # ══════════════════════════════════════════════════════════════════════════
     # PESTAÑA: EMPRESA
@@ -621,6 +624,70 @@ class Configuracion:
         self._uconn.commit()
         self._cargar_usuarios()
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # PESTAÑA: MIS RUTAS PDF
+    # ══════════════════════════════════════════════════════════════════════════
+    def _build_tab_mis_rutas(self):
+        C  = self.C
+        fr = self._tab_mis_rutas
+
+        tk.Label(fr, text='Rutas de destino para PDFs generados',
+                 font=('Arial', 10, 'bold'), bg=C['form_bg'],
+                 fg=C['text_dark']).pack(anchor='w', padx=20, pady=(16, 2))
+        tk.Label(fr,
+                 text='Estas rutas son personales — cada usuario guarda sus PDFs donde prefiera.',
+                 font=('Arial', 8), bg=C['form_bg'],
+                 fg=C['text_muted']).pack(anchor='w', padx=20, pady=(0, 14))
+
+        prefs_u = app_config.cargar_prefs_usuario(sesion.USUARIO_ACTUAL.get('id'))
+
+        self._ruta_cot_var = tk.StringVar(value=prefs_u.get('ruta_cotizaciones', ''))
+        self._ruta_rem_var = tk.StringVar(value=prefs_u.get('ruta_remisiones', ''))
+
+        campos = [
+            ('Cotizaciones PDF:',      self._ruta_cot_var, self._explorar_ruta_cot),
+            ('Notas de Remisión PDF:', self._ruta_rem_var, self._explorar_ruta_rem),
+        ]
+
+        for label_txt, var, cmd_explorar in campos:
+            row = tk.Frame(fr, bg=C['form_bg'])
+            row.pack(fill='x', padx=20, pady=5)
+            tk.Label(row, text=label_txt, font=('Arial', 9),
+                     bg=C['form_bg'], fg=C['text_secondary'],
+                     width=22, anchor='e').pack(side='left')
+            tk.Entry(row, textvariable=var, font=('Arial', 10),
+                     width=44, relief='solid', bd=1).pack(side='left', padx=6)
+            tk.Button(row, text='📂', font=('Arial', 10),
+                      bg=C['toolbar_bg'], fg=C['text_dark'], cursor='hand2',
+                      bd=0, padx=6, relief='flat',
+                      command=cmd_explorar).pack(side='left')
+
+        tk.Button(fr, text='💾  Guardar mis rutas',
+                  font=('Arial', 9), bg=C['toolbar_bg'], fg=C['text_dark'],
+                  cursor='hand2', bd=0, padx=14, pady=6, relief='flat',
+                  command=self._guardar_mis_rutas).pack(anchor='w', padx=20, pady=(10, 0))
+
+    def _explorar_ruta_cot(self):
+        carpeta = filedialog.askdirectory(title='Carpeta para Cotizaciones PDF')
+        if carpeta:
+            self._ruta_cot_var.set(carpeta)
+
+    def _explorar_ruta_rem(self):
+        carpeta = filedialog.askdirectory(title='Carpeta para Notas de Remisión PDF')
+        if carpeta:
+            self._ruta_rem_var.set(carpeta)
+
+    def _guardar_mis_rutas(self):
+        usuario_id = sesion.USUARIO_ACTUAL.get('id')
+        if not usuario_id:
+            messagebox.showwarning('Sin sesión', 'No hay usuario activo.')
+            return
+        app_config.guardar_prefs_usuario(usuario_id, {
+            'ruta_cotizaciones': self._ruta_cot_var.get().strip(),
+            'ruta_remisiones':   self._ruta_rem_var.get().strip(),
+        })
+        messagebox.showinfo('Guardado', 'Tus rutas PDF han sido guardadas.')
+
     # ──────────────────────────────────────────────────────────────────────────
     def recargar(self):
         """Recarga los valores actuales al mostrar la sección."""
@@ -638,6 +705,10 @@ class Configuracion:
             var.set(emp.get(key, ''))
         # Respaldo
         self._respaldo_carpeta.set(prefs.get('respaldo', {}).get('carpeta', ''))
+        # Mis rutas PDF
+        prefs_u = app_config.cargar_prefs_usuario(sesion.USUARIO_ACTUAL.get('id'))
+        self._ruta_cot_var.set(prefs_u.get('ruta_cotizaciones', ''))
+        self._ruta_rem_var.set(prefs_u.get('ruta_remisiones', ''))
         # Usuarios
         self._cargar_usuarios()
 

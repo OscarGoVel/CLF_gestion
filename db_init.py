@@ -176,6 +176,7 @@ def inicializar_bd(db_path):
             oc_documento      TEXT,
             factura_documento TEXT,
             observaciones     TEXT,
+            aplica_iva        INTEGER DEFAULT 0,
             fecha_registro    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (cliente_id) REFERENCES clientes(id)
         )
@@ -430,6 +431,7 @@ def inicializar_bd(db_path):
 
     # ── Migraciones columnas faltantes ───────────────────────────────────────────
     for tabla, cols in [
+        ('cotizaciones',       [('aplica_iva',       'INTEGER DEFAULT 0')]),
         ('cotizacion_detalle', [('costo_snapshot',  'REAL')]),
         ('compras',            [('cotizacion_id',   'INTEGER'),
                                 ('factura_xml_id',  'INTEGER')]),

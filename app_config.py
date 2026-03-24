@@ -11,10 +11,12 @@ Configuración centralizada de la aplicación:
 import os
 import json
 import copy
+import sqlite3
 
 # Directorio raíz del proyecto (mismo nivel que este archivo)
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.json')
+USERS_DB    = os.path.join(BASE_DIR, 'app_usuarios.db')
 
 # Carpetas de datos
 FACTURAS_XML_DIR = os.path.join(BASE_DIR, 'facturas_xml')
@@ -24,7 +26,7 @@ DOCUMENTOS_DIR   = os.path.join(BASE_DIR, 'documentos')
 PREFS_DEFAULT = {
     'comercial': {
         'iva_default': 16,
-        'utilidad': {'Gobierno': 40, 'Hotel': 35},
+        'utilidad': {'Gobierno': 40, 'Hotel': 35, 'Empresa': 35},
     },
     'pdf': {
         'logo_path':      'logo_clf.jpg',
@@ -42,7 +44,7 @@ PREFS_DEFAULT = {
 # ── Dicts mutables — se actualizan in-place al cargar/guardar prefs ────────────
 # Todos los módulos que ya importaron estas referencias verán los cambios.
 
-UTILIDAD: dict = {'Gobierno': 40, 'Hotel': 35}
+UTILIDAD: dict = {'Gobierno': 40, 'Hotel': 35, 'Empresa': 35}
 
 PDF_CONFIG: dict = {
     'logo_path':      'logo_clf.jpg',
@@ -137,6 +139,51 @@ def _merge(base: dict, override: dict) -> None:
             _merge(base[k], v)
         else:
             base[k] = v
+
+
+# ── Preferencias por usuario (rutas de PDFs) ──────────────────────────────────
+
+# Rutas por defecto — se usan si el usuario no configuró las suyas
+RUTAS_PDF_DEFAULT = {
+    'ruta_cotizaciones': r'C:\Users\oscar\OneDrive\Documentos\CLF Sistema\cotizaciones',
+    'ruta_remisiones':   r'C:\Users\oscar\OneDrive\Documentos\Gestion CLF\notas de remision',
+}
+
+
+def cargar_prefs_usuario(usuario_id: int) -> dict:
+    """Lee las rutas PDF configuradas por el usuario desde la BD de usuarios.
+    Devuelve un dict con al menos las claves de RUTAS_PDF_DEFAULT.
+    """
+    import db_connection
+    prefs = dict(RUTAS_PDF_DEFAULT)
+    if not usuario_id:
+        return prefs
+    try:
+        conn, cursor = db_connection.conectar_usuarios()
+        cursor.execute(
+            'SELECT clave, valor FROM preferencias_usuario WHERE usuario_id = ?',
+            (usuario_id,)
+        )
+        for clave, valor in cursor.fetchall():
+            prefs[clave] = valor
+        conn.close()
+    except Exception:
+        pass
+    return prefs
+
+
+def guardar_prefs_usuario(usuario_id: int, prefs: dict) -> None:
+    """Guarda las rutas PDF del usuario en la BD de usuarios."""
+    import db_connection
+    conn, cursor = db_connection.conectar_usuarios()
+    for clave, valor in prefs.items():
+        cursor.execute('''
+            INSERT INTO preferencias_usuario (usuario_id, clave, valor)
+            VALUES (?, ?, ?)
+            ON CONFLICT(usuario_id, clave) DO UPDATE SET valor = excluded.valor
+        ''', (usuario_id, clave, str(valor)))
+    conn.commit()
+    conn.close()
 
 
 # ── Paleta de colores principal (coincide con self.C en SistemaGestion) ────────

@@ -1,4 +1,12 @@
 {
+  "motor": "sqlite",
+  "postgresql": {
+    "host": "192.168.0.40",
+    "port": 5432,
+    "user": "postgres",
+    "password": "Admin123",
+    "database_usuarios": "clf_usuarios"
+  },
   "empresas": [
     {
       "id": "emp_CLF240418U94_default",
@@ -9,6 +17,7 @@
       "telefono": "9993633880",
       "direccion": "Calle 17 No. 56 Depto. 74, Kanasín, Yucatán",
       "db_path": "c:\\Users\\oscar\\OneDrive\\Documentos\\CLF Sistema\\Gestion-CLF\\gestion_comercial.db",
+      "pg_database": "clf_empresa",
       "fecha_registro": "2024-01-01"
     },
     {
@@ -19,8 +28,32 @@
       "email": "",
       "telefono": "",
       "db_path": "C:/Users/oscar/OneDrive/Documentos/CLF Sistema/Gestion-PTE/Gestion-PTE.db",
+      "pg_database": "clf_pte",
       "fecha_registro": "2026-03-17"
     }
   ],
-  "ultima_empresa": "emp_CLF240418U94_default"
+  "ultima_empresa": "emp_CLF240418U94_default",
+  "preferencias": {
+    "emp_CLF240418U94_default": {
+      "comercial": {
+        "iva_default": 16,
+        "utilidad": {
+          "Gobierno": 40,
+          "Hotel": 35,
+          "Empresa": 35
+        }
+      },
+      "pdf": {
+        "logo_path": "logo_clf.jpg",
+        "vigencia": "30 DÍAS",
+        "lugar_entrega": "MÉRIDA",
+        "tiempo_entrega": "15 DÍAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA",
+        "moneda": "TODOS LOS PRECIOS DE ESTA COTIZACIÓN SON EN MONEDA NACIONAL",
+        "cambios": "PRECIO SUJETO A CAMBIO SIN PREVIO AVISO"
+      },
+      "respaldo": {
+        "carpeta": "C:/Users/oscar/OneDrive/Documentos/CLF Sistema/Respaldo"
+      }
+    }
+  }
 }

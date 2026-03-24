@@ -26,6 +26,9 @@ class VentanaCotizacion:
         
         # Lista de productos agregados a la cotización
         self.productos_cotizacion = []
+
+        # Flag de IVA para esta cotización (el usuario puede cambiarlo manualmente)
+        self.var_iva = tk.BooleanVar(value=False)
         
         # Crear ventana
         self.ventana = tk.Toplevel(parent)
@@ -97,6 +100,15 @@ class VentanaCotizacion:
         # Información del cliente seleccionado
         self.label_info_cliente = tk.Label(frame_fila2, text="", font=('Arial', 9), fg='#6b7280')
         self.label_info_cliente.pack(side='left', padx=10)
+
+        # Checkbox IVA
+        tk.Checkbutton(
+            frame_fila2,
+            text="Aplicar IVA (16%)",
+            variable=self.var_iva,
+            command=self.recalcular_productos,
+            font=('Arial', 10)
+        ).pack(side='left', padx=15)
         
         # Frame de productos
         frame_productos = tk.LabelFrame(self.ventana, text="Productos", font=('Arial', 10, 'bold'))
@@ -247,18 +259,19 @@ class VentanaCotizacion:
         try:
             # Obtener datos de la cotización
             self.cursor.execute("""
-                SELECT folio, fecha, cliente_id, notas
+                SELECT folio, fecha, cliente_id, notas, aplica_iva
                 FROM cotizaciones
                 WHERE id = ?
             """, (self.cotizacion_id,))
-            
+
             row = self.cursor.fetchone()
             if not row:
                 messagebox.showerror("Error", "No se encontró la cotización")
                 self.ventana.destroy()
                 return
-            
-            folio, fecha, cliente_id, notas = row
+
+            folio, fecha, cliente_id, notas, aplica_iva_cot = row
+            self.var_iva.set(bool(aplica_iva_cot))
             
             # Cargar folio
             self.label_folio.config(text=folio, fg='black')
@@ -384,6 +397,9 @@ class VentanaCotizacion:
                 
                 self.label_info_cliente.config(text=info)
             
+            # Preseleccionar IVA según tipo de cliente (el usuario puede cambiarlo)
+            self.var_iva.set(cliente['tipo'] == 'Gobierno')
+
             # Recalcular precios si ya hay productos
             if self.productos_cotizacion:
                 self.recalcular_productos()
@@ -801,30 +817,20 @@ class VentanaCotizacion:
                 # Calcular precio con utilidad según tipo de cliente
                 cliente_info = self.clientes[self.combo_cliente.get()]
                 tipo_cliente = cliente_info['tipo']
-                porcentaje_utilidad = self.UTILIDAD[tipo_cliente] / 100
+                porcentaje_utilidad = self.UTILIDAD.get(tipo_cliente, 0) / 100
                 
                 precio_base = producto[3]
                 aplica_iva = producto[4]
                 stock = producto[5]
                 
-                # Calcular precio unitario
-                if tipo_cliente == 'Gobierno' and aplica_iva:
-                    # Para gobierno: precio base + utilidad (el IVA se agrega después en el total)
-                    precio_unitario = precio_base * (1 + porcentaje_utilidad)
-                    # NO multiplicar por 1.16 aquí
-                else:
-                    # Para hotel: solo utilidad (sin IVA)
-                    precio_unitario = precio_base * (1 + porcentaje_utilidad)
-                
+                # Calcular precio unitario (sin IVA)
+                precio_unitario = precio_base * (1 + porcentaje_utilidad)
+
                 # Calcular subtotal
                 subtotal = precio_unitario * cantidad
-                
-                # Calcular IVA (solo si aplica)
-                iva = 0
-                if aplica_iva and tipo_cliente == 'Gobierno':
-                    # IVA se calcula sobre el subtotal
-                    iva = subtotal * 0.16
-                
+
+                # IVA: solo si el checkbox de la cotización está activo Y el producto aplica IVA
+                iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
                 total = subtotal + iva
                 
                 # Verificar stock
@@ -911,7 +917,7 @@ class VentanaCotizacion:
             return
         
         tipo_cliente = cliente_info['tipo']
-        porcentaje_utilidad = self.UTILIDAD[tipo_cliente] / 100
+        porcentaje_utilidad = self.UTILIDAD.get(tipo_cliente, 0) / 100
         
         self.cursor.execute(
             "SELECT precio_base, aplica_iva, stock_actual FROM productos WHERE id = ?",
@@ -923,13 +929,9 @@ class VentanaCotizacion:
         
         precio_base, aplica_iva, stock = resultado
         
-        if tipo_cliente == 'Gobierno' and aplica_iva:
-            precio_unitario = precio_base * (1 + porcentaje_utilidad)
-        else:
-            precio_unitario = precio_base * (1 + porcentaje_utilidad)
-        
+        precio_unitario = precio_base * (1 + porcentaje_utilidad)
         subtotal = precio_unitario * nueva_cantidad
-        iva = subtotal * 0.16 if (aplica_iva and tipo_cliente == 'Gobierno') else 0
+        iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
         total = subtotal + iva
         tiene_stock = nueva_cantidad <= stock
         
@@ -1043,11 +1045,7 @@ class VentanaCotizacion:
                 precio_con_desc = precio * (1 - desc_pct / 100)
                 subtotal = cant * precio_con_desc
                 
-                # Calcular IVA según tipo de cliente
-                cliente_info = self.clientes.get(self.combo_cliente.get())
-                iva_amt = 0
-                if cliente_info and aplica_iva and cliente_info['tipo'] == 'Gobierno':
-                    iva_amt = subtotal * 0.16
+                iva_amt = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
                 
                 total = subtotal + iva_amt
                 
@@ -1081,11 +1079,7 @@ class VentanaCotizacion:
             precio_final = nuevo_precio * (1 - desc_pct / 100)
             subtotal = nueva_cant * precio_final
             
-            # Calcular IVA
-            cliente_info = self.clientes.get(self.combo_cliente.get())
-            iva_amt = 0
-            if cliente_info and aplica_iva and cliente_info['tipo'] == 'Gobierno':
-                iva_amt = subtotal * 0.16
+            iva_amt = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
             
             total = subtotal + iva_amt
             
@@ -1095,6 +1089,7 @@ class VentanaCotizacion:
             # Actualizar producto en la lista
             prod['cantidad'] = nueva_cant
             prod['precio_unitario'] = nuevo_precio  # Guardamos el precio SIN descuento
+            prod['precio_manual'] = True             # El usuario lo editó: no sobreescribir al recalcular
             prod['descuento_pct'] = desc_pct
             prod['subtotal'] = subtotal
             prod['iva'] = iva_amt
@@ -1179,37 +1174,29 @@ class VentanaCotizacion:
         
         cliente_info = self.clientes[self.combo_cliente.get()]
         tipo_cliente = cliente_info['tipo']
-        porcentaje_utilidad = self.UTILIDAD[tipo_cliente] / 100
+        porcentaje_utilidad = self.UTILIDAD.get(tipo_cliente, 0) / 100
         
         for prod in self.productos_cotizacion:
-            # Obtener precio base del producto
-            self.cursor.execute("""
-                SELECT precio_base, aplica_iva
-                FROM productos WHERE id = ?
-            """, (prod['producto_id'],))
-            
+            self.cursor.execute(
+                "SELECT precio_base, aplica_iva FROM productos WHERE id = ?",
+                (prod['producto_id'],))
             resultado = self.cursor.fetchone()
             if resultado:
                 precio_base, aplica_iva = resultado
                 cantidad = prod['cantidad']
-                
-                # Recalcular precio unitario
-                if tipo_cliente == 'Gobierno' and aplica_iva:
-                    precio_con_utilidad = precio_base * (1 + porcentaje_utilidad)
-                    precio_unitario = precio_con_utilidad * 1.16
+                desc_pct = prod.get('descuento_pct', 0)
+
+                if prod.get('precio_manual'):
+                    # Precio editado a mano: respetarlo, solo recalcular IVA/total
+                    precio_unitario = prod['precio_unitario']
                 else:
                     precio_unitario = precio_base * (1 + porcentaje_utilidad)
-                
-                subtotal = precio_unitario * cantidad
-                
-                iva = 0
-                if aplica_iva and tipo_cliente == 'Gobierno':
-                    precio_sin_iva = subtotal / 1.16
-                    iva = subtotal - precio_sin_iva
-                
-                total = subtotal
-                
-                # Actualizar producto
+
+                precio_con_desc = precio_unitario * (1 - desc_pct / 100)
+                subtotal = precio_con_desc * cantidad
+                iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
+                total = subtotal + iva
+
                 prod['precio_unitario'] = precio_unitario
                 prod['subtotal'] = subtotal
                 prod['iva'] = iva
@@ -1527,9 +1514,10 @@ class VentanaCotizacion:
                 
                 # Insertar cotización
                 self.cursor.execute("""
-                    INSERT INTO cotizaciones (folio, fecha, cliente_id, subtotal, iva, total, notas, estado)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente')
-                """, (folio, fecha_actual.strftime('%Y-%m-%d'), cliente_id, subtotal, iva, total, notas))
+                    INSERT INTO cotizaciones (folio, fecha, cliente_id, subtotal, iva, total, notas, estado, aplica_iva)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
+                """, (folio, fecha_actual.strftime('%Y-%m-%d'), cliente_id, subtotal, iva, total, notas,
+                      1 if self.var_iva.get() else 0))
                 
                 cotizacion_id = self.cursor.lastrowid
                 
@@ -1567,10 +1555,11 @@ class VentanaCotizacion:
                 # MODO EDITAR COTIZACIÓN
                 # Actualizar cotización existente
                 self.cursor.execute("""
-                    UPDATE cotizaciones 
-                    SET cliente_id = ?, subtotal = ?, iva = ?, total = ?, notas = ?
+                    UPDATE cotizaciones
+                    SET cliente_id = ?, subtotal = ?, iva = ?, total = ?, notas = ?, aplica_iva = ?
                     WHERE id = ?
-                """, (cliente_id, subtotal, iva, total, notas, self.cotizacion_id))
+                """, (cliente_id, subtotal, iva, total, notas,
+                      1 if self.var_iva.get() else 0, self.cotizacion_id))
                 
                 # Eliminar detalle anterior
                 self.cursor.execute("""
