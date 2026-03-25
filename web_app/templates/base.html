@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CLF Gestión{% endblock %}</title>
+
+    <!-- TailwindCSS Play CDN (desarrollo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            50:  '#f0f4fa',
+                            100: '#d9e2f0',
+                            400: '#6b7e99',
+                            500: '#2b3a55',
+                            700: '#1e2d45',
+                            900: '#141f30',
+                        },
+                        clf: {
+                            green:      '#0f7b5e',
+                            'green-dk': '#065f46',
+                            teal:       '#1aab82',
+                            blue:       '#1a4b8c',
+                        },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-navy-700 min-h-screen font-sans antialiased">
+    {% block body %}{% endblock %}
+</body>
+</html>

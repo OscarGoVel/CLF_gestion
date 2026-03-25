@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/oscar/OneDrive/Documentos/**)"
+      "Read(//c/Users/oscar/OneDrive/Documentos/**)",
+      "Bash(python -c \"import web_app.main; print\\(''OK - importacion correcta''\\)\")"
     ]
   }
 }

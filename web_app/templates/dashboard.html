@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CLF Gestión{% endblock %}
+
+{% block body %}
+
+<!-- ── Barra de navegación ──────────────────────────────────────────────── -->
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+
+    <!-- Logo -->
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+
+    <!-- Links de navegación -->
+    <div class="flex items-center h-full flex-1 overflow-x-auto">
+        <a href="/dashboard"
+           class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">
+            📊 Dashboard
+        </a>
+        {% for icon, label in [('📄','Cotizaciones'),('🧾','Facturación'),('📚','Catálogos'),('📦','Stock'),('📈','Análisis')] %}
+        <a href="#"
+           class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">
+            {{ icon }} {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Usuario y logout -->
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">
+            👤 {{ user.nombre }}
+            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold
+                {% if user.rol == 'Administrador' %}bg-clf-blue text-white
+                {% elif user.rol == 'Operador' %}bg-clf-green text-white
+                {% else %}bg-gray-500 text-white{% endif %}">
+                {{ user.rol }}
+            </span>
+        </span>
+        <a href="/auth/logout"
+           class="text-xs text-navy-400 hover:text-red-400 transition-colors">
+            🔒 Salir
+        </a>
+    </div>
+</nav>
+
+<!-- ── Contenido principal ───────────────────────────────────────────────── -->
+<main class="p-6 max-w-7xl mx-auto">
+
+    <!-- Título -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-xl font-bold text-white">Dashboard</h2>
+            <p class="text-xs text-navy-400 mt-0.5">Resumen general del sistema</p>
+        </div>
+        <span class="text-xs text-navy-400 bg-navy-900 px-3 py-1.5 rounded-lg">
+            Fase 1 activa
+        </span>
+    </div>
+
+    <!-- KPIs placeholder -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {% for label, icon, color in [
+            ('Cotizaciones activas', '📄', '#0f7b5e'),
+            ('Pendientes de entrega', '📦', '#d97706'),
+            ('Pendientes de cobro', '💰', '#1a4b8c'),
+            ('Ventas del mes', '📈', '#7c3aed'),
+        ] %}
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="text-lg">{{ icon }}</span>
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium leading-tight">{{ label }}</p>
+            </div>
+            <p class="text-3xl font-bold" style="color: {{ color }}">—</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Aviso de fase en construccion -->
+    <div class="bg-navy-900 border border-navy-500 rounded-2xl p-10 text-center">
+        <div class="text-5xl mb-4">🚧</div>
+        <h3 class="text-lg font-bold text-white mb-3">Fase 1 completada</h3>
+        <p class="text-navy-400 text-sm leading-relaxed max-w-lg mx-auto">
+            Autenticacion con JWT activa · PostgreSQL conectado · Sesion de
+            <span class="text-clf-teal font-semibold">{{ user.nombre }}</span> iniciada correctamente.
+            <br><br>
+            Las demas secciones se implementan en las fases siguientes.
+        </p>
+
+        <!-- Checklist de lo que ya funciona -->
+        <div class="mt-6 inline-flex flex-col gap-2 text-left">
+            {% for item in [
+                'Servidor FastAPI corriendo',
+                'Autenticacion JWT con cookie httponly',
+                'Contrasenas compatibles con la app de escritorio',
+                'PostgreSQL compartido con la app de escritorio',
+                'Rutas protegidas (redirige al login si no hay sesion)',
+                'Cierre de sesion',
+            ] %}
+            <div class="flex items-center gap-2 text-sm text-gray-300">
+                <span class="text-clf-teal text-base">✓</span>
+                {{ item }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</main>
+{% endblock %}
