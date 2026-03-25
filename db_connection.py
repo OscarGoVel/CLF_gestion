@@ -28,6 +28,19 @@ def motor_activo() -> str:
     return _cfg().get('motor', 'sqlite')
 
 
+# Tablas sin columna 'id' (clave compuesta o sin PK serial)
+_TABLAS_SIN_ID = {'preferencias_usuario', 'producto_proveedor', 'seguimiento_etapas',
+                  'factura_cotizaciones', 'oc_cotizaciones', 'compra_detalle_cotizacion'}
+
+def _sql_tiene_id(sql: str) -> bool:
+    """Devuelve False si el INSERT es a una tabla conocida sin columna id."""
+    import re
+    m = re.search(r'INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(\w+)', sql, re.IGNORECASE)
+    if m:
+        return m.group(1).lower() not in _TABLAS_SIN_ID
+    return True
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Adapter psycopg2 → interfaz sqlite3
 # Hace que el código escrito para sqlite3 funcione con PostgreSQL sin cambios.
@@ -49,10 +62,13 @@ class _PgCursor:
 
     def execute(self, sql: str, params=None):
         sql = sql.replace('?', '%s')
-        is_insert  = sql.strip().upper().startswith('INSERT')
-        has_return = 'RETURNING' in sql.upper()
+        stripped   = sql.strip().upper()
+        is_insert  = stripped.startswith('INSERT')
+        has_return = 'RETURNING' in stripped
+        # Solo agregar RETURNING id si hay columna id (tablas con clave compuesta no la tienen)
+        has_id_col = _sql_tiene_id(sql)
 
-        if is_insert and not has_return:
+        if is_insert and not has_return and has_id_col:
             sql = sql.rstrip().rstrip(';') + ' RETURNING id'
             self._c.execute(sql, params) if params else self._c.execute(sql)
             row = self._c.fetchone()
@@ -136,8 +152,11 @@ def conectar_empresa(db_path: str = None, pg_database: str = None):
 
     if cfg.get('motor') == 'postgresql':
         import psycopg2
+        import os as _os
         pg     = cfg['postgresql']
         dbname = pg_database or pg.get('database', 'clf_empresa')
+        _os.environ['PGPASSWORD'] = pg['password']
+        _os.environ['PGPASSFILE'] = _os.devnull
         raw    = psycopg2.connect(
             host=pg['host'],
             port=pg.get('port', 5432),
@@ -165,7 +184,10 @@ def conectar_usuarios():
 
     if cfg.get('motor') == 'postgresql':
         import psycopg2
+        import os as _os
         pg  = cfg['postgresql']
+        _os.environ['PGPASSWORD'] = pg['password']
+        _os.environ['PGPASSFILE'] = _os.devnull
         raw = psycopg2.connect(
             host=pg['host'],
             port=pg.get('port', 5432),

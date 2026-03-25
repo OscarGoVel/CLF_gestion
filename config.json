@@ -1,5 +1,5 @@
 {
-  "motor": "sqlite",
+  "motor": "postgresql",
   "postgresql": {
     "host": "192.168.0.40",
     "port": 5432,
@@ -12,10 +12,10 @@
       "id": "emp_CLF240418U94_default",
       "nombre": "COMERCIALIZADORA, LOGISTICA Y FUERZA YUCATECA",
       "rfc": "CLF240418U94",
-      "razon_social": "Comercializadora, Logística y Fuerza Yucateca S.A. de C.V.",
+      "razon_social": "Comercializadora, Logistica y Fuerza Yucateca S.A. de C.V.",
       "email": "clfyucateca@gmail.com",
       "telefono": "9993633880",
-      "direccion": "Calle 17 No. 56 Depto. 74, Kanasín, Yucatán",
+      "direccion": "Calle 17 No. 56 Depto. 74, Kanasin, Yucatan",
       "db_path": "c:\\Users\\oscar\\OneDrive\\Documentos\\CLF Sistema\\Gestion-CLF\\gestion_comercial.db",
       "pg_database": "clf_empresa",
       "fecha_registro": "2024-01-01"
@@ -45,10 +45,10 @@
       },
       "pdf": {
         "logo_path": "logo_clf.jpg",
-        "vigencia": "30 DÍAS",
-        "lugar_entrega": "MÉRIDA",
-        "tiempo_entrega": "15 DÍAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA",
-        "moneda": "TODOS LOS PRECIOS DE ESTA COTIZACIÓN SON EN MONEDA NACIONAL",
+        "vigencia": "30 DIAS",
+        "lugar_entrega": "MERIDA",
+        "tiempo_entrega": "15 DIAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA",
+        "moneda": "TODOS LOS PRECIOS DE ESTA COTIZACION SON EN MONEDA NACIONAL",
         "cambios": "PRECIO SUJETO A CAMBIO SIN PREVIO AVISO"
       },
       "respaldo": {

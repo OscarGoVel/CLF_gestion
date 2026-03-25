@@ -37,27 +37,29 @@ def verificar_password(password: str, stored_hash: str) -> bool:
 
 def _abrir_users_db():
     conn, cursor = db_connection.conectar_usuarios()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            username       TEXT UNIQUE NOT NULL,
-            nombre         TEXT NOT NULL,
-            password_hash  TEXT NOT NULL,
-            rol            TEXT NOT NULL DEFAULT 'Operador',
-            activo         INTEGER NOT NULL DEFAULT 1,
-            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ultimo_acceso  TIMESTAMP
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS preferencias_usuario (
-            usuario_id  INTEGER NOT NULL,
-            clave       TEXT    NOT NULL,
-            valor       TEXT    NOT NULL DEFAULT '',
-            PRIMARY KEY (usuario_id, clave)
-        )
-    ''')
-    conn.commit()
+    # En PostgreSQL las tablas ya existen (creadas por migrate_schema.py)
+    if db_connection.motor_activo() == 'sqlite':
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                username       TEXT UNIQUE NOT NULL,
+                nombre         TEXT NOT NULL,
+                password_hash  TEXT NOT NULL,
+                rol            TEXT NOT NULL DEFAULT 'Operador',
+                activo         INTEGER NOT NULL DEFAULT 1,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ultimo_acceso  TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS preferencias_usuario (
+                usuario_id  INTEGER NOT NULL,
+                clave       TEXT    NOT NULL,
+                valor       TEXT    NOT NULL DEFAULT '',
+                PRIMARY KEY (usuario_id, clave)
+            )
+        ''')
+        conn.commit()
     return conn, cursor
 
 
