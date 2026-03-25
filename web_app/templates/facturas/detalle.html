@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Factura {{ (factura.serie or '') + (factura.folio_factura or '') }} — CLF Gestión{% endblock %}
+{% block body %}
+{% include "facturas/_nav.html" %}
+
+{% set folio_display = (factura.serie or '') + (factura.folio_factura or '') %}
+
+<main class="p-5 max-w-5xl mx-auto">
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <div class="h-1.5
+            {% if factura.tipo == 'I' %}bg-green-500
+            {% elif factura.tipo == 'E' %}bg-red-500
+            {% elif factura.tipo == 'P' %}bg-blue-500
+            {% else %}bg-gray-400{% endif %}">
+        </div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <h2 class="text-2xl font-bold text-navy-700">Factura {{ folio_display or '(sin folio)' }}</h2>
+                        {% set t = tipo_label.get(factura.tipo, factura.tipo) %}
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold
+                            {% if factura.tipo == 'I' %}bg-green-100 text-green-700
+                            {% elif factura.tipo == 'E' %}bg-red-100 text-red-700
+                            {% elif factura.tipo == 'P' %}bg-blue-100 text-blue-700
+                            {% else %}bg-gray-100 text-gray-500{% endif %}">
+                            {{ t }}
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400 font-mono">UUID: {{ factura.uuid }}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    {% if factura.ruta_xml %}
+                    <a href="/facturas/{{ factura.id }}/xml"
+                       class="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-600
+                              hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1">
+                        ⬇ XML
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Emisor / Receptor -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-2 font-semibold">Emisor</p>
+                    <p class="text-sm font-bold text-gray-800">{{ factura.nombre_emisor or '—' }}</p>
+                    <p class="text-xs font-mono text-gray-500 mt-0.5">{{ factura.rfc_emisor or '—' }}</p>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-2 font-semibold">Receptor</p>
+                    <p class="text-sm font-bold text-gray-800">{{ factura.nombre_receptor or '—' }}</p>
+                    <p class="text-xs font-mono text-gray-500 mt-0.5">{{ factura.rfc_receptor or '—' }}</p>
+                    {% if factura.uso_cfdi %}
+                    <p class="text-xs text-gray-400 mt-1">Uso CFDI: {{ factura.uso_cfdi }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Datos del comprobante -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+                {% for label, val in [
+                    ('Fecha emisión', factura.fecha[:10] if factura.fecha else '—'),
+                    ('Fecha timbrado', factura.fecha_timbrado[:10] if factura.fecha_timbrado else '—'),
+                    ('Método pago', metodo_label.get(factura.metodo_pago, factura.metodo_pago) if factura.metodo_pago else '—'),
+                    ('Forma pago', factura.forma_pago or '—'),
+                    ('Moneda', factura.moneda or 'MXN'),
+                    ('No. cert. SAT', factura.no_cert_sat or '—'),
+                ] %}
+                <div>
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-0.5">{{ label }}</p>
+                    <p class="text-sm text-gray-700 font-medium">{{ val }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Conceptos -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+        <div class="px-5 py-3 border-b border-gray-100">
+            <h3 class="text-sm font-bold text-gray-700">Conceptos ({{ conceptos|length }})</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100">
+                        {% for col in ['Descripción','Clave SAT','Cant.','Unidad','Precio unit.','Importe'] %}
+                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap
+                                   {% if col in ['Precio unit.','Importe'] %}text-right{% endif %}">{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for c in conceptos %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2.5 text-sm text-gray-800">{{ c.descripcion or '—' }}</td>
+                        <td class="px-4 py-2.5 text-xs font-mono text-gray-400">{{ c.clave_prod_serv or '—' }}</td>
+                        <td class="px-4 py-2.5 text-sm text-gray-600 text-right">{{ c.cantidad }}</td>
+                        <td class="px-4 py-2.5 text-xs text-gray-400">{{ c.unidad or c.clave_unidad or '—' }}</td>
+                        <td class="px-4 py-2.5 text-sm font-semibold text-right">${{ '{:,.4f}'.format(c.valor_unitario or 0) }}</td>
+                        <td class="px-4 py-2.5 text-sm font-bold text-right">${{ '{:,.2f}'.format(c.importe or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- Totales -->
+        <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
+            <div class="w-56 space-y-1.5">
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>Subtotal</span>
+                    <span>${{ '{:,.2f}'.format(factura.subtotal or 0) }}</span>
+                </div>
+                {% if factura.descuento %}
+                <div class="flex justify-between text-sm text-red-500">
+                    <span>Descuento</span>
+                    <span>−${{ '{:,.2f}'.format(factura.descuento) }}</span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>IVA 16%</span>
+                    <span>${{ '{:,.2f}'.format(factura.iva or 0) }}</span>
+                </div>
+                <div class="flex justify-between text-base font-bold text-gray-800 border-t border-gray-200 pt-1.5">
+                    <span>Total</span>
+                    <span>${{ '{:,.2f}'.format(factura.total or 0) }} {{ factura.moneda }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cotizaciones vinculadas -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Cotizaciones vinculadas</h3>
+            <button onclick="document.getElementById('form-vincular').classList.toggle('hidden')"
+                    class="text-xs text-clf-green font-semibold hover:underline">
+                + Vincular cotización
+            </button>
+        </div>
+
+        <!-- Formulario vincular (oculto por defecto) -->
+        <div id="form-vincular" class="hidden px-5 py-3 bg-gray-50 border-b border-gray-100">
+            <form hx-post="/facturas/{{ factura.id }}/vincular"
+                  hx-target="#vinculadas-list"
+                  hx-swap="outerHTML"
+                  class="flex items-center gap-3">
+                <input type="number" name="cotizacion_id" placeholder="ID de cotización"
+                       class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg
+                              focus:outline-none focus:ring-2 focus:ring-clf-green bg-white"
+                       required>
+                <button type="submit"
+                        class="px-4 py-1.5 bg-clf-green text-white text-sm font-semibold
+                               rounded-lg hover:bg-clf-green/90 transition-colors">
+                    Vincular
+                </button>
+            </form>
+        </div>
+
+        {% include "facturas/_vinculadas.html" %}
+    </div>
+
+    <div class="mt-4">
+        <a href="/facturas" class="text-sm text-navy-400 hover:text-white transition-colors">← Volver a facturas</a>
+    </div>
+</main>
+{% endblock %}

@@ -1,0 +1,25 @@
+<div id="vinculadas-list">
+{% if vinculadas %}
+<div class="divide-y divide-gray-50">
+{% for v in vinculadas %}
+{% set bg, fg = estado_color.get(v.estado, ('bg-gray-100','text-gray-500')) %}
+<div class="flex items-center justify-between px-5 py-3 hover:bg-gray-50 group">
+    <div class="flex items-center gap-3 cursor-pointer" onclick="window.location='/cotizaciones/{{ v.id }}'">
+        <span class="font-mono text-sm font-semibold text-navy-700">{{ v.folio }}</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg }} {{ fg }}">{{ v.estado }}</span>
+        <span class="text-xs text-gray-400">{{ v.fecha.strftime('%d/%m/%Y') if v.fecha else '' }}</span>
+        <span class="text-sm font-semibold">${{ '{:,.2f}'.format(v.total or 0) }}</span>
+    </div>
+    <button hx-delete="/facturas/{{ factura_id }}/vincular/{{ v.id }}"
+            hx-target="#vinculadas-list" hx-swap="outerHTML"
+            hx-confirm="¿Desvincular esta cotización?"
+            class="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-all px-2 py-1 rounded">
+        ✕
+    </button>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p class="px-5 py-6 text-sm text-gray-400 text-center">Sin cotizaciones vinculadas.</p>
+{% endif %}
+</div>

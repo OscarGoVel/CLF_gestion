@@ -11,10 +11,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import JWTError, jwt
+from web_app.config import settings
 
 # ── Configuracion JWT ─────────────────────────────────────────────────────────
-# En produccion, establece CLF_SECRET_KEY como variable de entorno.
-SECRET_KEY = os.environ.get("CLF_SECRET_KEY", "clf-gestion-dev-secret-cambia-en-produccion")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 8
 
@@ -40,11 +39,11 @@ def verificar_password(password: str, stored_hash: str) -> bool:
 def crear_token(payload: dict) -> str:
     data = payload.copy()
     data["exp"] = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(data, settings.secret_key_efectiva, algorithm=ALGORITHM)
 
 
 def decodificar_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(token, settings.secret_key_efectiva, algorithms=[ALGORITHM])
     except JWTError:
         return None

@@ -1,0 +1,35 @@
+<tbody id="clientes-body" class="divide-y divide-gray-100">
+{% for c in clientes %}
+{% set bg, fg = tipo_color.get(c.tipo, ('bg-gray-100','text-gray-500')) %}
+<tr class="hover:bg-slate-50 transition-colors cursor-pointer"
+    onclick="window.location='/catalogos/clientes/{{ c.id }}'">
+    <td class="px-4 py-3">
+        <p class="text-sm font-semibold text-gray-800">{{ c.nombre_comercial }}</p>
+        {% if c.razon_social and c.razon_social != c.nombre_comercial %}
+        <p class="text-xs text-gray-400 mt-0.5">{{ c.razon_social }}</p>
+        {% endif %}
+    </td>
+    <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg }} {{ fg }}">{{ c.tipo or '—' }}</span>
+    </td>
+    <td class="px-4 py-3 text-sm text-gray-500 font-mono">{{ c.rfc or '—' }}</td>
+    <td class="px-4 py-3 text-sm text-gray-600">{{ c.contacto or '—' }}</td>
+    <td class="px-4 py-3 text-sm text-gray-500">{{ c.telefono or '—' }}</td>
+    <td class="px-4 py-3 text-sm text-gray-500">{{ c.email or '—' }}</td>
+    <td class="px-4 py-3 text-center">
+        <span class="text-sm font-bold {% if c.num_cotizaciones %}text-clf-green{% else %}text-gray-300{% endif %}">
+            {{ c.num_cotizaciones }}
+        </span>
+    </td>
+    <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+        {{ c.ultima_cotizacion.strftime('%d/%m/%Y') if c.ultima_cotizacion else '—' }}
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="8" class="px-4 py-10 text-center text-sm text-gray-400">
+        No se encontraron clientes.
+    </td>
+</tr>
+{% endfor %}
+</tbody>

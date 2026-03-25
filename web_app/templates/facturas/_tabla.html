@@ -1,0 +1,48 @@
+<tbody id="facturas-body" class="divide-y divide-gray-100">
+{% for f in facturas %}
+{% set folio_display = (f.serie or '') + (f.folio_factura or '') %}
+<tr class="hover:bg-slate-50 transition-colors cursor-pointer"
+    onclick="window.location='/facturas/{{ f.id }}'">
+    <td class="px-4 py-3">
+        <p class="text-sm font-mono font-semibold text-navy-700">{{ folio_display or '—' }}</p>
+        <p class="text-xs text-gray-400 mt-0.5 font-mono truncate max-w-[160px]" title="{{ f.uuid }}">{{ f.uuid[:8] }}…</p>
+    </td>
+    <td class="px-4 py-3 text-sm text-gray-500">
+        {{ f.fecha[:10] if f.fecha else '—' }}
+    </td>
+    <td class="px-4 py-3">
+        <p class="text-sm font-semibold text-gray-800 truncate max-w-[200px]">{{ f.nombre_receptor or '—' }}</p>
+        <p class="text-xs font-mono text-gray-400">{{ f.rfc_receptor or '' }}</p>
+    </td>
+    <td class="px-4 py-3 text-center">
+        {% set t = tipo_label.get(f.tipo, f.tipo) %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold
+            {% if f.tipo == 'I' %}bg-green-100 text-green-700
+            {% elif f.tipo == 'E' %}bg-red-100 text-red-700
+            {% elif f.tipo == 'P' %}bg-blue-100 text-blue-700
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ t }}
+        </span>
+    </td>
+    <td class="px-4 py-3 text-sm font-semibold text-gray-800 text-right">
+        ${{ '{:,.2f}'.format(f.total or 0) }}
+        <span class="text-xs text-gray-400 font-normal">{{ f.moneda }}</span>
+    </td>
+    <td class="px-4 py-3 text-center">
+        {% if f.num_cotizaciones %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-clf-green/10 text-clf-green">
+            {{ f.num_cotizaciones }}
+        </span>
+        {% else %}
+        <span class="text-xs text-gray-300">—</span>
+        {% endif %}
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-400">
+        No se encontraron facturas.
+    </td>
+</tr>
+{% endfor %}
+</tbody>

@@ -1,0 +1,68 @@
+# -*- coding: utf-8 -*-
+"""
+web_app/config.py
+Configuracion centralizada leida desde el archivo .env en la raiz del proyecto.
+Si una variable no existe en .env se usa el valor por defecto.
+
+Variables disponibles en .env:
+    CLF_SECRET_KEY   → clave secreta JWT (OBLIGATORIA en produccion)
+    CLF_HOST         → interfaz de escucha (default: 0.0.0.0)
+    CLF_PORT         → puerto HTTP  (default: 8000)
+    CLF_HTTPS_PORT   → puerto HTTPS (default: 8443)
+    CLF_SSL_CERT     → ruta al certificado SSL (default: ssl/server.crt)
+    CLF_SSL_KEY      → ruta a la clave privada SSL (default: ssl/server.key)
+    CLF_ENV          → "development" | "production" (default: development)
+"""
+
+import os
+import secrets
+from pathlib import Path
+
+# Cargar .env si existe
+_ROOT = Path(__file__).parent.parent
+_ENV_FILE = _ROOT / ".env"
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_ENV_FILE)
+except ImportError:
+    pass
+
+
+class Settings:
+    # Seguridad
+    SECRET_KEY:   str = os.environ.get("CLF_SECRET_KEY", "")
+    ENVIRONMENT:  str = os.environ.get("CLF_ENV", "development")
+
+    # Red
+    HOST:       str = os.environ.get("CLF_HOST", "0.0.0.0")
+    PORT:       int = int(os.environ.get("CLF_PORT", "8000"))
+    HTTPS_PORT: int = int(os.environ.get("CLF_HTTPS_PORT", "8443"))
+
+    # SSL
+    SSL_CERT: str = os.environ.get("CLF_SSL_CERT", str(_ROOT / "ssl" / "server.crt"))
+    SSL_KEY:  str = os.environ.get("CLF_SSL_KEY",  str(_ROOT / "ssl" / "server.key"))
+
+    @property
+    def es_produccion(self) -> bool:
+        return self.ENVIRONMENT == "production"
+
+    @property
+    def secret_key_efectiva(self) -> str:
+        """Retorna el SECRET_KEY. En desarrollo genera uno temporal si no hay."""
+        if self.SECRET_KEY:
+            return self.SECRET_KEY
+        if self.es_produccion:
+            raise RuntimeError(
+                "CLF_SECRET_KEY no configurada. "
+                "Agrega CLF_SECRET_KEY=<valor-seguro> al archivo .env"
+            )
+        # Desarrollo: clave temporal (nueva en cada reinicio — no persistente)
+        return "dev-" + secrets.token_hex(32)
+
+    @property
+    def ssl_disponible(self) -> bool:
+        return Path(self.SSL_CERT).exists() and Path(self.SSL_KEY).exists()
+
+
+settings = Settings()

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Métricas — CLF Gestión{% endblock %}
+
+{% block extra_head %}
+<!-- Auto-refresh cada 15 segundos via HTMX -->
+<meta http-equiv="refresh" content="15">
+{% endblock %}
+
+{% block body %}
+
+<!-- Nav -->
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 px-2 gap-1">
+        <a href="/dashboard" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            ← Dashboard
+        </a>
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700">
+            📊 Métricas
+        </span>
+        <a href="/admin/audit" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            🔍 Audit Log
+        </a>
+    </div>
+    <div class="flex items-center h-full px-4 gap-3 shrink-0 text-xs text-navy-400">
+        <span class="text-[10px] bg-navy-900 px-2 py-0.5 rounded">auto-refresh 15s</span>
+        <span>👤 {{ user.nombre }}</span>
+        <a href="/auth/logout" class="hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-7xl mx-auto">
+
+    <!-- Título + uptime -->
+    <div class="flex items-center justify-between mb-5">
+        <div>
+            <h2 class="text-xl font-bold text-white">Métricas del servidor</h2>
+            <p class="text-xs text-navy-400 mt-0.5">Activo desde {{ m.inicio_dt }} · uptime {{ m.uptime }}</p>
+        </div>
+        <span class="text-xs px-3 py-1.5 rounded-lg font-semibold
+            {% if m.error_rate < 1 %}bg-green-900 text-green-300
+            {% elif m.error_rate < 5 %}bg-yellow-900 text-yellow-300
+            {% else %}bg-red-900 text-red-300{% endif %}">
+            {{ m.error_rate }}% error rate
+        </span>
+    </div>
+
+    <!-- KPIs principales -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        {% set kpis = [
+            ('Total requests', m.total, '#0f7b5e', ''),
+            ('Activos ahora', m.activos, '#1a4b8c', ''),
+            ('Tiempo prom.', m.avg_ms, '#d97706', 'ms'),
+            ('P95 tiempo', m.p95_ms, '#7c3aed', 'ms'),
+        ] %}
+        {% for label, val, color, unit in kpis %}
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+            <p class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">{{ label }}</p>
+            <p class="text-2xl font-bold" style="color: {{ color }}">{{ val }}{{ unit }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+
+        <!-- Distribucion de status codes -->
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+            <h3 class="text-sm font-bold text-gray-700 mb-4">Distribución de respuestas</h3>
+            <div class="space-y-2">
+                {% set grupos = [
+                    ('2xx OK',       m.total_2xx, '#0f7b5e', '#d1fae5'),
+                    ('3xx Redirect', m.total - m.total_2xx - m.total_4xx - m.total_5xx, '#1a4b8c', '#dbeafe'),
+                    ('4xx Cliente',  m.total_4xx, '#d97706', '#fef3c7'),
+                    ('5xx Servidor', m.total_5xx, '#dc2626', '#fee2e2'),
+                ] %}
+                {% for label, count, color, bg in grupos %}
+                {% set pct = ((count / m.total * 100) | round(1)) if m.total else 0 %}
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="font-medium text-gray-600">{{ label }}</span>
+                        <span class="font-bold" style="color:{{ color }}">{{ count }} ({{ pct }}%)</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div class="h-full rounded-full transition-all"
+                             style="width: {{ pct }}%; background: {{ color }}"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Estado del pool de conexiones -->
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+            <h3 class="text-sm font-bold text-gray-700 mb-4">Pool de conexiones</h3>
+            {% for pool_name, pool_data in [('Usuarios', m.pool_usuarios), ('Empresa', m.pool_empresa)] %}
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-gray-600">BD {{ pool_name }}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold
+                        {% if pool_data.estado == 'activo' %}bg-green-100 text-green-700
+                        {% else %}bg-gray-100 text-gray-500{% endif %}">
+                        {{ pool_data.estado }}
+                    </span>
+                </div>
+                <div class="text-xs text-gray-500 space-y-0.5">
+                    <div class="flex justify-between">
+                        <span>Base de datos</span>
+                        <span class="font-mono font-medium text-gray-700">{{ pool_data.db }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Conexiones min/max</span>
+                        <span class="font-mono">{{ pool_data.min }} / {{ pool_data.max }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Disponibles ahora</span>
+                        <span class="font-mono font-bold text-clf-green">{{ pool_data.cerradas }}</span>
+                    </div>
+                </div>
+            </div>
+            {% if not loop.last %}<div class="border-t border-gray-100 my-3"></div>{% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- Errores recientes -->
+        <div class="bg-white rounded-xl p-5 shadow-sm">
+            <h3 class="text-sm font-bold text-gray-700 mb-4">
+                Errores recientes
+                <span class="ml-2 text-xs font-normal text-gray-400">(ultimos 50)</span>
+            </h3>
+            {% if m.errores_recientes %}
+            <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                {% for err in m.errores_recientes[:10] %}
+                <div class="flex items-start gap-2 text-xs">
+                    <span class="font-mono text-gray-400 shrink-0">{{ err.ts }}</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0
+                        {% if err.status >= 500 %}bg-red-100 text-red-700
+                        {% else %}bg-orange-100 text-orange-700{% endif %}">
+                        {{ err.status }}
+                    </span>
+                    <span class="text-gray-600 truncate">{{ err.ruta }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-6 text-gray-300">
+                <div class="text-3xl mb-2">✓</div>
+                <p class="text-xs">Sin errores registrados</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tabla de rutas -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Top rutas por tráfico</h3>
+            <span class="text-xs text-gray-400">{{ m.top_rutas | length }} rutas activas</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100">
+                        {% for col in ['Ruta', 'Requests', 'Avg (ms)', 'P95 (ms)', 'Max (ms)', 'Errores', '% Error'] %}
+                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                            {{ col }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for r in m.top_rutas %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-2.5 font-mono text-xs text-gray-700">{{ r.ruta }}</td>
+                        <td class="px-4 py-2.5 font-bold text-gray-800">{{ r.count }}</td>
+                        <td class="px-4 py-2.5 text-gray-600
+                            {% if r.avg_ms > 1000 %}text-red-600 font-semibold{% elif r.avg_ms > 500 %}text-orange-500{% endif %}">
+                            {{ r.avg_ms }}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-600
+                            {% if r.p95_ms > 2000 %}text-red-600 font-semibold{% elif r.p95_ms > 1000 %}text-orange-500{% endif %}">
+                            {{ r.p95_ms }}
+                        </td>
+                        <td class="px-4 py-2.5 text-gray-500">{{ r.max_ms }}</td>
+                        <td class="px-4 py-2.5
+                            {% if r.errors > 0 %}text-red-600 font-semibold{% else %}text-gray-400{% endif %}">
+                            {{ r.errors }}
+                        </td>
+                        <td class="px-4 py-2.5">
+                            {% if r.error_pct > 0 %}
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+                                {% if r.error_pct > 10 %}bg-red-100 text-red-700
+                                {% else %}bg-orange-100 text-orange-700{% endif %}">
+                                {{ r.error_pct }}%
+                            </span>
+                            {% else %}
+                            <span class="text-gray-300 text-xs">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-300">
+                            Sin tráfico registrado aún.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+{% endblock %}

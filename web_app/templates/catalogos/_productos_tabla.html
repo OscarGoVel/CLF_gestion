@@ -1,0 +1,39 @@
+<tbody id="productos-body" class="divide-y divide-gray-100">
+{% for p in productos %}
+<tr class="hover:bg-slate-50 transition-colors cursor-pointer"
+    onclick="window.location='/catalogos/productos/{{ p.id }}'">
+    <td class="px-4 py-3">
+        <p class="text-sm font-semibold text-gray-800">{{ p.nombre }}</p>
+        {% if p.categoria %}
+        <p class="text-xs text-gray-400 mt-0.5">{{ p.categoria }}{% if p.subcategoria %} › {{ p.subcategoria }}{% endif %}</p>
+        {% endif %}
+    </td>
+    <td class="px-4 py-3 text-sm font-mono text-gray-500">{{ p.codigo or '—' }}</td>
+    <td class="px-4 py-3 text-sm text-gray-600">{{ p.unidad_medida or '—' }}</td>
+    <td class="px-4 py-3 text-sm font-semibold text-gray-800">${{ '{:,.2f}'.format(p.precio_base or 0) }}</td>
+    <td class="px-4 py-3 text-center">
+        {% if p.aplica_iva %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">IVA</span>
+        {% else %}
+        <span class="text-xs text-gray-300">—</span>
+        {% endif %}
+    </td>
+    <td class="px-4 py-3 text-center">
+        {% set stock = p.stock_actual or 0 %}
+        {% set minimo = p.stock_minimo or 0 %}
+        <span class="text-sm font-bold
+            {% if stock == 0 %}text-red-400
+            {% elif minimo and stock <= minimo %}text-amber-500
+            {% else %}text-clf-green{% endif %}">
+            {{ stock }}
+        </span>
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-400">
+        No se encontraron productos.
+    </td>
+</tr>
+{% endfor %}
+</tbody>

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.nombre_comercial }} — CLF Gestión{% endblock %}
+{% block body %}
+{% include "catalogos/_nav.html" %}
+
+{% set bg_t, fg_t = tipo_color.get(cliente.tipo, ('bg-gray-100','text-gray-500')) %}
+
+<main class="p-5 max-w-5xl mx-auto">
+
+    <!-- Header cliente -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <div class="h-1.5 {% if cliente.tipo=='Gobierno' %}bg-purple-500{% elif cliente.tipo=='Empresa' %}bg-blue-500{% else %}bg-green-500{% endif %}"></div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4 mb-5">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <h2 class="text-2xl font-bold text-navy-700">{{ cliente.nombre_comercial }}</h2>
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold {{ bg_t }} {{ fg_t }}">{{ cliente.tipo }}</span>
+                    </div>
+                    {% if cliente.razon_social and cliente.razon_social != cliente.nombre_comercial %}
+                    <p class="text-sm text-gray-500">{{ cliente.razon_social }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                {% for label, val, color in [
+                    ('Total cotizaciones', stats.total_cots, '#0f7b5e'),
+                    ('Monto total', '$'+'{:,.0f}'.format(stats.monto_total), '#1a4b8c'),
+                    ('Pagadas', stats.pagadas, '#16a34a'),
+                    ('Pendientes', stats.pendientes, '#d97706'),
+                ] %}
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">{{ label }}</p>
+                    <p class="text-xl font-bold" style="color:{{ color }}">{{ val }}</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Datos de contacto -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+                {% for label, val in [
+                    ('RFC', cliente.rfc), ('Contacto', cliente.contacto),
+                    ('Teléfono', cliente.telefono), ('Email', cliente.email),
+                    ('Dirección', cliente.direccion), ('Régimen fiscal', cliente.regimen_fiscal),
+                    ('CP Fiscal', cliente.cp_fiscal), ('Uso CFDI', cliente.uso_cfdi),
+                ] %}
+                {% if val %}
+                <div>
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-0.5">{{ label }}</p>
+                    <p class="text-sm text-gray-700 font-medium">{{ val }}</p>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Cotizaciones del cliente -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100">
+            <h3 class="text-sm font-bold text-gray-700">Últimas cotizaciones</h3>
+        </div>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-100">
+                    {% for col in ['Folio','Fecha','Total','Estado','OC'] %}
+                    <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for cot in cotizaciones %}
+                {% set bg, fg = estado_color.get(cot.estado, ('bg-gray-100','text-gray-500')) %}
+                <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location='/cotizaciones/{{ cot.id }}'">
+                    <td class="px-4 py-2.5 font-mono text-sm font-semibold text-navy-700">{{ cot.folio }}</td>
+                    <td class="px-4 py-2.5 text-sm text-gray-500">{{ cot.fecha.strftime('%d/%m/%Y') if cot.fecha else '—' }}</td>
+                    <td class="px-4 py-2.5 text-sm font-semibold">${{ '{:,.2f}'.format(cot.total) }}</td>
+                    <td class="px-4 py-2.5">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg }} {{ fg }}">{{ cot.estado }}</span>
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ cot.orden_compra or '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">Sin cotizaciones registradas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4">
+        <a href="/catalogos/clientes" class="text-sm text-navy-400 hover:text-white transition-colors">← Volver a clientes</a>
+    </div>
+</main>
+{% endblock %}
