@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from web_app.database import pool_empresa
+from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
 from web_app.cfdi import parsear_cfdi_bytes
 
@@ -59,7 +59,7 @@ async def lista_facturas(
 
     w = ("WHERE " + " AND ".join(where)) if where else ""
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(f"""
             SELECT f.id, f.serie, f.folio_factura, f.fecha, f.fecha_timbrado,
                    f.rfc_receptor, f.nombre_receptor,
@@ -107,7 +107,7 @@ async def detalle_factura(request: Request, factura_id: int):
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT * FROM facturas WHERE id = %s", (factura_id,))
         row = cur.fetchone()
         if not row:
@@ -164,7 +164,7 @@ async def descargar_xml(request: Request, factura_id: int):
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT ruta_xml, folio_factura, serie FROM facturas WHERE id = %s", (factura_id,))
         row = cur.fetchone()
         if not row or not row[0]:
@@ -205,7 +205,7 @@ async def importar_xml(request: Request, archivo: UploadFile = File(...)):
 
     uuid = datos["uuid"]
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         # Verificar duplicado
         cur.execute("SELECT id FROM facturas WHERE uuid = %s", (uuid,))
         existing = cur.fetchone()
@@ -295,7 +295,7 @@ async def vincular_cotizacion(
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         # Verificar que existe la cotización
         cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cotizacion_id,))
         cot = cur.fetchone()
@@ -344,7 +344,7 @@ async def desvincular_cotizacion(
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(
             "DELETE FROM factura_cotizaciones WHERE factura_id=%s AND cotizacion_id=%s",
             (factura_id, cotizacion_id),

@@ -11,6 +11,12 @@ if not exist ssl\server.crt (
     python tools\generar_cert.py
 )
 
+:: Liberar puerto 8443 si esta ocupado
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8443 ^| findstr LISTENING') do (
+    echo Cerrando proceso anterior en puerto 8443 ^(PID %%a^)...
+    taskkill /F /PID %%a >nul 2>&1
+)
+
 echo Iniciando CLF Gestion Web ^(HTTPS puerto 8443^)...
 python -m uvicorn web_app.main:app ^
     --host 0.0.0.0 ^

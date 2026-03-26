@@ -32,9 +32,11 @@ from web_app.routers import auth as auth_router
 from web_app.routers import cotizaciones as cotizaciones_router
 from web_app.routers import catalogos as catalogos_router
 from web_app.routers import facturas as facturas_router
+from web_app.routers import stock as stock_router
+from web_app.routers import analisis as analisis_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
-from web_app.database import pool_empresa, pool_usuarios
+from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
 from web_app.metrics import registry as metrics
 
 # ── Rate limiter global ───────────────────────────────────────────────────────
@@ -51,13 +53,12 @@ async def lifespan(app: FastAPI):
     audit._asegurar_tabla()
     try:
         pool_usuarios._init()
-        pool_empresa._init()
         _log.info("Pools de conexion PostgreSQL listos")
     except Exception as e:
         _log.error(f"Error iniciando pool: {e}")
     yield
     # shutdown
-    pool_empresa.cerrar()
+    cerrar_todos_pools_empresa()
     pool_usuarios.cerrar()
     logger.get("clf.startup").info("Servidor detenido. Pools cerrados.")
 
@@ -76,7 +77,10 @@ async def _rate_limit_html_handler(request: Request, exc: RateLimitExceeded):
     return templates.TemplateResponse(
         request=request,
         name="login.html",
-        context={"error": "Demasiados intentos. Espera un momento e intenta de nuevo."},
+        context={
+            "error": "Demasiados intentos. Espera un momento e intenta de nuevo.",
+            "empresas": get_empresas(),
+        },
         status_code=429,
     )
 
@@ -134,6 +138,8 @@ app.include_router(auth_router.router)
 app.include_router(cotizaciones_router.router)
 app.include_router(catalogos_router.router)
 app.include_router(facturas_router.router)
+app.include_router(stock_router.router)
+app.include_router(analisis_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -190,7 +196,10 @@ async def root(request: Request):
     user = get_usuario_actual(request)
     if user:
         return RedirectResponse("/dashboard")
-    return templates.TemplateResponse(request=request, name="login.html")
+    return templates.TemplateResponse(
+        request=request, name="login.html",
+        context={"empresas": get_empresas()},
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -201,7 +210,7 @@ async def dashboard(request: Request):
 
     kpis = {}
     try:
-        with pool_empresa.conexion() as (_, cur):
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
             cur.execute("""
                 SELECT
                     COUNT(*) FILTER (WHERE estado IN ('Pendiente','Programada')) AS activas,

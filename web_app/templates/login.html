@@ -29,6 +29,29 @@
 
                 <form method="post" action="/auth/login" class="space-y-4">
 
+                    {% if empresas and empresas|length > 1 %}
+                    <div>
+                        <label class="block text-xs font-semibold text-navy-700 uppercase tracking-wide mb-1.5">
+                            Empresa
+                        </label>
+                        <select
+                            name="empresa_id"
+                            required
+                            class="w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm
+                                   text-gray-800 bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:border-transparent
+                                   transition"
+                        >
+                            {% for emp in empresas %}
+                            <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% else %}
+                    <input type="hidden" name="empresa_id"
+                           value="{{ empresas[0].id if empresas else '' }}">
+                    {% endif %}
+
                     <div>
                         <label class="block text-xs font-semibold text-navy-700 uppercase tracking-wide mb-1.5">
                             Usuario

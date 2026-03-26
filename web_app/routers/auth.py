@@ -11,8 +11,8 @@ from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-import db_connection
 from web_app.auth import verificar_password, crear_token, TOKEN_EXPIRE_HOURS
+from web_app.database import pool_usuarios, get_empresas
 from web_app import audit
 
 router = APIRouter()
@@ -31,7 +31,10 @@ async def login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    empresa_id: str = Form(...),
 ):
+    empresas = get_empresas()
+
     def _error(msg: str):
         audit.registrar(
             audit.LOGIN_FALLO,
@@ -40,23 +43,28 @@ async def login(
             ip=_ip(request),
         )
         return templates.TemplateResponse(
-            request=request, name="login.html", context={"error": msg}
+            request=request, name="login.html",
+            context={"error": msg, "empresas": empresas},
         )
+
+    # ── Validar empresa seleccionada ──────────────────────────────────────
+    empresa = next((e for e in empresas if e["id"] == empresa_id), None)
+    if empresa is None:
+        return _error("Empresa no válida.")
 
     # ── Consultar usuario ─────────────────────────────────────────────────
     try:
-        conn, cursor = db_connection.conectar_usuarios()
-        cursor.execute(
-            "SELECT id, nombre, password_hash, rol, activo FROM usuarios WHERE username = ?",
-            (username,),
-        )
-        row = cursor.fetchone()
-        conn.close()
+        with pool_usuarios.conexion() as (_, cursor):
+            cursor.execute(
+                "SELECT id, nombre, password_hash, rol, activo FROM usuarios WHERE username = %s",
+                (username,),
+            )
+            row = cursor.fetchone()
     except Exception as e:
-        return _error(f"Error de conexion a la base de datos: {e}")
+        return _error(f"Error de conexión a la base de datos: {e}")
 
     if row is None:
-        return _error("Usuario o contrasena incorrectos.")
+        return _error("Usuario o contraseña incorrectos.")
 
     uid, nombre, phash, rol, activo = row
 
@@ -64,22 +72,25 @@ async def login(
         return _error("Usuario desactivado. Contacta al administrador.")
 
     if not verificar_password(password, phash):
-        return _error("Usuario o contrasena incorrectos.")
+        return _error("Usuario o contraseña incorrectos.")
 
     # ── Login exitoso ─────────────────────────────────────────────────────
     audit.registrar(
         audit.LOGIN_OK,
         username=username,
         usuario_id=uid,
-        detalle=f"rol={rol}",
+        detalle=f"rol={rol} empresa={empresa_id}",
         ip=_ip(request),
     )
 
     token = crear_token({
-        "sub":      str(uid),
-        "username": username,
-        "nombre":   nombre,
-        "rol":      rol,
+        "sub":            str(uid),
+        "username":       username,
+        "nombre":         nombre,
+        "rol":            rol,
+        "empresa_id":     empresa_id,
+        "empresa_db":     empresa["pg_database"],
+        "empresa_nombre": empresa["nombre"],
     })
 
     response = RedirectResponse("/dashboard", status_code=302)

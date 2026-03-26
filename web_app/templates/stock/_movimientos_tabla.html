@@ -1,0 +1,36 @@
+<tbody id="mov-body" class="divide-y divide-gray-100">
+{% for m in movimientos %}
+<tr class="hover:bg-slate-50 transition-colors">
+    <td class="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+        {{ m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '—' }}
+    </td>
+    <td class="px-4 py-2.5">
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold
+            {% if m.tipo == 'entrada' %}bg-green-100 text-green-700
+            {% else %}bg-red-100 text-red-600{% endif %}">
+            {% if m.tipo == 'entrada' %}▲ Entrada{% else %}▼ Salida{% endif %}
+        </span>
+    </td>
+    <td class="px-4 py-2.5">
+        <p class="text-sm font-semibold text-gray-800">{{ m.producto_nombre }}</p>
+        <p class="text-xs font-mono text-gray-400">{{ m.producto_codigo or '' }}</p>
+    </td>
+    <td class="px-4 py-2.5 text-sm text-gray-500">{{ m.motivo or '—' }}</td>
+    <td class="px-4 py-2.5 text-center font-bold
+        {% if m.tipo == 'entrada' %}text-green-600{% else %}text-red-500{% endif %}">
+        {% if m.tipo == 'entrada' %}+{% else %}−{% endif %}{{ m.cantidad }} {{ m.unidad_medida or '' }}
+    </td>
+    <td class="px-4 py-2.5 text-center text-xs text-gray-400">
+        {{ m.stock_antes }} → <span class="font-semibold text-gray-600">{{ m.stock_despues }}</span>
+    </td>
+    <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.referencia or '—' }}</td>
+    <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.usuario or '—' }}</td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="8" class="px-4 py-10 text-center text-sm text-gray-400">
+        No hay movimientos registrados.
+    </td>
+</tr>
+{% endfor %}
+</tbody>

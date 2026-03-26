@@ -1,0 +1,14 @@
+{% if resultados %}
+<div class="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+    {% for r in resultados %}
+    <button type="button"
+            onclick="seleccionarProducto({{ r.id }}, '{{ r.nombre }}', {{ r.stock_actual or 0 }})"
+            class="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+        <p class="text-sm font-semibold text-gray-800">{{ r.nombre }}</p>
+        <p class="text-xs text-gray-400">
+            {{ r.codigo or '' }} · Stock: <span class="font-semibold {% if r.stock_actual %}text-clf-green{% else %}text-red-400{% endif %}">{{ r.stock_actual or 0 }}</span> {{ r.unidad_medida or '' }}
+        </p>
+    </button>
+    {% endfor %}
+</div>
+{% endif %}

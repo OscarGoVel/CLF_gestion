@@ -137,18 +137,45 @@ class PgPool:
             self._pool = None
 
 
-def _get_dbnames() -> tuple[str, str]:
-    """Lee los nombres de BD de empresa y usuarios desde config.json."""
+def _get_db_usuarios() -> str:
     cfg = _cfg()
-    pg  = cfg.get("postgresql", {})
-    empresas = cfg.get("empresas", [])
-    db_empresa = empresas[0].get("pg_database", "clf_empresa") if empresas else "clf_empresa"
-    db_usuarios = pg.get("database_usuarios", "clf_usuarios")
-    return db_empresa, db_usuarios
+    return cfg.get("postgresql", {}).get("database_usuarios", "clf_usuarios")
 
 
-_db_empresa, _db_usuarios = _get_dbnames()
+def get_empresas() -> list[dict]:
+    """Retorna la lista de empresas definidas en config.json."""
+    return _cfg().get("empresas", [])
 
-# Instancias globales del pool — se inicializan en el primer uso
-pool_empresa  = PgPool(_db_empresa,  minconn=2, maxconn=10)
+
+# ── Pools por empresa ─────────────────────────────────────────────────────────
+
+_pools_empresa: dict[str, "PgPool"] = {}
+_pools_lock = threading.Lock()
+
+
+def get_pool_empresa(pg_database: str) -> "PgPool":
+    """Retorna (o crea) el pool de conexiones para una empresa dado su pg_database."""
+    if pg_database not in _pools_empresa:
+        with _pools_lock:
+            if pg_database not in _pools_empresa:
+                _pools_empresa[pg_database] = PgPool(pg_database, minconn=2, maxconn=10)
+    return _pools_empresa[pg_database]
+
+
+def cerrar_todos_pools_empresa():
+    """Cierra todos los pools de empresa al apagar el servidor."""
+    with _pools_lock:
+        for pool in _pools_empresa.values():
+            pool.cerrar()
+        _pools_empresa.clear()
+
+
+# ── Pool de usuarios (único) ──────────────────────────────────────────────────
+
+_db_usuarios = _get_db_usuarios()
 pool_usuarios = PgPool(_db_usuarios, minconn=2, maxconn=5)
+
+# pool_empresa: alias al pool de la primera empresa (backward-compat para health/metrics)
+_empresas_cfg = get_empresas()
+_db_empresa_default = _empresas_cfg[0]["pg_database"] if _empresas_cfg else "clf_empresa"
+pool_empresa = get_pool_empresa(_db_empresa_default)

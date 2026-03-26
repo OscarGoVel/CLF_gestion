@@ -11,7 +11,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from web_app.database import pool_empresa
+from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
 
 router = APIRouter(prefix="/cotizaciones")
@@ -50,7 +50,7 @@ def _build_where(estado: str, buscar: str) -> tuple[str, list]:
     return where, params
 
 
-def _cargar_lista(estado: str, buscar: str, pagina: int) -> dict:
+def _cargar_lista(empresa_db: str, estado: str, buscar: str, pagina: int) -> dict:
     where, params = _build_where(estado, buscar)
     offset = (pagina - 1) * POR_PAGINA
 
@@ -76,7 +76,7 @@ def _cargar_lista(estado: str, buscar: str, pagina: int) -> dict:
         {where}
     """
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute(sql, params or None)
         cols = [d[0] for d in cur.description]
         rows = [_dec_to_float(dict(zip(cols, r))) for r in cur.fetchall()]
@@ -101,11 +101,11 @@ async def lista(
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/")
 
-    data       = _cargar_lista(estado, buscar, pagina)
+    data       = _cargar_lista(user["empresa_db"], estado, buscar, pagina)
     total_pags = max(1, (data["total"] + POR_PAGINA - 1) // POR_PAGINA)
 
     # Totales por estado para los chips del encabezado
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT estado, COUNT(*) FROM cotizaciones GROUP BY estado")
         conteo_estado = dict(cur.fetchall())
 
@@ -140,7 +140,7 @@ async def detalle(request: Request, cot_id: int):
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
             SELECT c.*,
                    COALESCE(cl.nombre_comercial, '—') AS cliente,
@@ -200,7 +200,7 @@ async def cambiar_estado(
     if nuevo_estado not in ESTADOS:
         raise HTTPException(status_code=400, detail="Estado no valido")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(
             "UPDATE cotizaciones SET estado = %s WHERE id = %s",
             (nuevo_estado, cot_id),

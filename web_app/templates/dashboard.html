@@ -22,8 +22,8 @@
             ('📄','Cotizaciones','/cotizaciones'),
             ('🧾','Facturas','/facturas'),
             ('📚','Catálogos','/catalogos'),
-            ('📦','Stock','#'),
-            ('📈','Análisis','#')
+            ('📦','Stock','/stock'),
+            ('📈','Análisis','/analisis')
         ] %}
         <a href="{{ href }}"
            class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">
@@ -43,6 +43,7 @@
                 {% else %}bg-gray-500 text-white{% endif %}">
                 {{ user.rol }}
             </span>
+            <span class="ml-1 text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
         </span>
         <a href="/auth/logout"
            class="text-xs text-navy-400 hover:text-red-400 transition-colors">

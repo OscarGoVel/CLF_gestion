@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from web_app.database import pool_empresa
+from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
 
 router = APIRouter(prefix="/catalogos")
@@ -57,7 +57,7 @@ async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
         params += [f"%{buscar}%"] * 3
     w = ("WHERE " + " AND ".join(where)) if where else ""
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(f"""
             SELECT c.id, c.nombre_comercial, c.razon_social, c.tipo,
                    c.rfc, c.contacto, c.telefono, c.email,
@@ -99,7 +99,7 @@ async def detalle_cliente(request: Request, cliente_id: int):
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
         row = cur.fetchone()
         if not row:
@@ -174,7 +174,7 @@ async def lista_productos(
     w      = ("WHERE " + " AND ".join(where)) if where else ""
     offset = (pagina - 1) * POR_PAGINA_PRODUCTOS
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
                    p.precio_base, p.aplica_iva, p.stock_actual, p.stock_minimo,
@@ -230,7 +230,7 @@ async def detalle_producto(request: Request, producto_id: int):
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
             SELECT p.*,
                    cat.nombre AS categoria,
@@ -306,7 +306,7 @@ async def lista_proveedores(request: Request, buscar: str = ""):
         params += [f"%{buscar}%"] * 3
     w = ("WHERE " + " AND ".join(where)) if where else ""
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(f"""
             SELECT p.id, p.nombre, p.rfc, p.contacto, p.telefono, p.email,
                    COUNT(pp.producto_id) AS num_productos
@@ -340,7 +340,7 @@ async def detalle_proveedor(request: Request, prov_id: int):
     if not user:
         return RedirectResponse("/")
 
-    with pool_empresa.conexion() as (_, cur):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT * FROM proveedores WHERE id = %s", (prov_id,))
         row = cur.fetchone()
         if not row:
