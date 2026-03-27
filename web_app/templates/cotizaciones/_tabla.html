@@ -5,11 +5,17 @@
 {% for c in cotizaciones %}
 {% set bg, fg = estado_color.get(c.estado, ('bg-gray-100', 'text-gray-600')) %}
 <tr class="hover:bg-slate-50 transition-colors cursor-pointer"
-    onclick="window.location='/cotizaciones/{{ c.id }}'">
+    data-cot-id="{{ c.id }}"
+    hx-get="/cotizaciones/{{ c.id }}/preview"
+    hx-target="#preview-panel"
+    hx-swap="innerHTML"
+    hx-trigger="click[window.innerWidth >= 1024]"
+    onclick="if(window.innerWidth < 1024) window.location='/cotizaciones/{{ c.id }}'"
+    hx-indicator=".htmx-indicator">
     <td class="px-4 py-3 font-mono text-sm font-semibold text-navy-700 whitespace-nowrap">
         {{ c.folio }}
     </td>
-    <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+    <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap hidden sm:table-cell">
         {{ c.fecha.strftime('%d/%m/%Y') if c.fecha else '—' }}
     </td>
     <td class="px-4 py-3 text-sm text-gray-800 max-w-[200px] truncate" title="{{ c.cliente }}">
@@ -26,7 +32,7 @@
             {{ c.estado }}
         </span>
     </td>
-    <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+    <td class="px-4 py-3 text-xs text-gray-400 whitespace-nowrap hidden md:table-cell">
         {% if c.orden_compra %}
         <span class="text-blue-600 font-medium">OC</span>
         {% endif %}
@@ -34,7 +40,7 @@
         <span class="text-green-600 font-medium ml-1">FAC</span>
         {% endif %}
     </td>
-    <td class="px-4 py-3 text-xs text-gray-400 text-center">
+    <td class="px-4 py-3 text-xs text-gray-400 text-center hidden md:table-cell">
         {{ c.num_productos }}
     </td>
 </tr>

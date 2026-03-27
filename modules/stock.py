@@ -135,6 +135,9 @@ class SeccionStock:
     # ── Tablas ────────────────────────────────────────────────────────────────
     def _asegurar_tablas(self):
         """Crea las tablas necesarias si no existen."""
+        import db_connection
+        if db_connection.motor_activo() == 'postgresql':
+            return  # Esquema ya existe en PostgreSQL
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS movimientos_stock (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,

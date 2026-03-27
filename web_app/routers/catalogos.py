@@ -7,17 +7,22 @@ Seccion Catalogos: Clientes, Productos y Proveedores.
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from web_app import audit
+from web_app.cache import cache, TTL_CATALOGOS, TTL_CATEGORIAS
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
+from web_app.rbac import require_rol
 
 router = APIRouter(prefix="/catalogos")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 POR_PAGINA_PRODUCTOS = 30
+
+TIPOS_CLIENTE = ["Empresa", "Gobierno", "Persona"]
 
 TIPO_CLIENTE_COLOR = {
     "Empresa":  ("bg-blue-100",   "text-blue-700"),
@@ -57,23 +62,32 @@ async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
         params += [f"%{buscar}%"] * 3
     w = ("WHERE " + " AND ".join(where)) if where else ""
 
-    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
-        cur.execute(f"""
-            SELECT c.id, c.nombre_comercial, c.razon_social, c.tipo,
-                   c.rfc, c.contacto, c.telefono, c.email,
-                   COUNT(cot.id)  AS num_cotizaciones,
-                   MAX(cot.fecha) AS ultima_cotizacion
-            FROM clientes c
-            LEFT JOIN cotizaciones cot ON cot.cliente_id = c.id
-            {w}
-            GROUP BY c.id
-            ORDER BY c.nombre_comercial
-        """, params or None)
-        cols     = [d[0] for d in cur.description]
-        clientes = [_floats(dict(zip(cols, r))) for r in cur.fetchall()]
+    _ck = f"clientes:{user['empresa_db']}" if not tipo and not buscar else None
+    cached = cache.get(_ck) if _ck else None
 
-        cur.execute("SELECT DISTINCT tipo FROM clientes WHERE tipo IS NOT NULL ORDER BY tipo")
-        tipos = [r[0] for r in cur.fetchall()]
+    if cached:
+        clientes, tipos = cached
+    else:
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+            cur.execute(f"""
+                SELECT c.id, c.nombre_comercial, c.razon_social, c.tipo,
+                       c.rfc, c.contacto, c.telefono, c.email,
+                       COUNT(cot.id)  AS num_cotizaciones,
+                       MAX(cot.fecha) AS ultima_cotizacion
+                FROM clientes c
+                LEFT JOIN cotizaciones cot ON cot.cliente_id = c.id
+                {w}
+                GROUP BY c.id
+                ORDER BY c.nombre_comercial
+            """, params or None)
+            cols     = [d[0] for d in cur.description]
+            clientes = [_floats(dict(zip(cols, r))) for r in cur.fetchall()]
+
+            cur.execute("SELECT DISTINCT tipo FROM clientes WHERE tipo IS NOT NULL ORDER BY tipo")
+            tipos = [r[0] for r in cur.fetchall()]
+
+        if _ck:
+            cache.set(_ck, (clientes, tipos), ttl=TTL_CATALOGOS)
 
     ctx = {
         "user": user,
@@ -91,6 +105,71 @@ async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
     return templates.TemplateResponse(
         request=request, name="catalogos/clientes.html", context=ctx
     )
+
+
+@router.get("/clientes/nuevo", response_class=HTMLResponse)
+async def nuevo_cliente_form(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/cliente_form.html",
+        context={"user": user, "clt": None, "tipos": TIPOS_CLIENTE, "seccion": "clientes"},
+    )
+
+
+@router.post("/clientes/nuevo", response_class=HTMLResponse)
+async def crear_cliente(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre_comercial: str = Form(""),
+    razon_social: str = Form(""),
+    tipo: str = Form("Empresa"),
+    rfc: str = Form(""),
+    contacto: str = Form(""),
+    telefono: str = Form(""),
+    email: str = Form(""),
+    direccion: str = Form(""),
+    regimen_fiscal: str = Form(""),
+    cp_fiscal: str = Form(""),
+    uso_cfdi: str = Form(""),
+):
+    nombre_comercial = nombre_comercial.strip()
+    if not nombre_comercial or tipo not in TIPOS_CLIENTE:
+        vals = dict(nombre_comercial=nombre_comercial, razon_social=razon_social, tipo=tipo,
+                    rfc=rfc, contacto=contacto, telefono=telefono, email=email,
+                    direccion=direccion, regimen_fiscal=regimen_fiscal,
+                    cp_fiscal=cp_fiscal, uso_cfdi=uso_cfdi)
+        msg = "El nombre comercial es obligatorio." if not nombre_comercial else "Tipo de cliente inválido."
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/cliente_form.html",
+            context={"user": user, "clt": vals, "tipos": TIPOS_CLIENTE,
+                     "seccion": "clientes", "error": msg},
+        )
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            INSERT INTO clientes (nombre_comercial, razon_social, tipo, rfc, contacto,
+                                  telefono, email, direccion, regimen_fiscal, cp_fiscal, uso_cfdi)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            nombre_comercial, razon_social or None, tipo,
+            rfc or None, contacto or None, telefono or None,
+            email or None, direccion or None,
+            regimen_fiscal or None, cp_fiscal or None, uso_cfdi or None,
+        ))
+        new_id = cur.fetchone()[0]
+
+    cache.invalidar(f"clientes:{user['empresa_db']}")
+    audit.registrar(
+        "cliente_creado",
+        username=user.get("username"),
+        detalle=f"id={new_id} nombre={nombre_comercial}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/clientes/{new_id}", status_code=303)
 
 
 @router.get("/clientes/{cliente_id}", response_class=HTMLResponse)
@@ -144,9 +223,101 @@ async def detalle_cliente(request: Request, cliente_id: int):
     )
 
 
+@router.get("/clientes/{cliente_id}/editar", response_class=HTMLResponse)
+async def editar_cliente_form(
+    request: Request,
+    cliente_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Cliente no encontrado")
+        clt = _floats(dict(zip([d[0] for d in cur.description], row)))
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/cliente_form.html",
+        context={"user": user, "clt": clt, "tipos": TIPOS_CLIENTE, "seccion": "clientes"},
+    )
+
+
+@router.post("/clientes/{cliente_id}/editar", response_class=HTMLResponse)
+async def guardar_cliente(
+    request: Request,
+    cliente_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre_comercial: str = Form(""),
+    razon_social: str = Form(""),
+    tipo: str = Form("Empresa"),
+    rfc: str = Form(""),
+    contacto: str = Form(""),
+    telefono: str = Form(""),
+    email: str = Form(""),
+    direccion: str = Form(""),
+    regimen_fiscal: str = Form(""),
+    cp_fiscal: str = Form(""),
+    uso_cfdi: str = Form(""),
+):
+    nombre_comercial = nombre_comercial.strip()
+    if not nombre_comercial or tipo not in TIPOS_CLIENTE:
+        vals = dict(id=cliente_id, nombre_comercial=nombre_comercial, razon_social=razon_social,
+                    tipo=tipo, rfc=rfc, contacto=contacto, telefono=telefono, email=email,
+                    direccion=direccion, regimen_fiscal=regimen_fiscal,
+                    cp_fiscal=cp_fiscal, uso_cfdi=uso_cfdi)
+        msg = "El nombre comercial es obligatorio." if not nombre_comercial else "Tipo de cliente inválido."
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/cliente_form.html",
+            context={"user": user, "clt": vals, "tipos": TIPOS_CLIENTE,
+                     "seccion": "clientes", "error": msg},
+        )
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            UPDATE clientes SET
+                nombre_comercial = %s, razon_social = %s, tipo = %s,
+                rfc = %s, contacto = %s, telefono = %s, email = %s, direccion = %s,
+                regimen_fiscal = %s, cp_fiscal = %s, uso_cfdi = %s
+            WHERE id = %s
+        """, (
+            nombre_comercial, razon_social or None, tipo,
+            rfc or None, contacto or None, telefono or None,
+            email or None, direccion or None,
+            regimen_fiscal or None, cp_fiscal or None, uso_cfdi or None,
+            cliente_id,
+        ))
+
+    cache.invalidar(f"clientes:{user['empresa_db']}")
+    audit.registrar(
+        "cliente_editado",
+        username=user.get("username"),
+        detalle=f"id={cliente_id} nombre={nombre_comercial}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PRODUCTOS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _ctx_catalogo(empresa_db: str) -> dict:
+    """Carga categorias y subcategorias para formularios de producto (con caché)."""
+    _ck = f"categorias:{empresa_db}"
+    cached = cache.get(_ck)
+    if cached:
+        return cached
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT id, nombre FROM categorias ORDER BY nombre")
+        cats = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+        cur.execute("SELECT id, nombre, categoria_id FROM subcategorias ORDER BY nombre")
+        subs = [{"id": r[0], "nombre": r[1], "categoria_id": r[2]} for r in cur.fetchall()]
+    result = {"categorias": cats, "subcategorias": subs}
+    cache.set(_ck, result, ttl=TTL_CATEGORIAS)
+    return result
+
 
 @router.get("/productos", response_class=HTMLResponse)
 async def lista_productos(
@@ -224,6 +395,107 @@ async def lista_productos(
     )
 
 
+@router.get("/productos/nuevo", response_class=HTMLResponse)
+async def nuevo_producto_form(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/producto_form.html",
+        context={"user": user, "prod": None, "seccion": "productos",
+                 **_ctx_catalogo(user["empresa_db"])},
+    )
+
+
+@router.post("/productos/nuevo", response_class=HTMLResponse)
+async def crear_producto(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre: str = Form(""),
+    codigo: str = Form(""),
+    descripcion: str = Form(""),
+    categoria_id: str = Form(""),
+    subcategoria_id: str = Form(""),
+    unidad_medida: str = Form(""),
+    precio_base: str = Form("0"),
+    aplica_iva: str = Form("0"),
+    clave_sat: str = Form(""),
+    clave_unidad_sat: str = Form(""),
+    stock_minimo: str = Form("0"),
+):
+    nombre = nombre.strip()
+    codigo = codigo.strip().upper()
+    error = None
+    precio_base_f = 0.0
+    if not nombre:
+        error = "El nombre del producto es obligatorio."
+    elif not codigo:
+        error = "El código es obligatorio."
+    else:
+        try:
+            precio_base_f = float(precio_base or 0)
+        except ValueError:
+            error = "El precio base debe ser un número válido."
+
+    if error:
+        vals = dict(nombre=nombre, codigo=codigo, descripcion=descripcion,
+                    categoria_id=int(categoria_id) if categoria_id else None,
+                    subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
+                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    aplica_iva=aplica_iva, clave_sat=clave_sat,
+                    clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/producto_form.html",
+            context={"user": user, "prod": vals, "seccion": "productos",
+                     "error": error, **_ctx_catalogo(user["empresa_db"])},
+        )
+
+    try:
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+            cur.execute("""
+                INSERT INTO productos (nombre, codigo, descripcion, categoria_id, subcategoria_id,
+                                       unidad_medida, precio_base, aplica_iva,
+                                       clave_sat, clave_unidad_sat, stock_minimo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                nombre, codigo, descripcion or None,
+                int(categoria_id) if categoria_id else None,
+                int(subcategoria_id) if subcategoria_id else None,
+                unidad_medida or None, precio_base_f,
+                1 if aplica_iva == "1" else 0,
+                clave_sat or None, clave_unidad_sat or None,
+                float(stock_minimo or 0),
+            ))
+            new_id = cur.fetchone()[0]
+    except Exception as e:
+        error = (f"El código '{codigo}' ya está en uso por otro producto."
+                 if "unique" in str(e).lower() or "duplicate" in str(e).lower()
+                 else "Error al guardar el producto. Intenta de nuevo.")
+        vals = dict(nombre=nombre, codigo=codigo, descripcion=descripcion,
+                    categoria_id=int(categoria_id) if categoria_id else None,
+                    subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
+                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    aplica_iva=aplica_iva, clave_sat=clave_sat,
+                    clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/producto_form.html",
+            context={"user": user, "prod": vals, "seccion": "productos",
+                     "error": error, **_ctx_catalogo(user["empresa_db"])},
+        )
+
+    cache.invalidar(f"productos:{user['empresa_db']}")
+    audit.registrar(
+        "producto_creado",
+        username=user.get("username"),
+        detalle=f"id={new_id} codigo={codigo} nombre={nombre}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/productos/{new_id}", status_code=303)
+
+
 @router.get("/productos/{producto_id}", response_class=HTMLResponse)
 async def detalle_producto(request: Request, producto_id: int):
     user = get_usuario_actual(request)
@@ -290,6 +562,122 @@ async def detalle_producto(request: Request, producto_id: int):
     )
 
 
+@router.get("/productos/{producto_id}/editar", response_class=HTMLResponse)
+async def editar_producto_form(
+    request: Request,
+    producto_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT * FROM productos WHERE id = %s", (producto_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Producto no encontrado")
+        prod = _floats(dict(zip([d[0] for d in cur.description], row)))
+        cur.execute("SELECT id, nombre FROM categorias ORDER BY nombre")
+        categorias = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+        cur.execute("SELECT id, nombre, categoria_id FROM subcategorias ORDER BY nombre")
+        subcategorias = [{"id": r[0], "nombre": r[1], "categoria_id": r[2]} for r in cur.fetchall()]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/producto_form.html",
+        context={"user": user, "prod": prod, "seccion": "productos",
+                 "categorias": categorias, "subcategorias": subcategorias},
+    )
+
+
+@router.post("/productos/{producto_id}/editar", response_class=HTMLResponse)
+async def guardar_producto(
+    request: Request,
+    producto_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre: str = Form(""),
+    codigo: str = Form(""),
+    descripcion: str = Form(""),
+    categoria_id: str = Form(""),
+    subcategoria_id: str = Form(""),
+    unidad_medida: str = Form(""),
+    precio_base: str = Form("0"),
+    aplica_iva: str = Form("0"),
+    clave_sat: str = Form(""),
+    clave_unidad_sat: str = Form(""),
+    stock_minimo: str = Form("0"),
+):
+    nombre = nombre.strip()
+    codigo = codigo.strip().upper()
+    error = None
+    precio_base_f = 0.0
+    if not nombre:
+        error = "El nombre del producto es obligatorio."
+    elif not codigo:
+        error = "El código es obligatorio."
+    else:
+        try:
+            precio_base_f = float(precio_base or 0)
+        except ValueError:
+            error = "El precio base debe ser un número válido."
+
+    if error:
+        vals = dict(id=producto_id, nombre=nombre, codigo=codigo, descripcion=descripcion,
+                    categoria_id=int(categoria_id) if categoria_id else None,
+                    subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
+                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    aplica_iva=aplica_iva, clave_sat=clave_sat,
+                    clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/producto_form.html",
+            context={"user": user, "prod": vals, "seccion": "productos",
+                     "error": error, **_ctx_catalogo(user["empresa_db"])},
+        )
+
+    try:
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+            cur.execute("""
+                UPDATE productos SET
+                    nombre = %s, codigo = %s, descripcion = %s,
+                    categoria_id = %s, subcategoria_id = %s,
+                    unidad_medida = %s, precio_base = %s, aplica_iva = %s,
+                    clave_sat = %s, clave_unidad_sat = %s, stock_minimo = %s
+                WHERE id = %s
+            """, (
+                nombre, codigo, descripcion or None,
+                int(categoria_id) if categoria_id else None,
+                int(subcategoria_id) if subcategoria_id else None,
+                unidad_medida or None, precio_base_f,
+                1 if aplica_iva == "1" else 0,
+                clave_sat or None, clave_unidad_sat or None,
+                float(stock_minimo or 0),
+                producto_id,
+            ))
+    except Exception as e:
+        error = (f"El código '{codigo}' ya está en uso por otro producto."
+                 if "unique" in str(e).lower() or "duplicate" in str(e).lower()
+                 else "Error al guardar el producto. Intenta de nuevo.")
+        vals = dict(id=producto_id, nombre=nombre, codigo=codigo, descripcion=descripcion,
+                    categoria_id=int(categoria_id) if categoria_id else None,
+                    subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
+                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    aplica_iva=aplica_iva, clave_sat=clave_sat,
+                    clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/producto_form.html",
+            context={"user": user, "prod": vals, "seccion": "productos",
+                     "error": error, **_ctx_catalogo(user["empresa_db"])},
+        )
+
+    cache.invalidar(f"productos:{user['empresa_db']}")
+    audit.registrar(
+        "producto_editado",
+        username=user.get("username"),
+        detalle=f"id={producto_id} codigo={codigo} nombre={nombre}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/productos/{producto_id}", status_code=303)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PROVEEDORES
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,18 +694,26 @@ async def lista_proveedores(request: Request, buscar: str = ""):
         params += [f"%{buscar}%"] * 3
     w = ("WHERE " + " AND ".join(where)) if where else ""
 
-    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
-        cur.execute(f"""
-            SELECT p.id, p.nombre, p.rfc, p.contacto, p.telefono, p.email,
-                   COUNT(pp.producto_id) AS num_productos
-            FROM proveedores p
-            LEFT JOIN producto_proveedor pp ON pp.proveedor_id = p.id
-            {w}
-            GROUP BY p.id
-            ORDER BY p.nombre
-        """, params or None)
-        cols       = [d[0] for d in cur.description]
-        proveedores = [dict(zip(cols, r)) for r in cur.fetchall()]
+    _ck = f"proveedores:{user['empresa_db']}" if not buscar else None
+    cached = cache.get(_ck) if _ck else None
+
+    if cached:
+        proveedores = cached
+    else:
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+            cur.execute(f"""
+                SELECT p.id, p.nombre, p.rfc, p.contacto, p.telefono, p.email,
+                       COUNT(pp.producto_id) AS num_productos
+                FROM proveedores p
+                LEFT JOIN producto_proveedor pp ON pp.proveedor_id = p.id
+                {w}
+                GROUP BY p.id, p.nombre, p.rfc, p.contacto, p.telefono, p.email
+                ORDER BY p.nombre
+            """, params or None)
+            cols        = [d[0] for d in cur.description]
+            proveedores = [dict(zip(cols, r)) for r in cur.fetchall()]
+        if _ck:
+            cache.set(_ck, proveedores, ttl=TTL_CATALOGOS)
 
     ctx = {
         "user": user,
@@ -332,6 +728,143 @@ async def lista_proveedores(request: Request, buscar: str = ""):
     return templates.TemplateResponse(
         request=request, name="catalogos/proveedores.html", context=ctx
     )
+
+
+@router.get("/proveedores/nuevo", response_class=HTMLResponse)
+async def nuevo_proveedor_form(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/proveedor_form.html",
+        context={"user": user, "prov": None, "seccion": "proveedores"},
+    )
+
+
+@router.post("/proveedores/nuevo", response_class=HTMLResponse)
+async def crear_proveedor(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre: str = Form(""),
+    razon_social: str = Form(""),
+    rfc: str = Form(""),
+    contacto: str = Form(""),
+    telefono: str = Form(""),
+    email: str = Form(""),
+    direccion: str = Form(""),
+    notas: str = Form(""),
+    regimen_fiscal: str = Form(""),
+    cp_fiscal: str = Form(""),
+    uso_cfdi: str = Form(""),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        vals = dict(nombre=nombre, razon_social=razon_social, rfc=rfc, contacto=contacto,
+                    telefono=telefono, email=email, direccion=direccion,
+                    notas=notas, regimen_fiscal=regimen_fiscal,
+                    cp_fiscal=cp_fiscal, uso_cfdi=uso_cfdi)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/proveedor_form.html",
+            context={"user": user, "prov": vals, "seccion": "proveedores",
+                     "error": "El nombre del proveedor es obligatorio."},
+        )
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            INSERT INTO proveedores (nombre, razon_social, rfc, contacto, telefono, email,
+                                     direccion, notas, regimen_fiscal, cp_fiscal, uso_cfdi)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            nombre, razon_social or None, rfc or None, contacto or None,
+            telefono or None, email or None, direccion or None,
+            notas or None, regimen_fiscal or None, cp_fiscal or None, uso_cfdi or None,
+        ))
+        new_id = cur.lastrowid
+
+    cache.invalidar(f"proveedores:{user['empresa_db']}")
+    audit.registrar(
+        "proveedor_creado",
+        username=user.get("username"),
+        detalle=f"id={new_id} nombre={nombre}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/proveedores/{new_id}", status_code=303)
+
+
+@router.get("/proveedores/{prov_id}/editar", response_class=HTMLResponse)
+async def editar_proveedor_form(
+    request: Request,
+    prov_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT * FROM proveedores WHERE id = %s", (prov_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Proveedor no encontrado")
+        prov = dict(zip([d[0] for d in cur.description], row))
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/proveedor_form.html",
+        context={"user": user, "prov": prov, "seccion": "proveedores"},
+    )
+
+
+@router.post("/proveedores/{prov_id}/editar", response_class=HTMLResponse)
+async def guardar_proveedor(
+    request: Request,
+    prov_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+    nombre: str = Form(""),
+    razon_social: str = Form(""),
+    rfc: str = Form(""),
+    contacto: str = Form(""),
+    telefono: str = Form(""),
+    email: str = Form(""),
+    direccion: str = Form(""),
+    notas: str = Form(""),
+    regimen_fiscal: str = Form(""),
+    cp_fiscal: str = Form(""),
+    uso_cfdi: str = Form(""),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        vals = dict(id=prov_id, nombre=nombre, razon_social=razon_social, rfc=rfc,
+                    contacto=contacto, telefono=telefono, email=email, direccion=direccion,
+                    notas=notas, regimen_fiscal=regimen_fiscal,
+                    cp_fiscal=cp_fiscal, uso_cfdi=uso_cfdi)
+        return templates.TemplateResponse(
+            request=request,
+            name="catalogos/proveedor_form.html",
+            context={"user": user, "prov": vals, "seccion": "proveedores",
+                     "error": "El nombre del proveedor es obligatorio."},
+        )
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            UPDATE proveedores SET
+                nombre = %s, razon_social = %s, rfc = %s, contacto = %s,
+                telefono = %s, email = %s, direccion = %s,
+                notas = %s, regimen_fiscal = %s, cp_fiscal = %s, uso_cfdi = %s
+            WHERE id = %s
+        """, (
+            nombre, razon_social or None, rfc or None, contacto or None,
+            telefono or None, email or None, direccion or None,
+            notas or None, regimen_fiscal or None, cp_fiscal or None, uso_cfdi or None,
+            prov_id,
+        ))
+
+    cache.invalidar(f"proveedores:{user['empresa_db']}")
+    audit.registrar(
+        "proveedor_editado",
+        username=user.get("username"),
+        detalle=f"id={prov_id} nombre={nombre}",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse(f"/catalogos/proveedores/{prov_id}", status_code=303)
 
 
 @router.get("/proveedores/{prov_id}", response_class=HTMLResponse)

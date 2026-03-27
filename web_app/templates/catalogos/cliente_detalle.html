@@ -21,6 +21,13 @@
                     <p class="text-sm text-gray-500">{{ cliente.razon_social }}</p>
                     {% endif %}
                 </div>
+                {% if user.rol in ('Administrador', 'Operador') %}
+                <a href="/catalogos/clientes/{{ cliente.id }}/editar"
+                   class="px-3 py-1.5 bg-navy-500 hover:bg-navy-700 text-white text-sm
+                          font-semibold rounded-lg transition-colors shrink-0">
+                    ✏️ Editar
+                </a>
+                {% endif %}
             </div>
 
             <!-- Stats -->

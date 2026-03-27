@@ -155,6 +155,9 @@ class SeccionFacturacion:
     # ── Base de datos ──────────────────────────────────────────────────────────
     def _init_db(self):
         """Crea tablas y migraciones necesarias."""
+        import db_connection
+        if db_connection.motor_activo() == 'postgresql':
+            return  # Esquema ya existe en PostgreSQL (creado por db_init.py)
         # Tabla principal de facturas
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS facturas (
@@ -447,9 +450,13 @@ class SeccionFacturacion:
         vinc   = self._filtro_vinc.get()
 
         # ── Verificar si existe factura_cotizaciones ───────────────────────
-        self.cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='factura_cotizaciones'")
-        tiene_junction = bool(self.cursor.fetchone())
+        import db_connection as _dbc
+        if _dbc.motor_activo() == 'postgresql':
+            tiene_junction = True  # Siempre existe en PostgreSQL
+        else:
+            self.cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='factura_cotizaciones'")
+            tiene_junction = bool(self.cursor.fetchone())
 
         # ── WHERE con filtros ──────────────────────────────────────────────
         where_parts = []
@@ -497,8 +504,8 @@ class SeccionFacturacion:
                        f.rfc_receptor, f.nombre_receptor,
                        f.subtotal, f.iva, f.total, f.moneda, f.tipo,
                        COALESCE(
-                           GROUP_CONCAT(DISTINCT c_junc.folio),
-                           c_leg.folio
+                           STRING_AGG(DISTINCT c_junc.folio, ','),
+                           MAX(c_leg.folio)
                        )                        AS cot_folios,
                        COUNT(DISTINCT fc.cotizacion_id) +
                            CASE WHEN f.cotizacion_id IS NOT NULL
@@ -1273,18 +1280,20 @@ class SeccionFacturacion:
             fecha_etapa = (fecha_fac or '')[:10] or datetime.now().strftime('%Y-%m-%d')
 
             for cot_id in cot_ids:
-                # 1. Junction table — crear si no existe y luego insertar
-                self.cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS factura_cotizaciones (
-                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                        factura_id    INTEGER NOT NULL,
-                        cotizacion_id INTEGER NOT NULL,
-                        fecha_vinculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (factura_id)    REFERENCES facturas(id),
-                        FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                        UNIQUE(factura_id, cotizacion_id)
-                    )
-                ''')
+                # 1. Junction table — crear si no existe (solo SQLite; en PG ya existe)
+                import db_connection as _dbc
+                if _dbc.motor_activo() != 'postgresql':
+                    self.cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS factura_cotizaciones (
+                            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                            factura_id    INTEGER NOT NULL,
+                            cotizacion_id INTEGER NOT NULL,
+                            fecha_vinculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (factura_id)    REFERENCES facturas(id),
+                            FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
+                            UNIQUE(factura_id, cotizacion_id)
+                        )
+                    ''')
                 self.cursor.execute("""
                     INSERT OR IGNORE INTO factura_cotizaciones (factura_id, cotizacion_id)
                     VALUES (?, ?)

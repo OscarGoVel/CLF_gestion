@@ -98,7 +98,6 @@ async def login(
         key="access_token",
         value=token,
         httponly=True,
-        max_age=TOKEN_EXPIRE_HOURS * 3600,
         samesite="lax",
     )
     return response

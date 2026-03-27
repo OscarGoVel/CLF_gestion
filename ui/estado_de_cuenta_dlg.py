@@ -230,6 +230,9 @@ class VentanaEstadoCuenta:
 
     def _init_corporativos(self):
         """Crea tabla corporativos si no existe (ya debería existir por main.py)."""
+        import db_connection
+        if db_connection.motor_activo() == 'postgresql':
+            return  # Esquema ya existe en PostgreSQL
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS corporativos (
                 id     INTEGER PRIMARY KEY AUTOINCREMENT,

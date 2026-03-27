@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}{% if clt and clt.id %}Editar Cliente{% else %}Nuevo Cliente{% endif %} — CLF Gestión{% endblock %}
+{% block body %}
+{% include "catalogos/_nav.html" %}
+
+<main class="p-5 max-w-2xl mx-auto">
+
+    <div class="mb-5">
+        <h2 class="text-xl font-bold text-white">
+            {% if clt and clt.id %}Editar Cliente{% else %}Nuevo Cliente{% endif %}
+        </h2>
+        <p class="text-xs text-navy-400 mt-0.5">
+            {% if clt and clt.id %}Modifica los datos del cliente en el catálogo{% else %}Registra un nuevo cliente en el catálogo{% endif %}
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+        ⚠ {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <form method="POST"
+              action="{% if clt and clt.id %}/catalogos/clientes/{{ clt.id }}/editar{% else %}/catalogos/clientes/nuevo{% endif %}"
+              class="px-6 py-6 space-y-5">
+
+            <!-- Nombre comercial + Razón social -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Nombre Comercial <span class="text-red-400">*</span>
+                    </label>
+                    <input type="text" name="nombre_comercial"
+                           value="{{ clt.nombre_comercial if clt else '' }}"
+                           required autofocus
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Razón Social
+                    </label>
+                    <input type="text" name="razon_social"
+                           value="{{ clt.razon_social if clt else '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+            </div>
+
+            <!-- Tipo + RFC -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Tipo <span class="text-red-400">*</span>
+                    </label>
+                    <select name="tipo" required
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer transition">
+                        {% for t in tipos %}
+                        <option value="{{ t }}" {% if clt and clt.tipo == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        RFC
+                    </label>
+                    <input type="text" name="rfc"
+                           value="{{ clt.rfc if clt else '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition font-mono
+                                  uppercase">
+                </div>
+            </div>
+
+            <!-- Contacto + Teléfono -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Contacto</label>
+                    <input type="text" name="contacto"
+                           value="{{ clt.contacto if clt else '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Teléfono</label>
+                    <input type="tel" name="telefono"
+                           value="{{ clt.telefono if clt else '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+            </div>
+
+            <!-- Email -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email</label>
+                <input type="email" name="email"
+                       value="{{ clt.email if clt else '' }}"
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                              focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+
+            <!-- Dirección -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Dirección</label>
+                <input type="text" name="direccion"
+                       value="{{ clt.direccion if clt else '' }}"
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                              focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+
+            <!-- Datos fiscales -->
+            <div class="pt-4 border-t border-gray-100">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Datos Fiscales (CFDI)</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Régimen Fiscal</label>
+                        <input type="text" name="regimen_fiscal"
+                               value="{{ clt.regimen_fiscal if clt else '' }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">CP Fiscal</label>
+                        <input type="text" name="cp_fiscal"
+                               value="{{ clt.cp_fiscal if clt else '' }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Uso CFDI</label>
+                        <input type="text" name="uso_cfdi"
+                               value="{{ clt.uso_cfdi if clt else '' }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                <a href="{% if clt and clt.id %}/catalogos/clientes/{{ clt.id }}{% else %}/catalogos/clientes{% endif %}"
+                   class="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                    ← Cancelar
+                </a>
+                <button type="submit"
+                        class="px-6 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-sm
+                               font-bold rounded-lg transition-colors shadow-sm">
+                    {% if clt and clt.id %}Guardar cambios{% else %}Crear Cliente{% endif %}
+                </button>
+            </div>
+
+        </form>
+    </div>
+</main>
+{% endblock %}

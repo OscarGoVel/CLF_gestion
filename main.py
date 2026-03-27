@@ -59,8 +59,11 @@ class SistemaGestion:
         self.root.title(titulo)
         self.root.geometry("1200x700")
 
-        # Inicializar base de datos (usa la ruta de la empresa seleccionada)
-        self.init_database(empresa.get('db_path') if empresa else None)
+        # Inicializar base de datos (usa PostgreSQL o SQLite según config.json)
+        self.init_database(
+            db_path=empresa.get('db_path') if empresa else None,
+            pg_database=empresa.get('pg_database') if empresa else None,
+        )
 
         # Cargar preferencias de la empresa activa
         import app_config as _cfg
@@ -158,31 +161,38 @@ class SistemaGestion:
         win.geometry(f"+{max(0,x)}+{max(0,y)}")
         win.after(0, win.deiconify)
 
-    def init_database(self, db_path=None):
-        """Inicializa la base de datos SQLite.
-        Delega la creación de tablas a db_init.inicializar_bd() para que
-        main.py y selector_empresa compartan exactamente el mismo esquema.
-        """
-        ruta = db_path or 'gestion_comercial.db'
-        self.conn, self.cursor = inicializar_bd(ruta)
+    def init_database(self, db_path=None, pg_database=None):
+        """Inicializa la conexión a la base de datos.
 
-        # Backfill historial de precios con los precios actuales de productos
-        self.cursor.execute("""
-            INSERT OR IGNORE INTO producto_precio_historial
-                (producto_id, precio, fecha, motivo, fuente)
-            SELECT p.id,
-                   p.precio_base,
-                   COALESCE(p.precio_base_fecha, DATE('now')),
-                   'Precio inicial (backfill)',
-                   'backfill'
-            FROM productos p
-            WHERE p.precio_base IS NOT NULL
-              AND NOT EXISTS (
-                  SELECT 1 FROM producto_precio_historial h
-                  WHERE h.producto_id = p.id
-              )
-        """)
-        self.conn.commit()
+        En modo PostgreSQL (config.json motor=postgresql) usa db_connection
+        para conectar al servidor compartido — mismo que usa la web.
+        En modo SQLite usa inicializar_bd() para crear las tablas localmente.
+        """
+        import db_connection
+        if db_connection.motor_activo() == 'postgresql':
+            self.conn, self.cursor = db_connection.conectar_empresa(
+                pg_database=pg_database
+            )
+        else:
+            ruta = db_path or 'gestion_comercial.db'
+            self.conn, self.cursor = inicializar_bd(ruta)
+            # Backfill historial de precios (solo SQLite, solo primera vez)
+            self.cursor.execute("""
+                INSERT OR IGNORE INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente)
+                SELECT p.id,
+                       p.precio_base,
+                       COALESCE(p.precio_base_fecha, DATE('now')),
+                       'Precio inicial (backfill)',
+                       'backfill'
+                FROM productos p
+                WHERE p.precio_base IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM producto_precio_historial h
+                      WHERE h.producto_id = p.id
+                  )
+            """)
+            self.conn.commit()
 
     def crear_interfaz(self):
         """Crea la interfaz principal estilo ERP compacto"""
@@ -254,7 +264,7 @@ class SistemaGestion:
             ('catalogos',      '📚  Catálogos'),
             ('stock',          '📦  Stock'),
             ('analisis',       '📈  Análisis'),
-            ('configuracion',  '⚙  Configuración'),
+            ('configuracion',  '⚙️  Configuración'),
         ]
 
         for key, texto in secciones:
@@ -771,3 +781,4 @@ if __name__ == '__main__':
             continue
         else:
             break                          # salida normal (ventana cerrada con X)
+

@@ -1,36 +1,91 @@
-<tbody id="mov-body" class="divide-y divide-gray-100">
-{% for m in movimientos %}
-<tr class="hover:bg-slate-50 transition-colors">
-    <td class="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-        {{ m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '—' }}
-    </td>
-    <td class="px-4 py-2.5">
-        <span class="px-2 py-0.5 rounded-full text-xs font-bold
-            {% if m.tipo == 'entrada' %}bg-green-100 text-green-700
-            {% else %}bg-red-100 text-red-600{% endif %}">
-            {% if m.tipo == 'entrada' %}▲ Entrada{% else %}▼ Salida{% endif %}
-        </span>
-    </td>
-    <td class="px-4 py-2.5">
-        <p class="text-sm font-semibold text-gray-800">{{ m.producto_nombre }}</p>
-        <p class="text-xs font-mono text-gray-400">{{ m.producto_codigo or '' }}</p>
-    </td>
-    <td class="px-4 py-2.5 text-sm text-gray-500">{{ m.motivo or '—' }}</td>
-    <td class="px-4 py-2.5 text-center font-bold
-        {% if m.tipo == 'entrada' %}text-green-600{% else %}text-red-500{% endif %}">
-        {% if m.tipo == 'entrada' %}+{% else %}−{% endif %}{{ m.cantidad }} {{ m.unidad_medida or '' }}
-    </td>
-    <td class="px-4 py-2.5 text-center text-xs text-gray-400">
-        {{ m.stock_antes }} → <span class="font-semibold text-gray-600">{{ m.stock_despues }}</span>
-    </td>
-    <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.referencia or '—' }}</td>
-    <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.usuario or '—' }}</td>
-</tr>
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-100">
+                    {% for col in ['Fecha','Tipo','Producto','Motivo','Cantidad','Antes → Después','Referencia','Usuario'] %}
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+            {% for m in movimientos %}
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                    {{ m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '—' }}
+                </td>
+                <td class="px-4 py-2.5">
+                    <span class="px-2 py-0.5 rounded-full text-xs font-bold
+                        {% if m.tipo == 'entrada' %}bg-green-100 text-green-700
+                        {% else %}bg-red-100 text-red-600{% endif %}">
+                        {% if m.tipo == 'entrada' %}▲ Entrada{% else %}▼ Salida{% endif %}
+                    </span>
+                </td>
+                <td class="px-4 py-2.5">
+                    <p class="text-sm font-semibold text-gray-800">{{ m.producto_nombre }}</p>
+                    <p class="text-xs font-mono text-gray-400">{{ m.producto_codigo or '' }}</p>
+                </td>
+                <td class="px-4 py-2.5 text-sm text-gray-500">{{ m.motivo or '—' }}</td>
+                <td class="px-4 py-2.5 text-center font-bold
+                    {% if m.tipo == 'entrada' %}text-green-600{% else %}text-red-500{% endif %}">
+                    {% if m.tipo == 'entrada' %}+{% else %}−{% endif %}{{ m.cantidad }} {{ m.unidad_medida or '' }}
+                </td>
+                <td class="px-4 py-2.5 text-center text-xs text-gray-400">
+                    {{ m.stock_antes }} → <span class="font-semibold text-gray-600">{{ m.stock_despues }}</span>
+                </td>
+                <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.referencia or '—' }}</td>
+                <td class="px-4 py-2.5 text-xs text-gray-400">{{ m.usuario or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="px-4 py-10 text-center text-sm text-gray-400">
+                    No hay movimientos registrados.
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if total_paginas > 1 %}
+<div class="flex items-center justify-between px-2 py-3 mt-1">
+    <p class="text-xs text-navy-400">
+        {{ total_movimientos }} registros · página {{ pagina }} de {{ total_paginas }}
+    </p>
+    <div class="flex items-center gap-1">
+        {% if pagina > 1 %}
+        <a hx-get="/stock/movimientos?pagina={{ pagina - 1 }}&buscar={{ buscar }}&tipo={{ tipo_sel }}"
+           hx-target="#mov-wrapper" hx-swap="innerHTML"
+           class="px-3 py-1.5 text-xs bg-white text-navy-400 rounded-lg border border-navy-500
+                  hover:bg-navy-500 hover:text-white cursor-pointer transition-colors">
+            ← Anterior
+        </a>
+        {% endif %}
+        {% for p in range(1, total_paginas + 1) %}
+        {% if p == pagina %}
+        <span class="px-3 py-1.5 text-xs bg-clf-green text-white rounded-lg font-bold">{{ p }}</span>
+        {% elif p <= 3 or p > total_paginas - 3 or (p >= pagina - 1 and p <= pagina + 1) %}
+        <a hx-get="/stock/movimientos?pagina={{ p }}&buscar={{ buscar }}&tipo={{ tipo_sel }}"
+           hx-target="#mov-wrapper" hx-swap="innerHTML"
+           class="px-3 py-1.5 text-xs bg-white text-navy-400 rounded-lg border border-navy-500
+                  hover:bg-navy-500 hover:text-white cursor-pointer transition-colors">
+            {{ p }}
+        </a>
+        {% elif p == 4 and pagina > 5 or p == total_paginas - 3 and pagina < total_paginas - 4 %}
+        <span class="px-2 text-navy-400 text-xs">…</span>
+        {% endif %}
+        {% endfor %}
+        {% if pagina < total_paginas %}
+        <a hx-get="/stock/movimientos?pagina={{ pagina + 1 }}&buscar={{ buscar }}&tipo={{ tipo_sel }}"
+           hx-target="#mov-wrapper" hx-swap="innerHTML"
+           class="px-3 py-1.5 text-xs bg-white text-navy-400 rounded-lg border border-navy-500
+                  hover:bg-navy-500 hover:text-white cursor-pointer transition-colors">
+            Siguiente →
+        </a>
+        {% endif %}
+    </div>
+</div>
 {% else %}
-<tr>
-    <td colspan="8" class="px-4 py-10 text-center text-sm text-gray-400">
-        No hay movimientos registrados.
-    </td>
-</tr>
-{% endfor %}
-</tbody>
+<p class="text-xs text-navy-400 text-right px-2 py-2 mt-1">{{ total_movimientos }} registros</p>
+{% endif %}

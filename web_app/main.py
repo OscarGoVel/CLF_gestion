@@ -19,7 +19,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
@@ -34,10 +34,12 @@ from web_app.routers import catalogos as catalogos_router
 from web_app.routers import facturas as facturas_router
 from web_app.routers import stock as stock_router
 from web_app.routers import analisis as analisis_router
+from web_app.routers import admin as admin_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
 from web_app.metrics import registry as metrics
+from web_app.config import settings
 
 # ── Rate limiter global ───────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
@@ -66,8 +68,8 @@ async def lifespan(app: FastAPI):
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="CLF Gestion Web",
-    docs_url=None,
-    redoc_url=None,
+    docs_url=None if settings.es_produccion else "/docs",
+    redoc_url=None if settings.es_produccion else "/redoc",
     lifespan=lifespan,
 )
 
@@ -140,6 +142,7 @@ app.include_router(catalogos_router.router)
 app.include_router(facturas_router.router)
 app.include_router(stock_router.router)
 app.include_router(analisis_router.router)
+app.include_router(admin_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -189,6 +192,78 @@ async def handler_500(request: Request, exc: Exception):
 
 
 
+# ── PWA ───────────────────────────────────────────────────────────────────────
+
+@app.get("/manifest.json")
+async def manifest():
+    return JSONResponse({
+        "name":             "CLF Gestión",
+        "short_name":       "CLF",
+        "description":      "Sistema de gestión comercial CLF",
+        "start_url":        "/dashboard",
+        "display":          "standalone",
+        "background_color": "#141f30",
+        "theme_color":      "#0f7b5e",
+        "orientation":      "portrait-primary",
+        "icons": [
+            {
+                "src":   "/static/logo_clf.jpg",
+                "sizes": "any",
+                "type":  "image/jpeg",
+                "purpose": "any maskable",
+            }
+        ],
+        "screenshots": [],
+    })
+
+
+_SW_JS = """
+const CACHE_NAME = 'clf-v1';
+const STATIC_URLS = [
+    'https://cdn.tailwindcss.com',
+    'https://unpkg.com/htmx.org@1.9.12',
+];
+
+self.addEventListener('install', evt => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', evt => {
+    evt.waitUntil(
+        caches.keys().then(keys =>
+            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+        )
+    );
+    self.clients.claim();
+});
+
+/* Network-first: siempre intenta la red; usa caché solo si falla */
+self.addEventListener('fetch', evt => {
+    if (evt.request.method !== 'GET') return;
+    evt.respondWith(
+        fetch(evt.request)
+            .then(resp => {
+                if (resp && resp.status === 200 && resp.type === 'basic') {
+                    const clone = resp.clone();
+                    caches.open(CACHE_NAME).then(c => c.put(evt.request, clone));
+                }
+                return resp;
+            })
+            .catch(() => caches.match(evt.request))
+    );
+});
+""".strip()
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return Response(
+        content=_SW_JS,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
+
+
 # ── Rutas principales ─────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
@@ -208,35 +283,77 @@ async def dashboard(request: Request):
     if not user:
         return RedirectResponse("/")
 
-    kpis = {}
-    try:
-        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
-            cur.execute("""
-                SELECT
-                    COUNT(*) FILTER (WHERE estado IN ('Pendiente','Programada')) AS activas,
-                    COUNT(*) FILTER (WHERE estado = 'Entregada'
-                                    AND (monto_pagado IS NULL OR monto_pagado < total)) AS por_cobrar,
-                    COUNT(*) FILTER (WHERE estado NOT IN ('Cancelada','Pagada')
-                                    AND fecha_entrega < CURRENT_DATE) AS vencidas,
-                    COALESCE(SUM(total) FILTER (
-                        WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', CURRENT_DATE)
-                        AND estado != 'Cancelada'), 0) AS ventas_mes
-                FROM cotizaciones
-            """)
-            row = cur.fetchone()
-            kpis = {
-                "activas":    row[0],
-                "por_cobrar": row[1],
-                "vencidas":   row[2],
-                "ventas_mes": float(row[3]),
-            }
-    except Exception:
-        kpis = {"activas": "—", "por_cobrar": "—", "vencidas": "—", "ventas_mes": "—"}
+    from web_app.cache import cache, TTL_KPIS
 
+    kpis = {}
+    recientes = []
+    vencidas_list = []
+    empresa_db = user["empresa_db"]
+    _cache_key = f"dashboard:{empresa_db}"
+    cached = cache.get(_cache_key)
+
+    if cached:
+        kpis, recientes, vencidas_list = cached
+    else:
+        try:
+            with get_pool_empresa(empresa_db).conexion() as (_, cur):
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE estado IN ('Pendiente','Programada')) AS activas,
+                        COUNT(*) FILTER (WHERE estado = 'Entregada'
+                                        AND (monto_pagado IS NULL OR monto_pagado < total)) AS por_cobrar,
+                        COUNT(*) FILTER (WHERE estado NOT IN ('Cancelada','Pagada')
+                                        AND fecha_entrega < CURRENT_DATE) AS vencidas,
+                        COALESCE(SUM(total) FILTER (
+                            WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', CURRENT_DATE)
+                            AND estado != 'Cancelada'), 0) AS ventas_mes
+                    FROM cotizaciones
+                """)
+                row = cur.fetchone()
+                kpis = {
+                    "activas":    row[0],
+                    "por_cobrar": row[1],
+                    "vencidas":   row[2],
+                    "ventas_mes": float(row[3]),
+                }
+
+                cur.execute("""
+                    SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, c.total, c.estado
+                    FROM cotizaciones c
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    ORDER BY c.id DESC
+                    LIMIT 8
+                """)
+                cols = [d[0] for d in cur.description]
+                recientes = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT c.id, c.folio, c.fecha_entrega, cl.nombre_comercial, c.total, c.estado
+                    FROM cotizaciones c
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    WHERE c.estado NOT IN ('Cancelada','Pagada')
+                      AND c.fecha_entrega < CURRENT_DATE
+                    ORDER BY c.fecha_entrega ASC
+                    LIMIT 5
+                """)
+                cols2 = [d[0] for d in cur.description]
+                vencidas_list = [dict(zip(cols2, r)) for r in cur.fetchall()]
+
+            cache.set(_cache_key, (kpis, recientes, vencidas_list), ttl=TTL_KPIS)
+        except Exception:
+            kpis = {"activas": "—", "por_cobrar": "—", "vencidas": "—", "ventas_mes": "—"}
+
+    from web_app.routers.cotizaciones import ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"user": user, "kpis": kpis},
+        context={
+            "user": user,
+            "kpis": kpis,
+            "recientes": recientes,
+            "vencidas_list": vencidas_list,
+            "estado_color": ESTADO_COLOR,
+        },
     )
 
 

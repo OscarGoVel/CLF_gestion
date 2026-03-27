@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}{% if prod and prod.id %}Editar Producto{% else %}Nuevo Producto{% endif %} — CLF Gestión{% endblock %}
+{% block body %}
+{% include "catalogos/_nav.html" %}
+
+<main class="p-5 max-w-2xl mx-auto">
+
+    <div class="mb-5">
+        <h2 class="text-xl font-bold text-white">
+            {% if prod and prod.id %}Editar Producto{% else %}Nuevo Producto{% endif %}
+        </h2>
+        <p class="text-xs text-navy-400 mt-0.5">
+            {% if prod and prod.id %}Modifica los datos del producto en el catálogo{% else %}Registra un nuevo producto en el catálogo{% endif %}
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+        ⚠ {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <form method="POST"
+              action="{% if prod and prod.id %}/catalogos/productos/{{ prod.id }}/editar{% else %}/catalogos/productos/nuevo{% endif %}"
+              class="px-6 py-6 space-y-5">
+
+            <!-- Nombre + Código -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Nombre <span class="text-red-400">*</span>
+                    </label>
+                    <input type="text" name="nombre"
+                           value="{{ prod.nombre if prod else '' }}"
+                           required autofocus
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Código <span class="text-red-400">*</span>
+                    </label>
+                    <input type="text" name="codigo"
+                           value="{{ prod.codigo if prod else '' }}"
+                           required
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition
+                                  font-mono uppercase">
+                </div>
+            </div>
+
+            <!-- Descripción -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Descripción</label>
+                <textarea name="descripcion" rows="2"
+                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                 focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition resize-none">{{ prod.descripcion if prod else '' }}</textarea>
+            </div>
+
+            <!-- Categoría + Subcategoría -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Categoría</label>
+                    <select id="cat-select" name="categoria_id"
+                            onchange="filtrarSubs()"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer transition">
+                        <option value="">Sin categoría</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat.id }}"
+                                {% if prod and prod.categoria_id == cat.id %}selected{% endif %}>
+                            {{ cat.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Subcategoría</label>
+                    <select id="sub-select" name="subcategoria_id"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer transition">
+                        <option value="">Sin subcategoría</option>
+                        {% for sub in subcategorias %}
+                        <option value="{{ sub.id }}"
+                                data-cat="{{ sub.categoria_id }}"
+                                {% if prod and prod.subcategoria_id == sub.id %}selected{% endif %}>
+                            {{ sub.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Unidad de medida + Precio base + IVA -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Unidad de Medida</label>
+                    <input type="text" name="unidad_medida"
+                           value="{{ prod.unidad_medida if prod else '' }}"
+                           placeholder="PZA, KG, M, L…"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        Precio Base <span class="text-red-400">*</span>
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                        <input type="number" name="precio_base" step="0.01" min="0"
+                               value="{{ '{:.2f}'.format(prod.precio_base) if prod and prod.precio_base is not none else '0.00' }}"
+                               required
+                               class="w-full pl-6 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                    </div>
+                </div>
+                <div class="flex items-end pb-1">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" name="aplica_iva" value="1"
+                               {% if prod %}{% if prod.aplica_iva %}checked{% endif %}{% else %}checked{% endif %}
+                               class="w-4 h-4 accent-clf-green">
+                        <span class="text-sm font-semibold text-gray-600">Aplica IVA (16%)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Stock mínimo -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Stock Mínimo</label>
+                    <input type="number" name="stock_minimo" step="0.01" min="0"
+                           value="{{ prod.stock_minimo if prod and prod.stock_minimo is not none else '0' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+            </div>
+
+            <!-- Datos SAT -->
+            <div class="pt-4 border-t border-gray-100">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Claves SAT</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Clave Producto SAT</label>
+                        <input type="text" name="clave_sat"
+                               value="{{ prod.clave_sat if prod else '' }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Clave Unidad SAT</label>
+                        <input type="text" name="clave_unidad_sat"
+                               value="{{ prod.clave_unidad_sat if prod else '' }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition font-mono">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                <a href="{% if prod and prod.id %}/catalogos/productos/{{ prod.id }}{% else %}/catalogos/productos{% endif %}"
+                   class="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                    ← Cancelar
+                </a>
+                <button type="submit"
+                        class="px-6 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-sm
+                               font-bold rounded-lg transition-colors shadow-sm">
+                    {% if prod and prod.id %}Guardar cambios{% else %}Crear Producto{% endif %}
+                </button>
+            </div>
+
+        </form>
+    </div>
+</main>
+
+<script>
+function filtrarSubs() {
+    const catId = document.getElementById('cat-select').value;
+    const subSelect = document.getElementById('sub-select');
+    const opts = subSelect.querySelectorAll('option[data-cat]');
+    let anyVisible = false;
+    opts.forEach(opt => {
+        const show = !catId || opt.dataset.cat === catId;
+        opt.style.display = show ? '' : 'none';
+        if (show) anyVisible = true;
+    });
+    // Reset selection if current sub doesn't belong to selected category
+    const sel = subSelect.selectedOptions[0];
+    if (sel && sel.dataset.cat && sel.dataset.cat !== catId) {
+        subSelect.value = '';
+    }
+}
+// Run on page load to filter subs based on pre-selected category
+document.addEventListener('DOMContentLoaded', filtrarSubs);
+</script>
+
+{% endblock %}

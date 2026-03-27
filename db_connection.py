@@ -61,6 +61,48 @@ class _PgCursor:
     # ── ejecución ─────────────────────────────────────────────────────────
 
     def execute(self, sql: str, params=None):
+        import re as _re
+        # Traducir INSERT OR IGNORE INTO → INSERT INTO ... ON CONFLICT DO NOTHING
+        was_ignore = bool(_re.search(r'INSERT\s+OR\s+IGNORE\s+INTO', sql, _re.IGNORECASE))
+        if was_ignore:
+            sql = _re.sub(
+                r'INSERT\s+OR\s+IGNORE\s+INTO',
+                'INSERT INTO',
+                sql,
+                flags=_re.IGNORECASE,
+            )
+        # Traducir GROUP_CONCAT → STRING_AGG
+        # Caso 1: GROUP_CONCAT(DISTINCT col_simple) → STRING_AGG(DISTINCT col, ',')
+        sql = _re.sub(
+            r'GROUP_CONCAT\(\s*DISTINCT\s+([\w\.]+)\s*\)',
+            r"STRING_AGG(DISTINCT \1, ',')",
+            sql,
+            flags=_re.IGNORECASE,
+        )
+        # Caso 2: GROUP_CONCAT(expr) o GROUP_CONCAT(expr, sep) → STRING_AGG(...)
+        sql = _re.sub(r'GROUP_CONCAT\(', 'STRING_AGG(', sql, flags=_re.IGNORECASE)
+        # Traducir strftime SQLite → TO_CHAR PostgreSQL
+        # El formato SQLite usa % que psycopg2 interpreta como placeholder (IndexError)
+        _STRFTIME_MAP = {
+            '%Y-%m-%d': 'YYYY-MM-DD',
+            '%Y-%m':    'YYYY-MM',
+            '%Y':       'YYYY',
+            '%m':       'MM',
+            '%d':       'DD',
+        }
+        def _strftime_to_tochar(m):
+            fmt_sqlite = m.group(1)   # ej. '%Y-%m'
+            col        = m.group(2)   # ej. 'fecha_compra'
+            fmt_pg = _STRFTIME_MAP.get(fmt_sqlite, fmt_sqlite.replace('%Y','YYYY')
+                                                               .replace('%m','MM')
+                                                               .replace('%d','DD'))
+            return f"TO_CHAR({col}, '{fmt_pg}')"
+        sql = _re.sub(
+            r"strftime\(\s*'([^']+)'\s*,\s*([^)]+?)\s*\)",
+            _strftime_to_tochar,
+            sql,
+            flags=_re.IGNORECASE,
+        )
         sql = sql.replace('?', '%s')
         stripped   = sql.strip().upper()
         is_insert  = stripped.startswith('INSERT')
@@ -68,7 +110,12 @@ class _PgCursor:
         # Solo agregar RETURNING id si hay columna id (tablas con clave compuesta no la tienen)
         has_id_col = _sql_tiene_id(sql)
 
-        if is_insert and not has_return and has_id_col:
+        if is_insert and was_ignore:
+            # ON CONFLICT DO NOTHING: no usar RETURNING (puede retornar nada)
+            conflict_sql = sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+            self._c.execute(conflict_sql, params) if params else self._c.execute(conflict_sql)
+            self.lastrowid = None
+        elif is_insert and not has_return and has_id_col:
             sql = sql.rstrip().rstrip(';') + ' RETURNING id'
             self._c.execute(sql, params) if params else self._c.execute(sql)
             row = self._c.fetchone()
@@ -83,14 +130,46 @@ class _PgCursor:
 
     # ── resultados ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _norm(row):
+        """Normaliza tipos PostgreSQL → tipos compatibles con código SQLite y Jinja2."""
+        if row is None:
+            return None
+        import decimal as _dec
+        import datetime as _dt
+
+        class _DateStr(str):
+            """str con .strftime(): sliceable para código desktop, templatable para Jinja2."""
+            __slots__ = ('_dt_obj',)
+            def strftime(self, fmt):
+                return self._dt_obj.strftime(fmt)
+
+        def _conv(v):
+            if isinstance(v, _dec.Decimal):
+                return float(v)
+            # Convertir date/datetime a _DateStr: se comporta como str (desktop)
+            # y tiene .strftime() (Jinja2/web)
+            if isinstance(v, _dt.datetime):
+                s = _DateStr(v.strftime('%Y-%m-%d %H:%M:%S'))
+                s._dt_obj = v
+                return s
+            if isinstance(v, _dt.date):
+                s = _DateStr(v.strftime('%Y-%m-%d'))
+                s._dt_obj = v
+                return s
+            return v
+
+        return tuple(_conv(v) for v in row)
+
     def fetchone(self):
-        return self._c.fetchone()
+        return self._norm(self._c.fetchone())
 
     def fetchall(self):
-        return self._c.fetchall()
+        return [self._norm(r) for r in self._c.fetchall()]
 
     def fetchmany(self, n=None):
-        return self._c.fetchmany(n) if n else self._c.fetchmany()
+        rows = self._c.fetchmany(n) if n else self._c.fetchmany()
+        return [self._norm(r) for r in rows]
 
     # ── propiedades ───────────────────────────────────────────────────────
 
@@ -164,7 +243,7 @@ def conectar_empresa(db_path: str = None, pg_database: str = None):
             user=pg['user'],
             password=pg['password'],
         )
-        raw.autocommit = False
+        raw.autocommit = True   # Igual que SQLite: cada sentencia es independiente
         conn = _PgConn(raw)
         return conn, conn.cursor()
 
@@ -195,7 +274,7 @@ def conectar_usuarios():
             user=pg['user'],
             password=pg['password'],
         )
-        raw.autocommit = False
+        raw.autocommit = True   # Igual que SQLite: cada sentencia es independiente
         conn = _PgConn(raw)
         return conn, conn.cursor()
 

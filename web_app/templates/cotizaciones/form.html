@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — CLF Gestión{% endblock %}
+
+{% block body %}
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 px-2 gap-1">
+        <a href="/dashboard" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            📊 Dashboard
+        </a>
+        <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            📄 Cotizaciones
+        </a>
+        {% if cot %}
+        <a href="/cotizaciones/{{ cot.id }}" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors font-mono">
+            {{ cot.folio }}
+        </a>
+        {% endif %}
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700">
+            {{ titulo }}
+        </span>
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-5xl mx-auto">
+
+    <form method="POST"
+          action="{{ '/cotizaciones' if not cot else '/cotizaciones/' ~ cot.id ~ '/editar' }}"
+          id="form-cotizacion">
+
+        <!-- ── Datos generales ─────────────────────────────────────────────── -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 mb-4">
+            <h3 class="text-sm font-bold text-gray-700 mb-4">Datos Generales</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <!-- Cliente -->
+                <div>
+                    <label class="text-xs text-gray-500 font-medium mb-1 block" for="cliente_id">
+                        Cliente <span class="text-red-400">*</span>
+                    </label>
+                    <select name="cliente_id" id="cliente_id" required
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                        <option value="">— Selecciona un cliente —</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}"
+                            {% if cot and cot.cliente_id == c.id %}selected{% endif %}>
+                            {{ c.nombre }}{% if c.tipo %} ({{ c.tipo }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Fecha -->
+                <div>
+                    <label class="text-xs text-gray-500 font-medium mb-1 block" for="fecha">
+                        Fecha <span class="text-red-400">*</span>
+                    </label>
+                    <input type="date" name="fecha" id="fecha" required
+                           value="{{ cot.fecha.isoformat()[:10] if cot and cot.fecha else hoy }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+
+                <!-- Orden de compra -->
+                <div>
+                    <label class="text-xs text-gray-500 font-medium mb-1 block" for="orden_compra">
+                        Orden de Compra
+                    </label>
+                    <input type="text" name="orden_compra" id="orden_compra"
+                           value="{{ cot.orden_compra or '' }}"
+                           placeholder="Número de OC del cliente (opcional)"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                </div>
+
+                <!-- Aplica IVA -->
+                <div class="flex items-center gap-3 pt-4">
+                    <div class="relative">
+                        <input type="checkbox" name="aplica_iva" value="1" id="aplica_iva"
+                               {% if not cot or cot.aplica_iva %}checked{% endif %}
+                               class="w-4 h-4 rounded border-gray-300 text-clf-green
+                                      focus:ring-clf-green cursor-pointer">
+                    </div>
+                    <label for="aplica_iva" class="text-sm text-gray-700 font-medium cursor-pointer">
+                        Aplicar IVA (16%)
+                    </label>
+                </div>
+
+            </div>
+
+            <!-- Notas -->
+            <div class="mt-4">
+                <label class="text-xs text-gray-500 font-medium mb-1 block" for="notas">
+                    Notas / Observaciones
+                </label>
+                <textarea name="notas" id="notas" rows="2"
+                          placeholder="Observaciones, condiciones de entrega, etc."
+                          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                 focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white
+                                 transition resize-none">{{ cot.notas or '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- ── Productos ───────────────────────────────────────────────────── -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+            <div class="px-5 py-3 border-b border-gray-100">
+                <h3 class="text-sm font-bold text-gray-700">Productos</h3>
+            </div>
+
+            <!-- Buscador de producto -->
+            <div class="px-5 py-3 border-b border-gray-100">
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                    <input type="text" id="buscar-prod"
+                           placeholder="Buscar producto por nombre o código..."
+                           autocomplete="off"
+                           class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg
+                                  bg-gray-50 focus:outline-none focus:ring-2 focus:ring-clf-green
+                                  focus:bg-white transition">
+                    <div id="sugerencias-prod" class="relative"></div>
+                </div>
+            </div>
+
+            <!-- Tabla de productos -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 border-b border-gray-100">
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Producto</th>
+                            <th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Cantidad</th>
+                            <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-36">Precio Unit.</th>
+                            <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Subtotal</th>
+                            <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-24">IVA</th>
+                            <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Total</th>
+                            <th class="w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="productos-body">
+                        <!-- Filas generadas por JS -->
+                    </tbody>
+                    <tfoot class="border-t-2 border-gray-200 bg-gray-50">
+                        <tr>
+                            <td colspan="3" class="px-4 py-3 text-sm text-right text-gray-500 font-medium">Subtotal</td>
+                            <td class="px-4 py-3 text-sm text-right font-semibold text-gray-700" id="tot-subtotal">$0.00</td>
+                            <td class="px-4 py-3 text-sm text-right text-blue-600" id="tot-iva">$0.00</td>
+                            <td class="px-4 py-3 text-sm text-right font-bold text-gray-800" colspan="2"></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4" class="px-4 py-2"></td>
+                            <td colspan="2" class="px-4 py-2 text-base text-right font-bold text-gray-800">TOTAL</td>
+                            <td class="px-4 py-2 text-xl text-right font-bold text-clf-green whitespace-nowrap pr-4" id="tot-total">$0.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Campo oculto con JSON de productos -->
+        <input type="hidden" name="productos_json" id="productos-json" value="[]">
+
+        <!-- Botones -->
+        <div class="flex items-center gap-3">
+            <button type="submit"
+                    class="px-5 py-2.5 bg-clf-green hover:bg-clf-green-dk text-white text-sm font-bold
+                           rounded-xl transition-colors shadow-sm">
+                💾 Guardar Cotización
+            </button>
+            <a href="{{ '/cotizaciones/' ~ cot.id if cot else '/cotizaciones' }}"
+               class="px-5 py-2.5 bg-navy-500 hover:bg-navy-700 text-white text-sm font-semibold
+                      rounded-xl transition-colors">
+                Cancelar
+            </a>
+        </div>
+
+    </form>
+</main>
+
+<script>
+// ── Estado de productos ────────────────────────────────────────────────────
+let productos = [];
+
+// Inicializar con productos existentes (modo editar)
+{% if productos_existentes %}
+productos = {{ productos_existentes | tojson }}.map(p => ({
+    producto_id:     p.producto_id,
+    nombre:          p.nombre,
+    codigo:          p.codigo || '',
+    cantidad:        parseFloat(p.cantidad) || 1,
+    precio_unitario: parseFloat(p.precio_unitario) || 0,
+    unidad_medida:   p.unidad_medida || ''
+}));
+{% endif %}
+
+// ── Formato de moneda ──────────────────────────────────────────────────────
+function fmt(n) {
+    return '$' + parseFloat(n).toLocaleString('es-MX', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+}
+
+// ── Recalcular totales ─────────────────────────────────────────────────────
+function recalcular() {
+    const aplicaIva = document.getElementById('aplica_iva').checked;
+    let subtotal = 0;
+
+    productos.forEach((p, i) => {
+        const sub = (parseFloat(p.cantidad) || 0) * (parseFloat(p.precio_unitario) || 0);
+        const iva = aplicaIva ? sub * 0.16 : 0;
+        const tot = sub + iva;
+        subtotal += sub;
+
+        const row = document.getElementById('prod-row-' + i);
+        if (!row) return;
+        row.querySelector('.cell-sub').textContent  = fmt(sub);
+        row.querySelector('.cell-iva').textContent  = iva > 0 ? fmt(iva) : '—';
+        row.querySelector('.cell-tot').textContent  = fmt(tot);
+    });
+
+    const ivaTotal = aplicaIva ? subtotal * 0.16 : 0;
+    document.getElementById('tot-subtotal').textContent = fmt(subtotal);
+    document.getElementById('tot-iva').textContent      = fmt(ivaTotal);
+    document.getElementById('tot-total').textContent    = fmt(subtotal + ivaTotal);
+
+    document.getElementById('productos-json').value = JSON.stringify(productos);
+}
+
+// ── Renderizar tabla ───────────────────────────────────────────────────────
+function renderTabla() {
+    const tbody = document.getElementById('productos-body');
+    tbody.innerHTML = '';
+
+    if (productos.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400">
+                <div class="text-2xl mb-1">📦</div>
+                Busca y agrega productos arriba.
+            </td></tr>`;
+        recalcular();
+        return;
+    }
+
+    productos.forEach((p, i) => {
+        const tr = document.createElement('tr');
+        tr.id = 'prod-row-' + i;
+        tr.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
+        tr.innerHTML = `
+            <td class="px-4 py-3">
+                <p class="text-sm text-gray-800 font-medium">${escHtml(p.nombre)}</p>
+                <p class="text-xs text-gray-400">${p.codigo ? escHtml(p.codigo) + ' · ' : ''}${p.unidad_medida || ''}</p>
+            </td>
+            <td class="px-4 py-3 text-center">
+                <input type="number" step="0.01" min="0.01" value="${p.cantidad}"
+                       class="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-center
+                              focus:outline-none focus:ring-2 focus:ring-clf-green transition"
+                       onchange="cambiarCant(${i}, this.value)">
+            </td>
+            <td class="px-4 py-3 text-right">
+                <input type="number" step="0.01" min="0" value="${p.precio_unitario}"
+                       class="w-32 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right
+                              focus:outline-none focus:ring-2 focus:ring-clf-green transition"
+                       onchange="cambiarPrecio(${i}, this.value)">
+            </td>
+            <td class="px-4 py-3 text-right text-sm text-gray-700 cell-sub whitespace-nowrap"></td>
+            <td class="px-4 py-3 text-right text-sm text-blue-600 cell-iva whitespace-nowrap"></td>
+            <td class="px-4 py-3 text-right text-sm font-bold text-gray-800 cell-tot whitespace-nowrap"></td>
+            <td class="px-4 py-3 text-center">
+                <button type="button" onclick="quitarProd(${i})"
+                        class="text-red-400 hover:text-red-600 text-xl font-bold leading-none
+                               transition-colors" title="Quitar">×</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    recalcular();
+}
+
+function escHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Acciones de la tabla ───────────────────────────────────────────────────
+function cambiarCant(i, v)   { productos[i].cantidad        = parseFloat(v) || 0; recalcular(); }
+function cambiarPrecio(i, v) { productos[i].precio_unitario = parseFloat(v) || 0; recalcular(); }
+
+function quitarProd(i) {
+    productos.splice(i, 1);
+    renderTabla();
+}
+
+// Llamado desde _prod_sugerencias.html
+function seleccionarProductoCot(id, nombre, precio, codigo, unidad) {
+    const existente = productos.findIndex(p => p.producto_id === id);
+    if (existente >= 0) {
+        productos[existente].cantidad += 1;
+    } else {
+        productos.push({
+            producto_id:     id,
+            nombre:          nombre,
+            codigo:          codigo || '',
+            cantidad:        1,
+            precio_unitario: precio || 0,
+            unidad_medida:   unidad || ''
+        });
+    }
+    renderTabla();
+    document.getElementById('buscar-prod').value = '';
+    document.getElementById('sugerencias-prod').innerHTML = '';
+}
+
+// ── Autocomplete de producto ───────────────────────────────────────────────
+const inputBuscar   = document.getElementById('buscar-prod');
+const divSugerencias = document.getElementById('sugerencias-prod');
+let debounce = null;
+
+inputBuscar.addEventListener('input', function () {
+    clearTimeout(debounce);
+    const q = this.value.trim();
+    if (q.length < 2) { divSugerencias.innerHTML = ''; return; }
+    debounce = setTimeout(() => {
+        fetch('/cotizaciones/buscar-producto?q=' + encodeURIComponent(q))
+            .then(r => r.text())
+            .then(html => { divSugerencias.innerHTML = html; });
+    }, 300);
+});
+
+document.addEventListener('click', function (e) {
+    if (!inputBuscar.contains(e.target) && !divSugerencias.contains(e.target)) {
+        divSugerencias.innerHTML = '';
+    }
+});
+
+// ── IVA toggle ─────────────────────────────────────────────────────────────
+document.getElementById('aplica_iva').addEventListener('change', recalcular);
+
+// ── Validación al enviar ───────────────────────────────────────────────────
+document.getElementById('form-cotizacion').addEventListener('submit', function (e) {
+    if (productos.length === 0) {
+        e.preventDefault();
+        alert('Debes agregar al menos un producto a la cotización.');
+        return;
+    }
+    document.getElementById('productos-json').value = JSON.stringify(productos);
+});
+
+// ── Inicializar ────────────────────────────────────────────────────────────
+renderTabla();
+</script>
+
+{% endblock %}

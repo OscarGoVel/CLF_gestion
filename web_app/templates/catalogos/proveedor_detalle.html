@@ -9,10 +9,19 @@
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
         <div class="h-1.5 bg-navy-700"></div>
         <div class="px-6 py-5">
-            <div class="mb-5">
-                <h2 class="text-2xl font-bold text-navy-700 mb-1">{{ proveedor.nombre }}</h2>
-                {% if proveedor.razon_social and proveedor.razon_social != proveedor.nombre %}
-                <p class="text-sm text-gray-500">{{ proveedor.razon_social }}</p>
+            <div class="flex items-start justify-between mb-5">
+                <div>
+                    <h2 class="text-2xl font-bold text-navy-700 mb-1">{{ proveedor.nombre }}</h2>
+                    {% if proveedor.razon_social and proveedor.razon_social != proveedor.nombre %}
+                    <p class="text-sm text-gray-500">{{ proveedor.razon_social }}</p>
+                    {% endif %}
+                </div>
+                {% if user.rol in ['Administrador', 'Operador'] %}
+                <a href="/catalogos/proveedores/{{ proveedor.id }}/editar"
+                   class="flex items-center gap-1.5 px-4 py-2 bg-navy-700 hover:bg-navy-800 text-white
+                          text-sm font-semibold rounded-lg transition-colors">
+                    ✏ Editar
+                </a>
                 {% endif %}
             </div>
 

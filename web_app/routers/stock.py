@@ -142,16 +142,21 @@ async def vista_stock(
 # HISTORIAL DE MOVIMIENTOS
 # ─────────────────────────────────────────────────────────────────────────────
 
+_POR_PAGINA_MOV = 50
+
+
 @router.get("/movimientos", response_class=HTMLResponse)
 async def historial_movimientos(
     request: Request,
     buscar: str = "",
     tipo: str = "",
+    pagina: int = 1,
 ):
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
 
+    pagina = max(1, pagina)
     where, params = [], []
     if buscar:
         where.append("(p.nombre ILIKE %s OR p.codigo ILIKE %s OR m.referencia ILIKE %s)")
@@ -163,6 +168,13 @@ async def historial_movimientos(
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(f"""
+            SELECT COUNT(*) FROM movimientos_stock m
+            JOIN productos p ON p.id = m.producto_id {w}
+        """, params or None)
+        total_movimientos = cur.fetchone()[0]
+
+        offset = (pagina - 1) * _POR_PAGINA_MOV
+        cur.execute(f"""
             SELECT m.id, m.tipo, m.motivo, m.cantidad,
                    m.stock_antes, m.stock_despues,
                    m.referencia, m.notas, m.usuario, m.fecha,
@@ -172,16 +184,23 @@ async def historial_movimientos(
             JOIN productos p ON p.id = m.producto_id
             {w}
             ORDER BY m.fecha DESC, m.id DESC
-            LIMIT 300
-        """, params or None)
+            LIMIT %s OFFSET %s
+        """, (params or []) + [_POR_PAGINA_MOV, offset])
         cols = [d[0] for d in cur.description]
         movimientos = [_floats(dict(zip(cols, r))) for r in cur.fetchall()]
+
+    import math
+    total_paginas = max(1, math.ceil(total_movimientos / _POR_PAGINA_MOV))
+    pagina = min(pagina, total_paginas)
 
     ctx = {
         "user": user,
         "movimientos": movimientos,
         "buscar": buscar,
         "tipo_sel": tipo,
+        "pagina": pagina,
+        "total_paginas": total_paginas,
+        "total_movimientos": total_movimientos,
         "seccion": "stock",
     }
     if request.headers.get("HX-Request"):

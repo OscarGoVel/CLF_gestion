@@ -397,7 +397,7 @@ class Dashboard:
             JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
             JOIN productos p ON p.id = cd.producto_id
             WHERE c.estado IN ('Programada', 'Parcialmente Entregada')
-            GROUP BY c.id
+            GROUP BY c.id, c.folio, cl.nombre_comercial, c.total, c.fecha_entrega
             ORDER BY c.fecha_entrega ASC NULLS LAST, c.folio
         """)
         for folio, cliente, total, fecha_entrega, prods in self.cursor.fetchall():

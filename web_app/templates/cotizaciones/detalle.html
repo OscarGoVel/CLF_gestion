@@ -16,6 +16,11 @@
         <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
             📄 Cotizaciones
         </a>
+        {% if user.rol == 'Administrador' %}
+        <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">
+            👥 Usuarios
+        </a>
+        {% endif %}
         <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 font-mono">
             {{ cot.folio }}
         </span>
@@ -64,25 +69,80 @@
                     </p>
                 </div>
 
-                <!-- Cambiar estado (Admins y Operadores) -->
+                <!-- Botones de acción (Admins y Operadores) -->
                 {% if user.rol in ('Administrador', 'Operador') %}
-                <form hx-post="/cotizaciones/{{ cot.id }}/estado"
-                      hx-target="#badge-estado"
-                      hx-swap="outerHTML"
-                      class="flex items-center gap-2">
-                    <select name="nuevo_estado"
-                            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50
-                                   focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer">
-                        {% for e in estados %}
-                        <option value="{{ e }}" {% if e == cot.estado %}selected{% endif %}>{{ e }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="flex items-center gap-2 flex-wrap">
+
+                <a href="/cotizaciones/{{ cot.id }}/pdf"
+                   class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm
+                          font-semibold rounded-lg transition-colors border border-gray-200">
+                    📄 PDF
+                </a>
+
+                {% if cot.estado not in ('Entregada', 'Pagada', 'Cancelada') %}
+                <a href="/cotizaciones/{{ cot.id }}/editar"
+                   class="px-3 py-1.5 bg-navy-500 hover:bg-navy-700 text-white text-sm
+                          font-semibold rounded-lg transition-colors">
+                    ✏️ Editar
+                </a>
+                {% endif %}
+
+                <!-- Cambiar estado -->
+                <form id="form-estado"
+                      hx-post="/cotizaciones/{{ cot.id }}/estado"
+                      hx-target="this"
+                      class="flex flex-wrap items-end gap-2">
+                    <div>
+                        <select name="nuevo_estado" id="sel-estado"
+                                onchange="actualizarCamposEstado(this.value)"
+                                class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50
+                                       focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer">
+                            {% for e in estados %}
+                            <option value="{{ e }}" {% if e == cot.estado %}selected{% endif %}>{{ e }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <!-- Campos extendidos (condicionales) -->
+                    <div id="campos-estado" class="flex flex-wrap gap-2"></div>
                     <button type="submit"
                             class="px-3 py-1.5 bg-clf-green hover:bg-clf-green-dk text-white text-sm
                                    font-semibold rounded-lg transition-colors">
                         Actualizar
                     </button>
                 </form>
+                <script>
+                const _FECHA_ENTREGA  = '{{ cot.fecha_entrega.strftime("%Y-%m-%d") if cot.fecha_entrega else "" }}';
+                const _FECHA_PAGO     = '{{ cot.fecha_pago.strftime("%Y-%m-%d") if cot.fecha_pago else "" }}';
+                const _MONTO_PAGADO   = '{{ cot.monto_pagado or "" }}';
+                const _NUM_FACTURA    = '{{ cot.numero_factura or "" }}';
+                const _ORDEN_COMPRA   = '{{ cot.orden_compra or "" }}';
+                const _HOY            = '{{ hoy }}';
+                function _inp(name, label, type, val, placeholder) {
+                    return `<div><label class="block text-[10px] text-gray-400 mb-0.5">${label}</label>
+                    <input type="${type}" name="${name}" value="${val}" placeholder="${placeholder}"
+                           class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50
+                                  focus:outline-none focus:ring-1 focus:ring-clf-green w-36"></div>`;
+                }
+                function actualizarCamposEstado(estado) {
+                    const c = document.getElementById('campos-estado');
+                    let html = '';
+                    if (estado === 'Programada' || estado === 'Entregada') {
+                        html += _inp('fecha_entrega','Fecha entrega','date', _FECHA_ENTREGA || _HOY, '');
+                    }
+                    if (estado === 'Entregada' || estado === 'Pagada') {
+                        html += _inp('numero_factura','No. Factura','text', _NUM_FACTURA, 'A-001');
+                        html += _inp('orden_compra','Orden compra','text', _ORDEN_COMPRA, 'OC-001');
+                    }
+                    if (estado === 'Pagada') {
+                        html += _inp('fecha_pago','Fecha pago','date', _FECHA_PAGO || _HOY, '');
+                        html += _inp('monto_pagado','Monto pagado','number', _MONTO_PAGADO, '0.00');
+                    }
+                    c.innerHTML = html;
+                }
+                actualizarCamposEstado(document.getElementById('sel-estado').value);
+                </script>
+
+                </div><!-- /flex acciones -->
                 {% endif %}
             </div>
 
@@ -230,6 +290,101 @@
                 </tfoot>
             </table>
         </div>
+    </div>
+
+    <!-- ── Entregas parciales ──────────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mt-4">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">
+                Entregas parciales
+                <span class="ml-2 text-xs font-normal text-gray-400">({{ entregas|length }})</span>
+            </h3>
+        </div>
+
+        {% if entregas %}
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-100">
+                    {% for col in ['Fecha','Producto','Cantidad entregada','Notas','Usuario'] %}
+                    <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for e in entregas %}
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                        {{ e.fecha_entrega.strftime('%d/%m/%Y') if e.fecha_entrega else '—' }}
+                    </td>
+                    <td class="px-4 py-2.5 text-sm text-gray-700">{{ e.producto_nombre }}</td>
+                    <td class="px-4 py-2.5 text-sm font-semibold text-clf-green">
+                        {{ e.cantidad_entregada }} {{ e.unidad_medida or '' }}
+                        {% set pid = e.producto_id %}
+                        {% set total_prod = namespace(v=0) %}
+                        {% for p in productos if p.producto_id == pid %}
+                            {% set total_prod.v = p.cantidad %}
+                        {% endfor %}
+                        {% if total_prod.v > 0 %}
+                        <span class="text-xs text-gray-400 font-normal ml-1">
+                            / {{ total_prod.v }} ({{ '{:.0f}'.format(entregado_por_prod.get(pid, 0) / total_prod.v * 100) }}%)
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ e.notas or '—' }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ e.usuario or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="px-5 py-5 text-sm text-gray-400">Sin entregas registradas.</p>
+        {% endif %}
+
+        {% if user.rol in ('Administrador', 'Operador') and cot.estado not in ('Pagada','Cancelada') and productos %}
+        <div class="px-5 py-4 border-t border-gray-100 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Registrar entrega</p>
+            <form hx-post="/cotizaciones/{{ cot.id }}/entregas"
+                  hx-target="this"
+                  class="flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-0.5">Producto</label>
+                    <select name="producto_id"
+                            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer max-w-xs">
+                        {% for p in productos %}
+                        <option value="{{ p.producto_id }}">
+                            {{ p.nombre[:50] }}
+                            ({{ entregado_por_prod.get(p.producto_id, 0)|round(2) }}/{{ p.cantidad }} {{ p.unidad_medida or '' }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-0.5">Cantidad</label>
+                    <input type="number" name="cantidad_entregada" min="0.001" step="any" required
+                           class="w-28 text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-0.5">Fecha</label>
+                    <input type="date" name="fecha_entrega" value="{{ hoy }}" required
+                           class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <div class="flex-1 min-w-[160px]">
+                    <label class="block text-xs text-gray-400 mb-0.5">Notas (opcional)</label>
+                    <input type="text" name="notas" placeholder="Referencia, albarán…"
+                           class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <button type="submit"
+                        class="px-4 py-1.5 bg-clf-green hover:bg-clf-green-dk text-white text-sm
+                               font-semibold rounded-lg transition-colors shrink-0">
+                    + Registrar
+                </button>
+            </form>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Botón volver -->
