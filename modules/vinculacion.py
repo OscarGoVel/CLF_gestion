@@ -1204,11 +1204,13 @@ class PanelVinculacion:
             prov_row = self.cursor.fetchone()
             prov_id  = prov_row[0] if prov_row else None
 
-            # Generar folio
+            # Generar folio (usa MAX para evitar duplicados si hay registros eliminados)
             año = (fecha_ or _dt.now().strftime("%Y-%m-%d"))[:4]
             self.cursor.execute(
-                "SELECT COUNT(*) FROM compras WHERE strftime('%Y', fecha_compra)=?", (año,))
-            folio_compra = f"COMP-{año}-{self.cursor.fetchone()[0]+1:04d}"
+                "SELECT MAX(CAST(SPLIT_PART(folio, '-', 3) AS INTEGER)) FROM compras "
+                "WHERE folio LIKE ?", (f"COMP-{año}-%",))
+            max_num = self.cursor.fetchone()[0] or 0
+            folio_compra = f"COMP-{año}-{max_num+1:04d}"
 
             try:
                 # Insertar compra principal
@@ -1315,7 +1317,7 @@ class PanelVinculacion:
                     pass
                 self.abrir()
 
-            except sqlite3.Error as e:
+            except Exception as e:
                 self.conn.rollback()
                 messagebox.showerror("Error BD", str(e), parent=win)
 

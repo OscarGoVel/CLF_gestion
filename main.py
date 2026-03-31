@@ -25,6 +25,7 @@ from ui.dashboard import Dashboard
 from ui.catalogos import Catalogos
 from ui.cotizaciones_ui import CotizacionesUI
 from ui.analisis import Analisis
+from ui.estudio_mercado import SeccionEstudioMercado
 from app_config import UTILIDAD
 from ui.configuracion import Configuracion
 import sesion
@@ -258,13 +259,14 @@ class SistemaGestion:
         self._seccion_actual = tk.StringVar(value='dashboard')
 
         secciones = [
-            ('dashboard',      '📊  Dashboard'),
-            ('cotizaciones',   '📄  Cotizaciones'),
-            ('facturacion',    '🧾  Facturación'),
-            ('catalogos',      '📚  Catálogos'),
-            ('stock',          '📦  Stock'),
-            ('analisis',       '📈  Análisis'),
-            ('configuracion',  '⚙️  Configuración'),
+            ('dashboard',         '📊  Dashboard'),
+            ('cotizaciones',      '📄  Cotizaciones'),
+            ('facturacion',       '🧾  Facturación'),
+            ('catalogos',         '📚  Catálogos'),
+            ('stock',             '📦  Stock'),
+            ('estudio_mercado',   '🔍  Mercado'),
+            ('analisis',          '📈  Análisis'),
+            ('configuracion',     '⚙️  Configuración'),
         ]
 
         for key, texto in secciones:
@@ -353,6 +355,8 @@ class SistemaGestion:
         self.catalogos.crear_seccion()
         self._facturacion = SeccionFacturacion(self)
         self._stock = SeccionStock(self)
+        self._estudio_mercado = SeccionEstudioMercado(self)
+        self._estudio_mercado.crear_seccion()
         self._analisis = Analisis(self)
         self._analisis.crear_seccion()
         self._configuracion = Configuracion(self)
@@ -369,8 +373,9 @@ class SistemaGestion:
             ('<Control-3>',  lambda e: self._navegar('facturacion')),
             ('<Control-4>',  lambda e: self._navegar('catalogos')),
             ('<Control-5>',  lambda e: self._navegar('stock')),
-            ('<Control-6>',  lambda e: self._navegar('analisis')),
-            ('<Control-7>',  lambda e: self._navegar('configuracion')),
+            ('<Control-6>',  lambda e: self._navegar('estudio_mercado')),
+            ('<Control-7>',  lambda e: self._navegar('analisis')),
+            ('<Control-8>',  lambda e: self._navegar('configuracion')),
         ]
         for seq, cmd in atajos:
             self.root.bind(seq, cmd)
@@ -517,9 +522,10 @@ class SistemaGestion:
             'cotizaciones':  'Cotizaciones',
             'facturacion':   'Facturación',
             'catalogos':     'Catálogos',
-            'stock':         'Stock',
-            'analisis':      'Análisis',
-            'configuracion': 'Configuración',
+            'stock':            'Stock',
+            'estudio_mercado':  'Estudio de Mercado',
+            'analisis':         'Análisis',
+            'configuracion':    'Configuración',
         }
         self._set_status(f'Cargando {nombres.get(seccion, seccion)}…', 'busy')
         self.root.config(cursor='watch')
@@ -548,6 +554,10 @@ class SistemaGestion:
                     self._stock.cargar_vista_stock()
                     self._stock.cargar_historial()
                 self._set_status('Stock actualizado', 'ok')
+            elif seccion == 'estudio_mercado':
+                if hasattr(self, '_estudio_mercado'):
+                    self._estudio_mercado.cargar_estudios()
+                self._set_status('Estudios de mercado cargados', 'ok')
             elif seccion == 'analisis':
                 if hasattr(self, '_analisis'):
                     self._analisis.refresh()
@@ -781,4 +791,5 @@ if __name__ == '__main__':
             continue
         else:
             break                          # salida normal (ventana cerrada con X)
+
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from web_app import audit
@@ -442,7 +442,7 @@ async def crear_producto(
         vals = dict(nombre=nombre, codigo=codigo, descripcion=descripcion,
                     categoria_id=int(categoria_id) if categoria_id else None,
                     subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
-                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    unidad_medida=unidad_medida, precio_base=precio_base_f,
                     aplica_iva=aplica_iva, clave_sat=clave_sat,
                     clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
         return templates.TemplateResponse(
@@ -459,6 +459,7 @@ async def crear_producto(
                                        unidad_medida, precio_base, aplica_iva,
                                        clave_sat, clave_unidad_sat, stock_minimo)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             """, (
                 nombre, codigo, descripcion or None,
                 int(categoria_id) if categoria_id else None,
@@ -476,7 +477,7 @@ async def crear_producto(
         vals = dict(nombre=nombre, codigo=codigo, descripcion=descripcion,
                     categoria_id=int(categoria_id) if categoria_id else None,
                     subcategoria_id=int(subcategoria_id) if subcategoria_id else None,
-                    unidad_medida=unidad_medida, precio_base=precio_base,
+                    unidad_medida=unidad_medida, precio_base=precio_base_f,
                     aplica_iva=aplica_iva, clave_sat=clave_sat,
                     clave_unidad_sat=clave_unidad_sat, stock_minimo=stock_minimo)
         return templates.TemplateResponse(
@@ -494,6 +495,43 @@ async def crear_producto(
         ip=request.client.host if request.client else None,
     )
     return RedirectResponse(f"/catalogos/productos/{new_id}", status_code=303)
+
+
+@router.get("/productos/generar-sku", response_class=JSONResponse)
+async def generar_sku_producto(
+    request: Request,
+    user=Depends(require_rol("Administrador", "Operador")),
+    categoria_id: str = "",
+    subcategoria_id: str = "",
+):
+    """Genera un SKU automático: 3 letras de categoría + 3 letras de subcategoría + número secuencial."""
+    if not categoria_id:
+        return JSONResponse({"sku": ""})
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT nombre FROM categorias WHERE id = %s", (int(categoria_id),))
+        row = cur.fetchone()
+        if not row:
+            return JSONResponse({"sku": ""})
+        prefix = row[0][:3].upper()
+        if subcategoria_id:
+            cur.execute("SELECT nombre FROM subcategorias WHERE id = %s", (int(subcategoria_id),))
+            sub_row = cur.fetchone()
+            prefix += sub_row[0][:3].upper() if sub_row else "GEN"
+        else:
+            prefix += "GEN"
+        cur.execute(
+            "SELECT codigo FROM productos WHERE codigo LIKE %s ORDER BY codigo DESC LIMIT 1",
+            (f"{prefix}%",)
+        )
+        ultimo = cur.fetchone()
+        if ultimo:
+            try:
+                num = int(ultimo[0][len(prefix):]) + 1
+            except Exception:
+                num = 1
+        else:
+            num = 1
+    return JSONResponse({"sku": f"{prefix}{num:04d}"})
 
 
 @router.get("/productos/{producto_id}", response_class=HTMLResponse)

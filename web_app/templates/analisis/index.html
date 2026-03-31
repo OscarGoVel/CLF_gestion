@@ -175,10 +175,7 @@ new Chart(document.getElementById('chart-meses'), {
             },
             {
                 label: 'Pagado',
-                data: mesesData.map(m => {
-                    // aproximación: pagadas/total * monto (no tenemos monto pagado por mes)
-                    return m.total > 0 ? m.monto * m.pagadas / m.total : 0;
-                }),
+                data: mesesData.map(m => m.monto_pagado),
                 backgroundColor: 'rgba(59,130,246,0.7)',
                 borderColor: '#3b82f6',
                 borderWidth: 0,

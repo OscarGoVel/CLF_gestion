@@ -1,6 +1,6 @@
-2026-03-30 10:33:24 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 10:33:24 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 10:33:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 12:08:18 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 12:08:18 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 12:14:40 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -10,7 +10,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:33:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 12:14:53 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -20,7 +20,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:33:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 12:15:11 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -30,7 +30,13 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:33:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 12:19:25 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 12:19:25 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 12:21:09 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 12:21:09 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:21:06 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:21:06 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:21:42 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -40,7 +46,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:34:14 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:22:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -50,7 +56,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:34:14 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:23:29 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:23:30 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:23:42 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -60,7 +68,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:40:22 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:23:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -70,7 +78,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:40:22 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:23:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -80,7 +88,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:40:35 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:24:06 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -90,7 +98,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:41:02 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:24:21 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -100,7 +108,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:41:02 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:24:35 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -110,7 +118,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:41:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:25:08 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:25:08 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:25:18 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -120,7 +130,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:41:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:29:22 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:29:22 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:29:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -130,9 +142,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:42:10 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 10:42:10 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 10:42:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:30:02 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -142,7 +152,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:42:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:30:10 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -152,7 +162,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:42:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:30:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -162,7 +172,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:42:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:30:54 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -172,7 +182,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:43:00 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:31:29 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -182,7 +192,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:43:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:37:37 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:37:38 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:38:02 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -192,7 +204,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:43:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:38:15 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -202,9 +214,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:44:52 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 10:44:52 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 10:45:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:38:21 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -214,7 +224,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:38:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -224,7 +234,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:38:34 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -234,7 +244,11 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:42:57 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:42:58 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:43:15 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:43:15 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:43:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -244,7 +258,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:35 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:43:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -254,7 +268,17 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:44 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 13:43:29 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:43:29 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:44:17 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:44:17 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 13:45:03 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 13:45:03 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 14:19:55 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 14:19:55 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 15:55:24 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 15:55:24 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 15:55:42 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -264,7 +288,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:44 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:55:42 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -274,7 +298,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:55:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -284,7 +308,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:45:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:55:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -294,7 +318,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:46:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:56:09 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -304,7 +328,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:46:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:56:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -314,7 +338,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:46:24 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:56:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -324,7 +348,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:47:01 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:56:32 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -334,7 +358,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:47:01 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:56:32 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -344,7 +368,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:47:18 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:58:29 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -354,7 +378,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:47:33 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 15:58:29 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -364,7 +388,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:47:33 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:11:55 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:11:56 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:12:07 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -374,11 +400,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:48:26 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 10:48:26 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 10:48:35 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 10:48:35 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 10:48:54 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:12:07 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -388,7 +410,11 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:48:54 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:13:18 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:13:18 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:18:26 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:18:27 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:18:51 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -398,7 +424,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:03 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:18:51 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -408,7 +434,12 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:03 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:38:20 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:38:20 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:38:20 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:38:20 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:38:20 | INFO     | clf.startup | Servidor detenido. Pools cerrados.
+2026-03-27 16:38:31 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -418,7 +449,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:27 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:38:31 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -428,7 +459,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:27 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:38:40 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -438,7 +469,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:39 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:38:59 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -448,7 +479,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:49:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:38:59 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -458,7 +489,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:50:20 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:43:27 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 16:43:27 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 16:43:47 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -468,7 +501,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:50:34 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 16:43:47 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -478,7 +511,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:50:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:17:25 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 17:17:25 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 17:17:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -488,7 +523,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:50:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:17:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -498,7 +533,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 10:52:33 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:18:19 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -508,11 +543,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 12:18:05 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 12:18:05 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 12:19:25 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 12:19:26 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 12:20:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:18:19 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -522,7 +553,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 12:20:57 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:18:31 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -532,7 +563,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 12:21:29 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:18:31 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -542,9 +573,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:28:59 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 14:28:59 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 14:30:45 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:06 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 17:31:06 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 17:31:18 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -554,7 +585,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:30:45 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:18 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -564,7 +595,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:30:53 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:25 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -574,7 +605,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:30:53 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:25 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -584,7 +615,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:30:59 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:38 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -594,7 +625,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:30:59 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:38 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -604,7 +635,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:48 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -614,7 +645,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:31:48 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -624,7 +655,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:22 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:03 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -634,7 +665,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:22 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:03 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -644,7 +675,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:37 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:08 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -654,7 +685,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:37 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:08 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -664,7 +695,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:46 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:34 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -674,7 +705,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:31:46 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:32:34 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -684,7 +715,9 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:45:38 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-03-27 17:45:38 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-03-27 17:45:54 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
@@ -694,308 +727,7 @@ Traceback (most recent call last):
     self._sock.shutdown(socket.SHUT_RDWR)
     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:04 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:23 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:23 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:30 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:30 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:32:49 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:35:11 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 14:35:11 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 14:35:32 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:41:57 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 14:41:57 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 14:42:15 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:42:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 14:42:26 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:34:19 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 17:34:31 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 17:36:57 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 17:39:02 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 17:39:02 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 17:39:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:39:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:39:28 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:39:28 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:39:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:39:41 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:01 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:01 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:16 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:23 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:46 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:46 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:53 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:40:53 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:48:36 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-03-30 17:48:36 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-03-30 17:48:44 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:48:44 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:50:35 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
-handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
-Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
-    self._context.run(self._callback, *self._args)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
-    self._sock.shutdown(socket.SHUT_RDWR)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [WinError 10054] Se ha forzado la interrupción de una conexión existente por el host remoto
-2026-03-30 17:50:35 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+2026-03-27 17:45:54 | ERROR    | asyncio | Exception in callback _ProactorBasePipeTransport._call_connection_lost()
 handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
 Traceback (most recent call last):
   File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run

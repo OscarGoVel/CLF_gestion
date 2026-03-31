@@ -1314,7 +1314,7 @@ class SeccionFacturacion:
                         completada  = 1,
                         referencia  = excluded.referencia,
                         fecha_etapa = excluded.fecha_etapa,
-                        notas       = COALESCE(excluded.notas, notas)
+                        notas       = COALESCE(excluded.notas, seguimiento_etapas.notas)
                 """, (cot_id, uuid, fecha_etapa,
                       'Vinculado automáticamente desde XML' if auto else None))
 
@@ -1322,9 +1322,9 @@ class SeccionFacturacion:
                 self.cursor.execute("""
                     UPDATE cotizaciones
                     SET numero_factura = ?,
-                        fecha_factura  = COALESCE(NULLIF(?, ''), fecha_factura)
+                        fecha_factura  = COALESCE(?, fecha_factura)
                     WHERE id = ?
-                """, (uuid, fecha_etapa, cot_id))
+                """, (uuid, fecha_etapa or None, cot_id))
 
             self.conn.commit()
 

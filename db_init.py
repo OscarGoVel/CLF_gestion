@@ -429,6 +429,42 @@ def inicializar_bd(db_path):
         )
     ''')
 
+    # ── Estudios de mercado ───────────────────────────────────────────────────────
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS estudios_mercado (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre         TEXT NOT NULL,
+            fecha          TEXT NOT NULL,
+            descripcion    TEXT,
+            estado         TEXT DEFAULT 'abierto',
+            fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS estudio_mercado_items (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            estudio_id      INTEGER NOT NULL,
+            producto_id     INTEGER,
+            nombre_articulo TEXT NOT NULL,
+            cantidad        REAL DEFAULT 1,
+            unidad          TEXT,
+            FOREIGN KEY (estudio_id)  REFERENCES estudios_mercado(id) ON DELETE CASCADE,
+            FOREIGN KEY (producto_id) REFERENCES productos(id)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS estudio_mercado_cotizaciones (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id          INTEGER NOT NULL,
+            proveedor_id     INTEGER,
+            nombre_proveedor TEXT NOT NULL,
+            precio_unitario  REAL NOT NULL,
+            notas            TEXT,
+            FOREIGN KEY (item_id)      REFERENCES estudio_mercado_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+        )
+    ''')
+
     # ── Migraciones columnas faltantes ───────────────────────────────────────────
     for tabla, cols in [
         ('cotizaciones',       [('aplica_iva',       'INTEGER DEFAULT 0')]),

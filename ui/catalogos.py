@@ -2407,7 +2407,7 @@ class Catalogos:
         tk.Label(
             frame_info,
             text="Revisa y ajusta las cantidades antes de exportar. "
-                 "Solo se exportarán filas con cantidad a comprar > 0.",
+                 "Usa la columna PDF (☑/☐) para elegir qué productos se imprimen.",
             font=('Arial', 9), bg='#16a085', fg='#d5f5ef'
         ).pack()
 
@@ -2415,17 +2415,18 @@ class Catalogos:
         frame_tabla = tk.Frame(ventana)
         frame_tabla.pack(fill='both', expand=True, padx=10, pady=8)
 
-        cols = ('_key', 'Cotización', 'O.C.', 'Producto', 'Unidad',
+        cols = ('_key', 'PDF', 'Cotización', 'O.C.', 'Producto', 'Unidad',
                 'Stock\nActual', 'Pendiente\nEntregar', 'Faltante\nStock',
                 'A Comprar\n(editable)', 'Costo Máx.', 'Subtotal Est.',
                 'Proveedor Principal')
         tree = ttk.Treeview(frame_tabla, columns=cols, show='headings', selectmode='browse')
 
-        anchos = [0, 110, 100, 220, 60, 75, 90, 80, 100, 95, 95, 140]
+        anchos = [0, 42, 110, 100, 220, 60, 75, 90, 80, 100, 95, 95, 140]
         for col, ancho in zip(cols, anchos):
             tree.heading(col, text=col)
             tree.column(col, width=ancho, minwidth=ancho)
         tree.column('_key', stretch=False, width=0)
+        tree.column('PDF',  stretch=False, anchor='center')
 
         scroll_y = ttk.Scrollbar(frame_tabla, orient='vertical', command=tree.yview)
         scroll_x = ttk.Scrollbar(frame_tabla, orient='horizontal', command=tree.xview)
@@ -2436,9 +2437,10 @@ class Catalogos:
         frame_tabla.grid_rowconfigure(0, weight=1)
         frame_tabla.grid_columnconfigure(0, weight=1)
 
-        # Colores por estado de stock
-        tree.tag_configure('faltante', background='#fde8e8')
-        tree.tag_configure('ok',       background='#eafaf1')
+        # Colores por estado de stock / inclusión en PDF
+        tree.tag_configure('faltante',  background='#fde8e8')
+        tree.tag_configure('ok',        background='#eafaf1')
+        tree.tag_configure('excluido',  background='#e5e7eb', foreground='#9ca3af')
 
         # Almacenamos datos en dict para edición  key = (cot_id, pid)
         datos_filas = {}
@@ -2456,6 +2458,7 @@ class Catalogos:
 
             iid = tree.insert('', 'end', tags=(tag,), values=(
                 key_str,
+                '☑',
                 folio,
                 oc_txt,
                 nombre,
@@ -2483,6 +2486,8 @@ class Catalogos:
                 'a_comprar': a_comprar,
                 'costo_max': costo_max,
                 'proveedor': proveedor or '',
+                'incluir':   True,
+                '_tag_base': tag,
             }
 
         # Totales en pie de tabla
@@ -2496,15 +2501,38 @@ class Catalogos:
         )
         lbl_total_est.pack(side='right', padx=15)
 
+        lbl_conteo = tk.Label(
+            frame_totales,
+            text="",
+            font=('Arial', 9), bg='#f1f5f9', fg='#6b7280'
+        )
+        lbl_conteo.pack(side='right', padx=15)
+
         def recalcular_total():
-            total = sum(
-                d['a_comprar'] * d['costo_max']
-                for d in datos_filas.values()
-                if d['a_comprar'] > 0
-            )
+            incluidos = [d for d in datos_filas.values() if d['incluir'] and d['a_comprar'] > 0]
+            total = sum(d['a_comprar'] * d['costo_max'] for d in incluidos)
             lbl_total_est.config(text=f"Total estimado: ${total:,.2f}")
+            total_filas = len(datos_filas)
+            inc = sum(1 for d in datos_filas.values() if d['incluir'])
+            lbl_conteo.config(text=f"{inc} de {total_filas} productos en PDF")
 
         recalcular_total()
+
+        # ── Toggle incluir/excluir al hacer clic en columna PDF ────────────
+        def _toggle_incluir(event):
+            col = tree.identify_column(event.x)
+            iid = tree.identify_row(event.y)
+            if not iid or col != '#2':   # '#2' = columna PDF
+                return
+            d = datos_filas[iid]
+            d['incluir'] = not d['incluir']
+            vals = list(tree.item(iid)['values'])
+            vals[1] = '☑' if d['incluir'] else '☐'
+            tag = d['_tag_base'] if d['incluir'] else 'excluido'
+            tree.item(iid, values=vals, tags=(tag,))
+            recalcular_total()
+
+        tree.bind('<ButtonRelease-1>', _toggle_incluir)
 
         # ── Edición de cantidad a comprar ──────────────────────────────────
         def editar_a_comprar(event=None):
@@ -2533,8 +2561,8 @@ class Catalogos:
             subtotal = nueva * d['costo_max']
 
             vals = list(tree.item(iid)['values'])
-            vals[8]  = f"{nueva:.2f}"
-            vals[10] = f"${subtotal:,.2f}"
+            vals[9]  = f"{nueva:.2f}"
+            vals[11] = f"${subtotal:,.2f}"
             tree.item(iid, values=vals)
             recalcular_total()
 
@@ -2558,13 +2586,36 @@ class Catalogos:
             cursor='hand2', padx=12, pady=6
         ).pack(side='left', padx=5)
 
+        tk.Button(
+            frame_btn, text="☑ Todos",
+            command=lambda: _marcar_todos(True),
+            bg='#374151', fg='white', font=('Arial', 9, 'bold'),
+            cursor='hand2', padx=10, pady=6
+        ).pack(side='left', padx=5)
+
+        tk.Button(
+            frame_btn, text="☐ Ninguno",
+            command=lambda: _marcar_todos(False),
+            bg='#374151', fg='white', font=('Arial', 9, 'bold'),
+            cursor='hand2', padx=10, pady=6
+        ).pack(side='left', padx=5)
+
         def _restablecer_todo():
             for iid, d in datos_filas.items():
                 d['a_comprar'] = d['faltante']
                 vals = list(tree.item(iid)['values'])
-                vals[8]  = f"{d['faltante']:.2f}"
-                vals[10] = f"${d['faltante'] * d['costo_max']:,.2f}"
+                vals[9]  = f"{d['faltante']:.2f}"
+                vals[11] = f"${d['faltante'] * d['costo_max']:,.2f}"
                 tree.item(iid, values=vals)
+            recalcular_total()
+
+        def _marcar_todos(incluir: bool):
+            for iid, d in datos_filas.items():
+                d['incluir'] = incluir
+                vals = list(tree.item(iid)['values'])
+                vals[1] = '☑' if incluir else '☐'
+                tag = d['_tag_base'] if incluir else 'excluido'
+                tree.item(iid, values=vals, tags=(tag,))
             recalcular_total()
 
         tk.Button(
@@ -2590,13 +2641,15 @@ class Catalogos:
 
         def _exportar_pdf(modo='presupuesto'):
             productos_pdf = [
-                d for d in datos_filas.values() if d['a_comprar'] > 0
+                d for d in datos_filas.values() if d['incluir'] and d['a_comprar'] > 0
             ]
             if not productos_pdf:
                 messagebox.showwarning(
                     "Sin productos",
-                    "Todas las cantidades a comprar son 0.\n"
-                    "Ajusta al menos una cantidad antes de exportar.",
+                    "No hay productos para exportar.\n\n"
+                    "Verifica que:\n"
+                    "• Al menos un producto tenga ☑ marcado en la columna PDF.\n"
+                    "• La cantidad a comprar sea mayor a 0.",
                     parent=ventana
                 )
                 return

@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from web_app.database import get_pool_empresa
+from web_app.database import get_pool_empresa, get_empresas
 from web_app.dependencies import get_usuario_actual
 from web_app.cfdi import parsear_cfdi_bytes
 
@@ -205,6 +205,13 @@ async def importar_xml(request: Request, archivo: UploadFile = File(...)):
 
     uuid = datos["uuid"]
 
+    # Detectar tipo automáticamente: si la empresa activa es el receptor → Egreso
+    empresa_cfg = next((e for e in get_empresas() if e["id"] == user.get("empresa_id")), None)
+    rfc_empresa = (empresa_cfg.get("rfc") or "").upper().strip() if empresa_cfg else ""
+    rfc_receptor = (datos.get("rfc_receptor") or "").upper().strip()
+    if rfc_empresa and rfc_receptor == rfc_empresa:
+        datos["tipo"] = "E"
+
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         # Verificar duplicado
         cur.execute("SELECT id FROM facturas WHERE uuid = %s", (uuid,))
@@ -333,6 +340,26 @@ async def vincular_cotizacion(
 # ─────────────────────────────────────────────────────────────────────────────
 # DESVINCULAR COTIZACIÓN
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CAMBIAR TIPO
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/{factura_id}/tipo", response_class=HTMLResponse)
+async def cambiar_tipo(
+    request: Request,
+    factura_id: int,
+    tipo: str = Form(""),
+):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if tipo not in TIPO_LABEL:
+        raise HTTPException(status_code=400, detail="Tipo inválido")
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("UPDATE facturas SET tipo=%s WHERE id=%s", (tipo, factura_id))
+    return RedirectResponse(f"/facturas/{factura_id}", status_code=303)
+
 
 @router.delete("/{factura_id}/vincular/{cotizacion_id}", response_class=HTMLResponse)
 async def desvincular_cotizacion(

@@ -2,7 +2,8 @@
 {% for c in clientes %}
 {% set bg, fg = tipo_color.get(c.tipo, ('bg-gray-100','text-gray-500')) %}
 <tr class="hover:bg-slate-50 transition-colors cursor-pointer"
-    onclick="window.location='/catalogos/clientes/{{ c.id }}'">
+    onclick="window.location='/catalogos/clientes/{{ c.id }}'"
+    ondblclick="event.stopPropagation(); window.location='/catalogos/clientes/{{ c.id }}/editar'">
     <td class="px-4 py-3">
         <p class="text-sm font-semibold text-gray-800">{{ c.nombre_comercial }}</p>
         {% if c.razon_social and c.razon_social != c.nombre_comercial %}

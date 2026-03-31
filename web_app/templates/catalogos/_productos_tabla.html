@@ -1,7 +1,8 @@
 <tbody id="productos-body" class="divide-y divide-gray-100">
 {% for p in productos %}
 <tr class="hover:bg-slate-50 transition-colors cursor-pointer"
-    onclick="window.location='/catalogos/productos/{{ p.id }}'">
+    onclick="window.location='/catalogos/productos/{{ p.id }}'"
+    ondblclick="event.stopPropagation(); window.location='/catalogos/productos/{{ p.id }}/editar'">
     <td class="px-4 py-3">
         <p class="text-sm font-semibold text-gray-800">{{ p.nombre }}</p>
         {% if p.categoria %}

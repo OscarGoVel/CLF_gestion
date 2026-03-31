@@ -28,7 +28,31 @@
                             {% else %}bg-gray-100 text-gray-500{% endif %}">
                             {{ t }}
                         </span>
+                        <button onclick="document.getElementById('form-tipo').classList.toggle('hidden')"
+                                class="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Cambiar tipo">✏</button>
                     </div>
+                    <!-- Formulario cambiar tipo (oculto por defecto) -->
+                    <form id="form-tipo" method="POST" action="/facturas/{{ factura.id }}/tipo"
+                          class="hidden flex items-center gap-2 mt-1">
+                        <select name="tipo"
+                                class="px-2 py-1 text-xs border border-gray-200 rounded-lg bg-gray-50
+                                       focus:outline-none focus:ring-2 focus:ring-clf-green">
+                            {% for code, label in tipo_label.items() %}
+                            <option value="{{ code }}" {% if code == factura.tipo %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit"
+                                class="px-3 py-1 bg-clf-green text-white text-xs font-semibold rounded-lg
+                                       hover:bg-clf-green/90 transition-colors">
+                            Guardar
+                        </button>
+                        <button type="button"
+                                onclick="document.getElementById('form-tipo').classList.add('hidden')"
+                                class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+                            Cancelar
+                        </button>
+                    </form>
                     <p class="text-xs text-gray-400 font-mono">UUID: {{ factura.uuid }}</p>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">

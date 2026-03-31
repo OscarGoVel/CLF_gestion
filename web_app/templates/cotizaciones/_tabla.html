@@ -11,7 +11,8 @@
     hx-swap="innerHTML"
     hx-trigger="click[window.innerWidth >= 1024]"
     onclick="if(window.innerWidth < 1024) window.location='/cotizaciones/{{ c.id }}'"
-    hx-indicator=".htmx-indicator">
+    hx-indicator=".htmx-indicator"
+    ondblclick="event.stopPropagation(); window.location='/cotizaciones/{{ c.id }}/editar'">
     <td class="px-4 py-3 font-mono text-sm font-semibold text-navy-700 whitespace-nowrap">
         {{ c.folio }}
     </td>

@@ -59,7 +59,7 @@ async def dashboard_analisis(request: Request):
             "por_cobrar":    _f(r[4]),
             "num_pagadas":   r[5],
             "num_canceladas":r[6],
-            "tasa_cobro":    round(r[5] / r[0] * 100, 1) if r[0] else 0,
+            "tasa_cobro":    round(_f(r[2]) / _f(r[1]) * 100, 1) if r[1] else 0,
         }
 
         # ── Tendencia mensual (últimos 12 meses) ─────────────────────────
@@ -69,7 +69,8 @@ async def dashboard_analisis(request: Request):
                 DATE_TRUNC('month', fecha)                    AS mes_ord,
                 COUNT(*)                                      AS total,
                 COALESCE(SUM(total), 0)                       AS monto,
-                COUNT(*) FILTER (WHERE estado='Pagada')       AS pagadas
+                COUNT(*) FILTER (WHERE estado='Pagada')       AS pagadas,
+                COALESCE(SUM(total) FILTER (WHERE estado='Pagada'), 0) AS monto_pagado
             FROM cotizaciones
             WHERE fecha >= NOW() - INTERVAL '12 months'
             GROUP BY mes_ord, mes_label
@@ -77,7 +78,8 @@ async def dashboard_analisis(request: Request):
         """)
         meses_raw = cur.fetchall()
         meses = [
-            {"label": r[0], "total": r[2], "monto": _f(r[3]), "pagadas": r[4]}
+            {"label": r[0], "total": r[2], "monto": _f(r[3]),
+             "pagadas": r[4], "monto_pagado": _f(r[5])}
             for r in meses_raw
         ]
 
@@ -121,7 +123,7 @@ async def dashboard_analisis(request: Request):
         cur.execute("""
             SELECT p.nombre,
                    COUNT(cd.id)                          AS apariciones,
-                   COALESCE(SUM(cd.cantidad * cd.precio_unitario), 0) AS monto
+                   COALESCE(SUM(cd.total), 0) AS monto
             FROM productos p
             JOIN cotizacion_detalle cd ON cd.producto_id = p.id
             JOIN cotizaciones cot ON cot.id = cd.cotizacion_id

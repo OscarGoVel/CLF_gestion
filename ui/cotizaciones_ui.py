@@ -2326,7 +2326,7 @@ class CotizacionesUI:
                     ON CONFLICT(cotizacion_id, etapa) DO UPDATE SET
                         completada  = excluded.completada,
                         fecha_etapa = COALESCE(excluded.fecha_etapa, fecha_etapa),
-                        notas       = COALESCE(excluded.notas, notas)
+                        notas       = COALESCE(excluded.notas, seguimiento_etapas.notas)
                 """, (cotizacion_id,
                       1 if nuevo_estado == 'Pagada' else 0,
                       fecha,
@@ -3066,7 +3066,7 @@ class CotizacionesUI:
                     self.cursor.execute("""
                         UPDATE cotizaciones
                         SET orden_compra = ?,
-                            fecha_orden_compra = COALESCE(NULLIF(?, ''), fecha_orden_compra)
+                            fecha_orden_compra = COALESCE(?, fecha_orden_compra)
                         WHERE id = ?
                     """, (ref, fecha or None, cot_id))
 
@@ -3075,7 +3075,7 @@ class CotizacionesUI:
                     self.cursor.execute("""
                         UPDATE cotizaciones
                         SET numero_factura = ?,
-                            fecha_factura = COALESCE(NULLIF(?, ''), fecha_factura)
+                            fecha_factura = COALESCE(?, fecha_factura)
                         WHERE id = ?
                     """, (ref, fecha or None, cot_id))
 

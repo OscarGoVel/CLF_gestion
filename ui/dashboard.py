@@ -244,7 +244,7 @@ class Dashboard:
 
         ctrl_est = tk.Frame(frame_estado, bg=self.C['content_bg'])
         ctrl_est.pack(fill='x', padx=8, pady=(4, 0))
-        tk.Label(ctrl_est, text='Entregadas — período:',
+        tk.Label(ctrl_est, text='Período:',
                  font=('Arial', 8), bg=self.C['content_bg'],
                  fg=self.C['text_muted']).pack(side='left', padx=(0, 4))
         self._estado_periodo = ttk.Combobox(ctrl_est, values=[
@@ -458,14 +458,9 @@ class Dashboard:
             _desde = '2000-01-01'
         self.cursor.execute("""
             SELECT estado, COUNT(*) FROM cotizaciones
-            WHERE estado != 'Entregada' GROUP BY estado
-        """)
-        conteos = dict(self.cursor.fetchall())
-        self.cursor.execute("""
-            SELECT COUNT(*) FROM cotizaciones
-            WHERE estado = 'Entregada' AND fecha >= ?
+            WHERE fecha >= ? GROUP BY estado
         """, (_desde,))
-        conteos['Entregada'] = self.cursor.fetchone()[0]
+        conteos = dict(self.cursor.fetchall())
         for estado, lbl in self._estado_labels.items():
             lbl.config(text=str(conteos.get(estado, 0)))
 
@@ -475,20 +470,11 @@ class Dashboard:
             SELECT
                 c.folio,
                 c.total AS venta,
-                COALESCE((
-                    SELECT SUM(cd2.cantidad * (
-                        SELECT cp2.costo_unitario
-                        FROM compra_detalle cp2
-                        JOIN compras comp ON comp.id = cp2.compra_id
-                        WHERE cp2.producto_id = cd2.producto_id
-                        ORDER BY comp.fecha_compra DESC
-                        LIMIT 1
-                    ))
-                    FROM cotizacion_detalle cd2
-                    WHERE cd2.cotizacion_id = c.id
-                ), 0) AS costo_est
+                COALESCE(SUM(cd.costo_snapshot * cd.cantidad), 0) AS costo_est
             FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
             WHERE c.estado IN ('Entregada', 'Facturada', 'Pagada')
+            GROUP BY c.id, c.folio, c.total, c.fecha
             ORDER BY c.fecha DESC
             LIMIT 8
         """)
@@ -687,16 +673,9 @@ class Dashboard:
         # ── Utilidad Esperada = Venta - Costo Presupuestado ───────────────────
         u_esperada = monto_entregado - costo_presupuestado
 
-        # ── Costo Directo Real (último costo de compra × cantidad entregada) ──
+        # ── Costo Directo Real (costo al momento de cotizar × cantidad) ──────
         self.cursor.execute(f"""
-            SELECT COALESCE(SUM(cd.cantidad * (
-                SELECT cp2.costo_unitario
-                FROM compra_detalle cp2
-                JOIN compras comp ON comp.id = cp2.compra_id
-                WHERE cp2.producto_id = cd.producto_id
-                ORDER BY comp.fecha_compra DESC
-                LIMIT 1
-            )), 0)
+            SELECT COALESCE(SUM(cd.costo_snapshot * cd.cantidad), 0)
             FROM cotizacion_detalle cd
             JOIN cotizaciones c ON c.id = cd.cotizacion_id
             WHERE c.estado IN ({_placeholders})
