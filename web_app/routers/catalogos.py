@@ -395,11 +395,17 @@ async def lista_productos(
     )
 
 
+def _asegurar_col_codigo_barras(empresa_db: str) -> None:
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("ALTER TABLE productos ADD COLUMN IF NOT EXISTS codigo_barras TEXT")
+
+
 @router.get("/productos/nuevo", response_class=HTMLResponse)
 async def nuevo_producto_form(
     request: Request,
     user=Depends(require_rol("Administrador", "Operador")),
 ):
+    _asegurar_col_codigo_barras(user["empresa_db"])
     return templates.TemplateResponse(
         request=request,
         name="catalogos/producto_form.html",
@@ -423,6 +429,7 @@ async def crear_producto(
     clave_sat: str = Form(""),
     clave_unidad_sat: str = Form(""),
     stock_minimo: str = Form("0"),
+    codigo_barras: str = Form(""),
 ):
     nombre = nombre.strip()
     codigo = codigo.strip().upper()
@@ -457,8 +464,8 @@ async def crear_producto(
             cur.execute("""
                 INSERT INTO productos (nombre, codigo, descripcion, categoria_id, subcategoria_id,
                                        unidad_medida, precio_base, aplica_iva,
-                                       clave_sat, clave_unidad_sat, stock_minimo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                       clave_sat, clave_unidad_sat, stock_minimo, codigo_barras)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (
                 nombre, codigo, descripcion or None,
@@ -468,6 +475,7 @@ async def crear_producto(
                 1 if aplica_iva == "1" else 0,
                 clave_sat or None, clave_unidad_sat or None,
                 float(stock_minimo or 0),
+                codigo_barras.strip() or None,
             ))
             new_id = cur.fetchone()[0]
     except Exception as e:
@@ -562,8 +570,17 @@ async def detalle_producto(request: Request, producto_id: int):
             WHERE producto_id = %s
             ORDER BY fecha DESC LIMIT 10
         """, (producto_id,))
+        from datetime import datetime as _dt
         hcols     = [d[0] for d in cur.description]
-        historial = [_floats(dict(zip(hcols, r))) for r in cur.fetchall()]
+        historial = []
+        for r in cur.fetchall():
+            h = _floats(dict(zip(hcols, r)))
+            if isinstance(h.get("fecha"), str):
+                try:
+                    h["fecha"] = _dt.fromisoformat(h["fecha"])
+                except (ValueError, TypeError):
+                    h["fecha"] = None
+            historial.append(h)
 
         # Proveedores vinculados
         cur.execute("""
@@ -597,6 +614,229 @@ async def detalle_producto(request: Request, producto_id: int):
             "uso_cots": uso_cots, "estado_color": ESTADO_COLOR,
             "seccion": "productos",
         },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACTUALIZAR PRECIO
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/productos/{producto_id}/precio", response_class=HTMLResponse)
+async def actualizar_precio(
+    request: Request,
+    producto_id: int,
+    precio_nuevo: float = Form(...),
+    motivo: str = Form(""),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    from datetime import date as _date
+    if precio_nuevo < 0:
+        raise HTTPException(400, "El precio no puede ser negativo.")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT precio_base, nombre FROM productos WHERE id = %s", (producto_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Producto no encontrado")
+        precio_actual, nombre = float(row[0] or 0), row[1]
+
+        if abs(precio_nuevo - precio_actual) > 0.001:
+            cur.execute("UPDATE productos SET precio_base = %s WHERE id = %s",
+                        (precio_nuevo, producto_id))
+            cur.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente)
+                VALUES (%s, %s, %s, %s, 'manual')
+            """, (producto_id, precio_nuevo,
+                  _date.today().isoformat(),
+                  motivo.strip() or "Actualización manual"))
+            cambio = True
+        else:
+            cambio = False
+
+        # Devolver historial actualizado como fragment HTMX
+        cur.execute("""
+            SELECT id, precio, fecha, motivo, fuente
+            FROM producto_precio_historial
+            WHERE producto_id = %s
+            ORDER BY fecha DESC, fecha_registro DESC
+        """, (producto_id,))
+        from datetime import datetime as _dt
+        hcols = [d[0] for d in cur.description]
+        historial = []
+        for r in cur.fetchall():
+            h = _floats(dict(zip(hcols, r)))
+            if isinstance(h.get("fecha"), str):
+                try:
+                    h["fecha"] = _dt.fromisoformat(h["fecha"])
+                except (ValueError, TypeError):
+                    h["fecha"] = None
+            historial.append(h)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_historial_completo.html",
+        context={
+            "user": user,
+            "historial": historial,
+            "producto_id": producto_id,
+            "precio_actual": precio_nuevo if cambio else precio_actual,
+            "toast": f"Precio actualizado a ${precio_nuevo:,.2f}" if cambio else "Sin cambios (precio idéntico)",
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HISTORIAL COMPLETO (fragment HTMX)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/productos/{producto_id}/historial", response_class=HTMLResponse)
+async def historial_precios(
+    request: Request,
+    producto_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    from datetime import datetime as _dt
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, precio, fecha, motivo, fuente
+            FROM producto_precio_historial
+            WHERE producto_id = %s
+            ORDER BY fecha DESC, fecha_registro DESC
+        """, (producto_id,))
+        hcols = [d[0] for d in cur.description]
+        historial = []
+        for r in cur.fetchall():
+            h = _floats(dict(zip(hcols, r)))
+            if isinstance(h.get("fecha"), str):
+                try:
+                    h["fecha"] = _dt.fromisoformat(h["fecha"])
+                except (ValueError, TypeError):
+                    h["fecha"] = None
+            historial.append(h)
+
+        cur.execute("SELECT precio_base FROM productos WHERE id = %s", (producto_id,))
+        row = cur.fetchone()
+        precio_actual = float(row[0] or 0) if row else 0.0
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_historial_completo.html",
+        context={
+            "user": user,
+            "historial": historial,
+            "producto_id": producto_id,
+            "precio_actual": precio_actual,
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGREGAR REGISTRO MANUAL AL HISTORIAL
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/productos/{producto_id}/historial", response_class=HTMLResponse)
+async def agregar_historial_manual(
+    request: Request,
+    producto_id: int,
+    precio: float = Form(...),
+    fecha: str = Form(...),
+    motivo: str = Form(""),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    from datetime import datetime as _dt
+    if precio < 0:
+        raise HTTPException(400, "El precio no puede ser negativo.")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            INSERT INTO producto_precio_historial
+                (producto_id, precio, fecha, motivo, fuente)
+            VALUES (%s, %s, %s, %s, 'manual')
+        """, (producto_id, precio, fecha, motivo.strip() or "Registro manual"))
+
+        cur.execute("""
+            SELECT id, precio, fecha, motivo, fuente
+            FROM producto_precio_historial
+            WHERE producto_id = %s
+            ORDER BY fecha DESC, fecha_registro DESC
+        """, (producto_id,))
+        hcols = [d[0] for d in cur.description]
+        historial = []
+        for r in cur.fetchall():
+            h = _floats(dict(zip(hcols, r)))
+            if isinstance(h.get("fecha"), str):
+                try:
+                    h["fecha"] = _dt.fromisoformat(h["fecha"])
+                except (ValueError, TypeError):
+                    h["fecha"] = None
+            historial.append(h)
+
+        cur.execute("SELECT precio_base FROM productos WHERE id = %s", (producto_id,))
+        row = cur.fetchone()
+        precio_actual = float(row[0] or 0) if row else 0.0
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_historial_completo.html",
+        context={
+            "user": user,
+            "historial": historial,
+            "producto_id": producto_id,
+            "precio_actual": precio_actual,
+            "toast": "Registro agregado al historial.",
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EDITAR MOTIVO DE UN REGISTRO
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/historial/{hid}/editar-motivo", response_class=HTMLResponse)
+async def editar_motivo_form(
+    request: Request,
+    hid: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT motivo FROM producto_precio_historial WHERE id = %s", (hid,))
+        row = cur.fetchone()
+        motivo_actual = row[0] or "" if row else ""
+
+    return HTMLResponse(f"""
+        <form hx-post="/catalogos/historial/{hid}/motivo" hx-target="this" hx-swap="outerHTML"
+              class="flex gap-1 items-center">
+            <input type="text" name="motivo" value="{motivo_actual}"
+                   autofocus
+                   class="px-2 py-0.5 text-xs border border-clf-green rounded focus:outline-none w-40">
+            <button type="submit" class="text-xs text-clf-green font-bold hover:underline">✓</button>
+        </form>
+    """)
+
+
+@router.post("/historial/{hid}/motivo", response_class=HTMLResponse)
+async def editar_motivo_historial(
+    request: Request,
+    hid: int,
+    motivo: str = Form(...),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "UPDATE producto_precio_historial SET motivo = %s WHERE id = %s RETURNING producto_id",
+            (motivo.strip(), hid)
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404)
+
+    return HTMLResponse(
+        f'<span class="text-xs text-gray-500 italic" '
+        f'hx-post="/catalogos/historial/{hid}/motivo" '
+        f'hx-trigger="dblclick" hx-swap="outerHTML" '
+        f'hx-vals=\'{{\"motivo\": \"{motivo.strip()}\"}}\'>'
+        f'{motivo.strip() or "—"}</span>'
     )
 
 
@@ -641,6 +881,7 @@ async def guardar_producto(
     clave_sat: str = Form(""),
     clave_unidad_sat: str = Form(""),
     stock_minimo: str = Form("0"),
+    codigo_barras: str = Form(""),
 ):
     nombre = nombre.strip()
     codigo = codigo.strip().upper()
@@ -677,7 +918,8 @@ async def guardar_producto(
                     nombre = %s, codigo = %s, descripcion = %s,
                     categoria_id = %s, subcategoria_id = %s,
                     unidad_medida = %s, precio_base = %s, aplica_iva = %s,
-                    clave_sat = %s, clave_unidad_sat = %s, stock_minimo = %s
+                    clave_sat = %s, clave_unidad_sat = %s, stock_minimo = %s,
+                    codigo_barras = %s
                 WHERE id = %s
             """, (
                 nombre, codigo, descripcion or None,
@@ -687,6 +929,7 @@ async def guardar_producto(
                 1 if aplica_iva == "1" else 0,
                 clave_sat or None, clave_unidad_sat or None,
                 float(stock_minimo or 0),
+                codigo_barras.strip() or None,
                 producto_id,
             ))
     except Exception as e:

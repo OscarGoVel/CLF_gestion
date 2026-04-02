@@ -18,6 +18,10 @@
         <div class="px-6 py-5">
             <div class="flex items-start justify-between gap-4 mb-5">
                 <div>
+                    <a href="/facturas"
+                       class="text-xs text-gray-400 hover:text-navy-600 transition-colors mb-2 inline-block">
+                        ← Volver a facturas
+                    </a>
                     <div class="flex items-center gap-3 mb-1">
                         <h2 class="text-2xl font-bold text-navy-700">Factura {{ folio_display or '(sin folio)' }}</h2>
                         {% set t = tipo_label.get(factura.tipo, factura.tipo) %}

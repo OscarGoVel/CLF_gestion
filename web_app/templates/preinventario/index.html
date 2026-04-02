@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Pre-Inventario — CLF Gestión{% endblock %}
+{% block body %}
+{% set subseccion = 'operario' %}
+{% include "preinventario/_nav.html" %}
+
+<main class="p-4 max-w-2xl mx-auto">
+
+    <!-- Encabezado -->
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-lg font-bold text-gray-800">🔢 Conteos de inventario</h1>
+    </div>
+
+    <!-- Crear nueva sesión -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-5">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Nueva sesión de conteo</h2>
+        <form action="/preinventario/sesion" method="post" class="flex gap-2">
+            <input type="text" name="nombre" required
+                   placeholder="Ej: Conteo Almacén A — Abril 2026"
+                   class="flex-1 px-3 py-3 text-sm border border-gray-200 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <button type="submit"
+                    class="px-4 py-3 bg-clf-green text-white text-sm font-semibold rounded-lg
+                           hover:bg-green-700 transition-colors whitespace-nowrap">
+                + Crear
+            </button>
+        </form>
+    </div>
+
+    <!-- Lista de sesiones -->
+    {% if sesiones %}
+    <div class="space-y-3">
+        {% for s in sesiones %}
+        {% set color = {
+            'abierta':   'bg-blue-50 border-blue-200 text-blue-700',
+            'cerrada':   'bg-amber-50 border-amber-200 text-amber-700',
+            'aprobada':  'bg-green-50 border-green-200 text-green-700',
+            'rechazada': 'bg-red-50 border-red-200 text-red-700',
+        }.get(s.estado, 'bg-gray-50 border-gray-200 text-gray-700') %}
+
+        <a href="/preinventario/sesion/{{ s.id }}"
+           class="block bg-white rounded-xl border border-gray-100 shadow-sm p-4
+                  hover:shadow-md hover:border-clf-green transition-all active:scale-[.99]">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-gray-800 truncate">{{ s.nombre }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                        Por {{ s.creado_por }} ·
+                        {{ s.fecha_creacion.strftime('%d/%m/%Y %H:%M') if s.fecha_creacion else '—' }}
+                    </p>
+                </div>
+                <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold border {{ color }}">
+                        {{ s.estado.capitalize() }}
+                    </span>
+                    <span class="text-xs text-gray-400">{{ s.total_items }} productos</span>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400">
+        <p class="text-4xl mb-3">📋</p>
+        <p class="text-sm">No hay sesiones de conteo aún.</p>
+        <p class="text-xs mt-1">Crea una nueva sesión para comenzar.</p>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}

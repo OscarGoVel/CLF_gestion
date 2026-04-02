@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}{{ sesion.nombre }} — Pre-Inventario{% endblock %}
+{% block body %}
+{% set subseccion = 'operario' %}
+{% include "preinventario/_nav.html" %}
+
+<!-- html5-qrcode para escaneo de código de barras -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<main class="p-4 max-w-xl mx-auto pb-8">
+
+    <!-- Encabezado de sesión -->
+    <div class="flex items-start justify-between gap-2 mb-4">
+        <div>
+            <a href="/preinventario" class="text-xs text-gray-400 hover:text-clf-green">← Mis conteos</a>
+            <h1 class="text-base font-bold text-gray-800 mt-0.5 leading-tight">{{ sesion.nombre }}</h1>
+            <p class="text-xs text-gray-400">Por {{ sesion.creado_por }}</p>
+        </div>
+        <span class="px-2 py-1 rounded-full text-xs font-semibold shrink-0
+            {% if sesion.estado == 'abierta' %}bg-blue-100 text-blue-700
+            {% elif sesion.estado == 'cerrada' %}bg-amber-100 text-amber-700
+            {% elif sesion.estado == 'aprobada' %}bg-green-100 text-green-700
+            {% else %}bg-red-100 text-red-700{% endif %}">
+            {{ sesion.estado.capitalize() }}
+        </span>
+    </div>
+
+    {% if sesion.estado == 'abierta' %}
+    <!-- Formulario de captura -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Registrar producto</h2>
+
+        <!-- Búsqueda de producto -->
+        <div class="relative mb-3">
+            <input id="input-buscar" type="text"
+                   placeholder="Buscar por nombre o código…"
+                   autocomplete="off"
+                   hx-get="/preinventario/buscar"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#sugerencias"
+                   hx-include="#input-buscar"
+                   name="q"
+                   class="w-full px-3 py-3 text-sm border border-gray-200 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <div id="sugerencias"
+                 class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+            </div>
+        </div>
+
+        <!-- Botón escanear -->
+        <button onclick="abrirEscaner()"
+                class="w-full mb-3 py-3 border-2 border-dashed border-gray-200 rounded-lg
+                       text-sm text-gray-500 hover:border-clf-green hover:text-clf-green
+                       transition-colors flex items-center justify-center gap-2">
+            📷 Escanear código de barras
+        </button>
+
+        <!-- Scanner div (oculto) -->
+        <div id="scanner-container" class="hidden mb-3 rounded-lg overflow-hidden bg-black" style="height:220px">
+            <div id="interactive" class="viewport w-full h-full"></div>
+        </div>
+
+        <!-- Formulario oculto para enviar item -->
+        <form id="form-item" action="/preinventario/sesion/{{ sesion.id }}/item" method="post"
+              hx-post="/preinventario/sesion/{{ sesion.id }}/item"
+              hx-target="#items-wrapper"
+              hx-swap="innerHTML"
+              hx-on::after-request="limpiarFormulario()">
+
+            <input type="hidden" id="producto_id" name="producto_id" value="">
+
+            <div id="producto-seleccionado" class="hidden mb-3 p-3 bg-clf-green/10 border border-clf-green/30 rounded-lg">
+                <p class="text-xs text-gray-500 mb-0.5">Producto seleccionado</p>
+                <p id="producto-nombre" class="text-sm font-semibold text-gray-800"></p>
+                <p id="producto-stock" class="text-xs text-gray-500"></p>
+            </div>
+
+            <div class="flex gap-2 mb-3">
+                <div class="flex-1">
+                    <label class="block text-xs text-gray-500 mb-1">Cantidad física contada *</label>
+                    <input type="number" id="cantidad_fisica" name="cantidad_fisica"
+                           step="0.01" min="0" required
+                           inputmode="decimal"
+                           placeholder="0"
+                           class="w-full px-3 py-3 text-lg font-bold text-center border border-gray-200 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-xs text-gray-500 mb-1">Nota (opcional)</label>
+                <input type="text" name="notas" placeholder="Comentario…"
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                              focus:outline-none focus:ring-2 focus:ring-clf-green">
+            </div>
+
+            <button type="submit" id="btn-guardar" disabled
+                    class="w-full py-3 bg-clf-green text-white font-bold rounded-lg
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           hover:bg-green-700 transition-colors text-sm">
+                ✓ Guardar conteo
+            </button>
+        </form>
+    </div>
+
+    <!-- Cerrar sesión -->
+    {% if items %}
+    <form action="/preinventario/sesion/{{ sesion.id }}/cerrar" method="post" class="mb-4"
+          onsubmit="return confirm('¿Cerrar sesión? Ya no podrás editar los conteos.')">
+        <button type="submit"
+                class="w-full py-3 bg-amber-500 text-white font-bold rounded-xl
+                       hover:bg-amber-600 transition-colors text-sm">
+            🔒 Cerrar sesión y enviar para revisión
+        </button>
+    </form>
+    {% endif %}
+    {% endif %} {# fin estado == abierta #}
+
+    <!-- Tabla de items capturados -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Productos contados</h3>
+            <span class="text-xs text-gray-400">{{ items|length }} registros</span>
+        </div>
+        <div id="items-wrapper">
+            {% include "preinventario/_items_tabla.html" %}
+        </div>
+    </div>
+
+</main>
+
+<script>
+// ── Selección de producto desde sugerencias ───────────────────────────────
+function seleccionarProducto(id, nombre, stock, unidad) {
+    document.getElementById('producto_id').value = id;
+    document.getElementById('producto-nombre').textContent = nombre;
+    document.getElementById('producto-stock').textContent =
+        'Stock actual: ' + stock + ' ' + (unidad || '');
+    document.getElementById('producto-seleccionado').classList.remove('hidden');
+    document.getElementById('sugerencias').innerHTML = '';
+    document.getElementById('input-buscar').value = nombre;
+    document.getElementById('btn-guardar').disabled = false;
+    document.getElementById('cantidad_fisica').focus();
+}
+
+function limpiarFormulario() {
+    document.getElementById('producto_id').value = '';
+    document.getElementById('input-buscar').value = '';
+    document.getElementById('cantidad_fisica').value = '';
+    document.getElementById('producto-seleccionado').classList.add('hidden');
+    document.getElementById('btn-guardar').disabled = true;
+    document.getElementById('sugerencias').innerHTML = '';
+    detenerEscaner();
+}
+
+// ── Escáner html5-qrcode ──────────────────────────────────────────────────
+let _scanner = null;
+
+function abrirEscaner() {
+    const container = document.getElementById('scanner-container');
+    container.classList.remove('hidden');
+    _scanner = new Html5Qrcode("interactive");
+    _scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 120 } },
+        function(codigo) {
+            detenerEscaner();
+            document.getElementById('input-buscar').value = codigo;
+            htmx.ajax('GET', '/preinventario/buscar?q=' + encodeURIComponent(codigo),
+                      { target: '#sugerencias', swap: 'innerHTML' });
+        },
+        function() { /* ignorar errores de frame individuales */ }
+    ).catch(function(err) {
+        container.classList.add('hidden');
+        alert('No se pudo acceder a la cámara: ' + err);
+    });
+}
+
+function detenerEscaner() {
+    if (_scanner) {
+        _scanner.stop().catch(function() {});
+        _scanner = null;
+    }
+    document.getElementById('scanner-container').classList.add('hidden');
+}
+</script>
+{% endblock %}

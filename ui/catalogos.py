@@ -247,7 +247,7 @@ class Catalogos:
                  font=('Arial', 9)).pack(side='left', padx=8)
         self.entry_buscar_cliente = tk.Entry(ff_cli, font=('Arial', 9), width=30)
         self.entry_buscar_cliente.pack(side='left', padx=4)
-        self.entry_buscar_cliente.bind('<Return>', lambda e: self.cargar_clientes())
+        self.entry_buscar_cliente.bind('<KeyRelease>', lambda e: self.cargar_clientes())
         self.sistema._toolbar_btn(ff_cli, '🔍', self.cargar_clientes)
         self.sistema._toolbar_sep(ff_cli)
         self.sistema._toolbar_btn(ff_cli, '📊 CSV', self.exportar_csv_clientes, color='#065f46')
@@ -298,7 +298,7 @@ class Catalogos:
                  font=('Arial', 9)).pack(side='left', padx=8)
         self.entry_buscar_producto = tk.Entry(ff_prod, font=('Arial', 9), width=30)
         self.entry_buscar_producto.pack(side='left', padx=4)
-        self.entry_buscar_producto.bind('<Return>', lambda e: self.cargar_productos())
+        self.entry_buscar_producto.bind('<KeyRelease>', lambda e: self.cargar_productos())
         self.sistema._toolbar_btn(ff_prod, '🔍', self.cargar_productos)
         self.sistema._toolbar_sep(ff_prod)
         self.sistema._toolbar_btn(ff_prod, '📊 CSV', self.exportar_csv_productos, color='#065f46')
@@ -373,7 +373,7 @@ class Catalogos:
                  font=('Arial', 9)).pack(side='left', padx=8)
         self.entry_buscar_proveedor = tk.Entry(ff_prov, font=('Arial', 9), width=30)
         self.entry_buscar_proveedor.pack(side='left', padx=4)
-        self.entry_buscar_proveedor.bind('<Return>', lambda e: self.cargar_proveedores())
+        self.entry_buscar_proveedor.bind('<KeyRelease>', lambda e: self.cargar_proveedores())
         self.sistema._toolbar_btn(ff_prov, '🔍', self.cargar_proveedores)
         self.sistema._toolbar_sep(ff_prov)
         self.sistema._toolbar_btn(ff_prov, '📊 CSV', self.exportar_csv_proveedores, color='#065f46')
@@ -417,7 +417,7 @@ class Catalogos:
                  font=('Arial', 9)).pack(side='left', padx=8)
         self.entry_buscar_compra = tk.Entry(ff_comp, font=('Arial', 9), width=30)
         self.entry_buscar_compra.pack(side='left', padx=4)
-        self.entry_buscar_compra.bind('<Return>', lambda e: self.sistema.cargar_compras())
+        self.entry_buscar_compra.bind('<KeyRelease>', lambda e: self.sistema.cargar_compras())
         self.sistema._toolbar_btn(ff_comp, '🔍', self.sistema.cargar_compras)
         self.sistema._toolbar_sep(ff_comp)
         self.sistema._toolbar_btn(ff_comp, '📊 CSV', self.exportar_csv_compras, color='#065f46')
@@ -452,8 +452,8 @@ class Catalogos:
             self.tree_clientes.delete(item)
         
         # Obtener término de búsqueda
-        buscar = self.entry_buscar_cliente.get().strip()
-        
+        buscar = self.entry_buscar_cliente.get().strip().lower()
+
         # Consultar base de datos
         if buscar:
             self.cursor.execute("""
@@ -461,7 +461,7 @@ class Catalogos:
                        regimen_fiscal, uso_cfdi, cp_fiscal,
                        contacto, telefono, email
                 FROM clientes
-                WHERE nombre_comercial LIKE ? OR razon_social LIKE ? OR rfc LIKE ?
+                WHERE LOWER(nombre_comercial) LIKE ? OR LOWER(razon_social) LIKE ? OR LOWER(rfc) LIKE ?
                 ORDER BY nombre_comercial
             """, (f'%{buscar}%', f'%{buscar}%', f'%{buscar}%'))
         else:
@@ -809,8 +809,8 @@ class Catalogos:
             self.tree_productos.delete(item)
         
         # Obtener término de búsqueda
-        buscar = self.entry_buscar_producto.get().strip()
-        
+        buscar = self.entry_buscar_producto.get().strip().lower()
+
         # Consultar base de datos
         if buscar:
             self.cursor.execute("""
@@ -820,7 +820,7 @@ class Catalogos:
                 FROM productos p
                 LEFT JOIN categorias c ON p.categoria_id = c.id
                 LEFT JOIN subcategorias s ON p.subcategoria_id = s.id
-                WHERE p.codigo LIKE ? OR p.nombre LIKE ?
+                WHERE LOWER(p.codigo) LIKE ? OR LOWER(p.nombre) LIKE ?
                 ORDER BY p.nombre
             """, (f'%{buscar}%', f'%{buscar}%'))
         else:
@@ -2696,13 +2696,13 @@ class Catalogos:
         """Carga la lista de proveedores en la tabla"""
         for item in self.tree_proveedores.get_children():
             self.tree_proveedores.delete(item)
-        buscar = self.entry_buscar_proveedor.get().strip()
+        buscar = self.entry_buscar_proveedor.get().strip().lower()
         if buscar:
             self.cursor.execute("""
                 SELECT id, nombre, rfc, regimen_fiscal, cp_fiscal,
                        contacto, telefono, email, notas
                 FROM proveedores
-                WHERE nombre LIKE ? OR rfc LIKE ? OR contacto LIKE ?
+                WHERE LOWER(nombre) LIKE ? OR LOWER(rfc) LIKE ? OR LOWER(contacto) LIKE ?
                 ORDER BY nombre
             """, (f'%{buscar}%', f'%{buscar}%', f'%{buscar}%'))
         else:

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Autorización de Inventarios — CLF Gestión{% endblock %}
+{% block body %}
+{% set subseccion = 'admin' %}
+{% include "preinventario/_nav.html" %}
+
+<main class="p-4 max-w-3xl mx-auto">
+
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-lg font-bold text-gray-800">🔐 Autorización de conteos</h1>
+    </div>
+
+    {% set pendientes = sesiones | selectattr('estado', 'equalto', 'cerrada') | list %}
+    {% if pendientes %}
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-center gap-2">
+        <span class="text-amber-500 text-lg">⚠</span>
+        <p class="text-sm text-amber-700 font-medium">
+            {{ pendientes|length }} sesión{% if pendientes|length != 1 %}es{% endif %} pendiente{% if pendientes|length != 1 %}s{% endif %} de autorización
+        </p>
+    </div>
+    {% endif %}
+
+    {% if sesiones %}
+    <div class="space-y-3">
+        {% for s in sesiones %}
+        {% set badge = {
+            'abierta':   'bg-blue-100 text-blue-700',
+            'cerrada':   'bg-amber-100 text-amber-700',
+            'aprobada':  'bg-green-100 text-green-700',
+            'rechazada': 'bg-red-100 text-red-700',
+        }.get(s.estado, 'bg-gray-100 text-gray-600') %}
+
+        <a href="/preinventario/admin/sesion/{{ s.id }}"
+           class="block bg-white rounded-xl border shadow-sm p-4
+                  hover:shadow-md transition-all active:scale-[.99]
+                  {% if s.estado == 'cerrada' %}border-amber-300{% else %}border-gray-100{% endif %}">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-gray-800 truncate">{{ s.nombre }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                        Creado por {{ s.creado_por }} ·
+                        {{ s.fecha_creacion.strftime('%d/%m/%Y') if s.fecha_creacion else '—' }}
+                    </p>
+                    {% if s.estado in ('aprobada', 'rechazada') and s.aprobado_por %}
+                    <p class="text-xs text-gray-400">
+                        {{ s.estado.capitalize() }} por {{ s.aprobado_por }} ·
+                        {{ s.fecha_aprobacion.strftime('%d/%m/%Y') if s.fecha_aprobacion else '—' }}
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col items-end gap-1.5 shrink-0">
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ badge }}">
+                        {{ s.estado.capitalize() }}
+                    </span>
+                    <span class="text-xs text-gray-400">{{ s.total_items }} productos</span>
+                    {% if s.total_diferencia and s.total_diferencia != 0 %}
+                    <span class="text-xs text-amber-600 font-medium">
+                        Δ {{ '{:,.1f}'.format(s.total_diferencia) }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400">
+        <p class="text-4xl mb-3">✅</p>
+        <p class="text-sm">No hay sesiones registradas.</p>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}

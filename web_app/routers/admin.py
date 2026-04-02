@@ -103,6 +103,7 @@ async def crear_usuario(
             cur.execute("""
                 INSERT INTO usuarios (username, nombre, password_hash, rol, activo)
                 VALUES (%s, %s, %s, %s, 1)
+                RETURNING id
             """, (username, nombre, phash, rol))
             new_id = cur.fetchone()[0]
     except Exception as e:

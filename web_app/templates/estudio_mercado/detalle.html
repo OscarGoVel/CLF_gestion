@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}{{ estudio.nombre }} — Estudio de Mercado{% endblock %}
+{% block body %}
+
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 overflow-x-auto">
+        <a href="/dashboard"   class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
+        <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
+        <a href="/facturas"     class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
+        <a href="/catalogos/productos" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📚 Catálogos</a>
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">📊 Est. Mercado</span>
+        <a href="/stock"   class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
+        <a href="/analisis" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
+        {% if user.rol == 'Administrador' %}
+        <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
+        {% endif %}
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-6xl mx-auto">
+
+    <!-- Encabezado del estudio -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-5">
+        <div class="h-1.5 {% if estudio.estado == 'abierto' %}bg-clf-green{% else %}bg-gray-400{% endif %}"></div>
+        <div class="px-6 py-5">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <h2 class="text-xl font-bold text-navy-700">{{ estudio.nombre }}</h2>
+                        {% if estudio.estado == 'abierto' %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">Abierto</span>
+                        {% else %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-500">Cerrado</span>
+                        {% endif %}
+                    </div>
+                    {% if estudio.descripcion %}
+                    <p class="text-sm text-gray-500">{{ estudio.descripcion }}</p>
+                    {% endif %}
+                    <p class="text-xs text-gray-400 mt-1">Fecha: {{ estudio.fecha }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="/estudio-mercado"
+                       class="px-3 py-1.5 text-xs font-semibold text-navy-600 border border-navy-300
+                              hover:bg-navy-50 rounded-lg transition-colors">
+                        ← Volver a estudios de mercado
+                    </a>
+                    {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+                    <form method="post" action="/estudio-mercado/{{ estudio.id }}/cerrar"
+                          onsubmit="return confirm('¿Cerrar este estudio? Ya no se podrán agregar items ni cotizaciones.')">
+                        <button type="submit"
+                                class="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-300
+                                       hover:bg-red-50 rounded-lg transition-colors">
+                            Cerrar estudio
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario agregar item (solo si abierto) -->
+    {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-5">
+        <div class="px-5 py-3 border-b border-gray-100">
+            <h3 class="text-sm font-bold text-gray-700">Agregar artículo al estudio</h3>
+        </div>
+        <div class="px-5 py-4">
+            <form method="post" action="/estudio-mercado/{{ estudio.id }}/item"
+                  class="flex flex-wrap gap-3 items-end">
+                <div class="flex-1 min-w-[180px]">
+                    <label class="block text-xs text-gray-500 mb-1">Nombre del artículo</label>
+                    <input type="text" name="nombre_articulo" required
+                           placeholder="Ej: Resma papel carta…"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <div class="w-24">
+                    <label class="block text-xs text-gray-500 mb-1">Cantidad</label>
+                    <input type="number" name="cantidad" value="1" min="0.001" step="any"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <div class="w-24">
+                    <label class="block text-xs text-gray-500 mb-1">Unidad</label>
+                    <input type="text" name="unidad" placeholder="pza, kg…"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs text-gray-500 mb-1">Vincular a producto del catálogo (opcional)</label>
+                    <select name="producto_id"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                        <option value="">— Sin vincular —</option>
+                        {% for p in productos %}
+                        <option value="{{ p.id }}">{{ p.codigo }} — {{ p.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit"
+                        class="px-4 py-2 bg-navy-600 text-white text-sm font-semibold rounded-lg
+                               hover:bg-navy-800 transition-colors whitespace-nowrap">
+                    + Agregar
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Items del estudio -->
+    {% if items %}
+    <div class="space-y-4">
+        {% for item in items %}
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+
+            <!-- Cabecera del item -->
+            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-bold text-navy-700">{{ item.nombre_articulo }}</span>
+                    <span class="text-xs text-gray-400">{{ item.cantidad }} {{ item.unidad or '' }}</span>
+                    {% if item.producto_codigo %}
+                    <span class="px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-600">{{ item.producto_codigo }}</span>
+                    {% endif %}
+                </div>
+                {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+                <form method="post" action="/estudio-mercado/item/{{ item.id }}/eliminar">
+                    <button type="submit" class="text-xs text-red-400 hover:text-red-600 transition-colors"
+                            onclick="return confirm('¿Eliminar este item y todas sus cotizaciones?')">
+                        Eliminar
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+            <!-- Tabla de cotizaciones -->
+            {% if item.cotizaciones %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
+                            <th class="px-5 py-2 text-left">Proveedor</th>
+                            <th class="px-5 py-2 text-right">Precio unit.</th>
+                            <th class="px-5 py-2 text-right">Total ({{ item.cantidad }} {{ item.unidad or 'u' }})</th>
+                            <th class="px-5 py-2 text-right hidden sm:table-cell">Vs mínimo</th>
+                            <th class="px-5 py-2 text-left hidden md:table-cell">Notas</th>
+                            <th class="px-5 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        {% for cot in item.cotizaciones %}
+                        {% set es_minimo = cot.precio_unitario == item.precio_minimo %}
+                        {% set diff_pct = ((cot.precio_unitario - item.precio_minimo) / item.precio_minimo * 100) if item.precio_minimo and not es_minimo else 0 %}
+                        <tr class="{% if es_minimo %}bg-green-50{% else %}hover:bg-gray-50{% endif %} transition-colors">
+                            <td class="px-5 py-2.5 font-medium {% if es_minimo %}text-green-700{% else %}text-gray-700{% endif %}">
+                                {% if es_minimo %}<span class="mr-1 text-green-500">★</span>{% endif %}
+                                {{ cot.nombre_proveedor }}
+                            </td>
+                            <td class="px-5 py-2.5 text-right font-semibold {% if es_minimo %}text-green-700{% else %}text-gray-800{% endif %}">
+                                ${{ '{:,.2f}'.format(cot.precio_unitario) }}
+                            </td>
+                            <td class="px-5 py-2.5 text-right text-gray-600">
+                                ${{ '{:,.2f}'.format(cot.precio_unitario * item.cantidad) }}
+                            </td>
+                            <td class="px-5 py-2.5 text-right hidden sm:table-cell">
+                                {% if es_minimo %}
+                                <span class="text-xs font-bold text-green-600">Mínimo</span>
+                                {% else %}
+                                <span class="text-xs text-red-500">+{{ '{:.1f}'.format(diff_pct) }}%</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-2.5 text-xs text-gray-400 hidden md:table-cell">{{ cot.notas or '—' }}</td>
+                            <td class="px-5 py-2.5 text-right">
+                                {% if user.rol in ('Administrador', 'Operador') %}
+                                <div class="flex items-center justify-end gap-2">
+                                    {% if es_minimo and item.producto_id and estudio.estado == 'abierto' %}
+                                    <form method="post" action="/estudio-mercado/item/{{ item.id }}/aplicar">
+                                        <button type="submit"
+                                                title="Aplicar este precio al catálogo"
+                                                class="px-2.5 py-1 text-xs font-semibold bg-green-600 text-white
+                                                       rounded hover:bg-green-700 transition-colors whitespace-nowrap"
+                                                onclick="return confirm('¿Actualizar el precio del producto en el catálogo a ${{ '{:,.2f}'.format(cot.precio_unitario) }}?')">
+                                            Aplicar al catálogo
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    {% if estudio.estado == 'abierto' %}
+                                    <form method="post" action="/estudio-mercado/cotizacion/{{ cot.id }}/eliminar">
+                                        <button type="submit" class="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                                onclick="return confirm('¿Eliminar esta cotización?')">✕</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="px-5 py-4 text-xs text-gray-400 italic">Sin cotizaciones aún.</p>
+            {% endif %}
+
+            <!-- Formulario agregar cotización -->
+            {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50">
+                <details class="group">
+                    <summary class="text-xs text-gray-500 font-semibold uppercase tracking-wide cursor-pointer
+                                    hover:text-clf-green select-none">
+                        + Agregar cotización de proveedor
+                    </summary>
+                    <form method="post" action="/estudio-mercado/item/{{ item.id }}/cotizacion"
+                          class="flex flex-wrap gap-3 items-end mt-3">
+                        <div class="flex-1 min-w-[180px]">
+                            <label class="block text-xs text-gray-500 mb-1">Proveedor</label>
+                            <select name="proveedor_id" id="prov-sel-{{ item.id }}"
+                                    onchange="document.getElementById('prov-nom-{{ item.id }}').value = this.options[this.selectedIndex].text !== '— Otro / escribir —' ? this.options[this.selectedIndex].text : ''"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                           focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                                <option value="">— Otro / escribir —</option>
+                                {% for prov in proveedores %}
+                                <option value="{{ prov.id }}">{{ prov.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[160px]">
+                            <label class="block text-xs text-gray-500 mb-1">Nombre proveedor</label>
+                            <input type="text" name="nombre_proveedor" id="prov-nom-{{ item.id }}" required
+                                   placeholder="Nombre del proveedor…"
+                                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+                        </div>
+                        <div class="w-36">
+                            <label class="block text-xs text-gray-500 mb-1">Precio unitario</label>
+                            <div class="relative">
+                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                                <input type="number" name="precio_unitario" required min="0" step="0.01"
+                                       class="pl-6 pr-3 py-2 w-full text-sm border border-gray-200 rounded-lg
+                                              focus:outline-none focus:ring-2 focus:ring-clf-green">
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-[140px]">
+                            <label class="block text-xs text-gray-500 mb-1">Notas (opcional)</label>
+                            <input type="text" name="notas" placeholder="Incluye envío, vigencia…"
+                                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+                        </div>
+                        <button type="submit"
+                                class="px-4 py-2 bg-clf-green text-white text-sm font-semibold rounded-lg
+                                       hover:bg-green-700 transition-colors whitespace-nowrap">
+                            Guardar
+                        </button>
+                    </form>
+                </details>
+            </div>
+            {% endif %}
+
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl shadow-sm px-6 py-10 text-center">
+        <p class="text-gray-400 text-sm">Este estudio aún no tiene artículos.</p>
+        {% if estudio.estado == 'abierto' %}
+        <p class="text-gray-300 text-xs mt-1">Usa el formulario de arriba para agregar artículos a comparar.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}

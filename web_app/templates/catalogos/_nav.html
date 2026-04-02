@@ -10,6 +10,7 @@
         <a href="/facturas"     class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
         <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">📚 Catálogos</span>
         <a href="/stock" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
+        <a href="/preinventario" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🔢 Pre-Inventario</a>
         <a href="/analisis" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
         {% if user.rol == 'Administrador' %}
         <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
@@ -29,6 +30,7 @@
         ('Clientes',    '/catalogos/clientes',    'clientes'),
         ('Productos',   '/catalogos/productos',   'productos'),
         ('Proveedores', '/catalogos/proveedores', 'proveedores'),
+        ('Est. Mercado', '/estudio-mercado',      'estudio_mercado'),
     ] %}
     <a href="{{ href }}"
        class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t

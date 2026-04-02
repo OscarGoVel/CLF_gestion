@@ -35,6 +35,8 @@ from web_app.routers import facturas as facturas_router
 from web_app.routers import stock as stock_router
 from web_app.routers import analisis as analisis_router
 from web_app.routers import admin as admin_router
+from web_app.routers import preinventario as preinventario_router
+from web_app.routers import estudio_mercado as estudio_mercado_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -127,7 +129,7 @@ class MonitorMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"]       = "1; mode=block"
         response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"]     = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"]     = "geolocation=(), microphone=(), camera=(self)"
         response.headers["X-Response-Time"]        = f"{elapsed_ms:.1f}ms"
         return response
 
@@ -143,6 +145,8 @@ app.include_router(facturas_router.router)
 app.include_router(stock_router.router)
 app.include_router(analisis_router.router)
 app.include_router(admin_router.router)
+app.include_router(preinventario_router.router)
+app.include_router(estudio_mercado_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -181,6 +185,9 @@ async def handler_404(request: Request, exc: HTTPException):
 
 @app.exception_handler(500)
 async def handler_500(request: Request, exc: Exception):
+    import traceback
+    _log = logger.get("clf.error")
+    _log.error(f"500 {request.method} {request.url.path} — {exc!r}\n{traceback.format_exc()}")
     user = get_usuario_actual(request)
     return templates.TemplateResponse(
         request=request,

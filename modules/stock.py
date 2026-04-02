@@ -218,7 +218,7 @@ class SeccionStock:
 
     def abrir_entrada(self):
         """Abre la ventana de registro de compra/entrada — idéntica a Compras."""
-        from compras import VentanaCompra  # import lazy para evitar circular import
+        from modules.compras import VentanaCompra  # import lazy para evitar circular import
 
         def _refrescar():
             try:
@@ -549,8 +549,8 @@ class SeccionStock:
             where_parts.append("m.tipo = 'salida'")
 
         if buscar:
-            where_parts.append("(LOWER(p.nombre) LIKE ? OR LOWER(p.codigo) LIKE ?)")
-            params += [f'%{buscar}%', f'%{buscar}%']
+            where_parts.append("(LOWER(p.nombre) LIKE ? OR LOWER(p.codigo) LIKE ? OR LOWER(COALESCE(m.motivo,'')) LIKE ? OR LOWER(COALESCE(m.referencia,'')) LIKE ?)")
+            params += [f'%{buscar}%', f'%{buscar}%', f'%{buscar}%', f'%{buscar}%']
 
         where = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
 

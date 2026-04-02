@@ -1,0 +1,17 @@
+{% for p in resultados %}
+<button type="button"
+        onclick="seleccionarProducto({{ p.id }}, {{ p.nombre|tojson }}, {{ p.stock_actual or 0 }}, {{ (p.unidad_medida or '')|tojson }})"
+        class="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0
+               flex items-center justify-between gap-2 transition-colors">
+    <div class="min-w-0">
+        <p class="text-sm font-medium text-gray-800 truncate">{{ p.nombre }}</p>
+        <p class="text-xs text-gray-400">{{ p.codigo or '—' }}</p>
+    </div>
+    <div class="text-right shrink-0">
+        <p class="text-sm font-semibold text-gray-700">{{ '{:g}'.format(p.stock_actual or 0) }}</p>
+        <p class="text-xs text-gray-400">{{ p.unidad_medida or '' }}</p>
+    </div>
+</button>
+{% else %}
+<div class="px-4 py-3 text-sm text-gray-400 text-center">Sin resultados</div>
+{% endfor %}

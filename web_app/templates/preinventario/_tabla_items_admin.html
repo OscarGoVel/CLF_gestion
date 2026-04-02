@@ -1,0 +1,64 @@
+{% if items %}
+<div class="overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
+                <th class="px-4 py-2 text-left">Producto</th>
+                <th class="px-4 py-2 text-right">Teórico</th>
+                <th class="px-4 py-2 text-right">Físico</th>
+                <th class="px-4 py-2 text-right">Ajuste</th>
+                <th class="px-4 py-2 text-right font-bold">Diferencia</th>
+                {% if sesion.estado == 'cerrada' %}
+                <th class="px-4 py-2 text-center">Acción</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+            {% for item in items %}
+            {% set dif = item.diferencia or 0 %}
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3">
+                    <p class="font-medium text-gray-800 leading-tight">{{ item.nombre }}</p>
+                    <p class="text-xs text-gray-400">{{ item.codigo or '—' }} · {{ item.capturado_por }}</p>
+                    {% if item.notas %}
+                    <p class="text-xs text-gray-400 italic">{{ item.notas }}</p>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right text-gray-500">
+                    {{ '{:g}'.format(item.cantidad_teorica or 0) }}<br>
+                    <span class="text-xs text-gray-400">{{ item.unidad_medida or '' }}</span>
+                </td>
+                <td class="px-4 py-3 text-right text-gray-700 font-medium">
+                    {{ '{:g}'.format(item.cantidad_fisica) }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    {% if item.cantidad_ajustada is not none %}
+                    <span class="text-purple-600 font-semibold">{{ '{:g}'.format(item.cantidad_ajustada) }}</span>
+                    <p class="text-xs text-gray-400">por {{ item.ajustado_por }}</p>
+                    {% else %}
+                    <span class="text-gray-300">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right font-bold
+                    {% if dif > 0 %}text-green-600
+                    {% elif dif < 0 %}text-red-500
+                    {% else %}text-gray-400{% endif %}">
+                    {{ '+' if dif > 0 else '' }}{{ '{:,.2f}'.format(dif) }}
+                </td>
+                {% if sesion.estado == 'cerrada' %}
+                <td class="px-4 py-3 text-center">
+                    <button onclick="abrirAjuste({{ item.id }}, {{ item.cantidad_fisica }}, {{ item.cantidad_ajustada if item.cantidad_ajustada is not none else 'null' }})"
+                            class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-lg
+                                   hover:bg-purple-200 transition-colors font-medium">
+                        Ajustar
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="py-10 text-center text-gray-400 text-sm">Sin productos en esta sesión.</div>
+{% endif %}

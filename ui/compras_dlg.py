@@ -35,14 +35,14 @@ class VentanaCompra:
         self.ventana.geometry("1000x650")
         self.ventana.minsize(920, 570)
         self.ventana.resizable(True, True)
-        _centrar(self.ventana, self.root)
-        
+        _centrar(self.ventana, self.parent)
+
         self.crear_interfaz()
-        
+
         # Hacer modal
         self.ventana.transient(parent)
         self.ventana.grab_set()
-        ventana.bind('<Escape>', lambda e: ventana.destroy())
+        self.ventana.bind('<Escape>', lambda e: self.ventana.destroy())
     
     def crear_interfaz(self):
         """Crea la interfaz de la ventana"""
@@ -239,7 +239,7 @@ class VentanaCompra:
         ventana.geometry("400x200")
         ventana.minsize(340, 200)
         ventana.resizable(True, True)
-        _centrar(ventana, self.root)
+        _centrar(ventana, self.parent)
         
         frame = tk.Frame(ventana, padx=20, pady=20)
         frame.pack(fill='both', expand=True)
@@ -297,7 +297,7 @@ class VentanaCompra:
         ventana.geometry("800x500")
         ventana.minsize(720, 420)
         ventana.resizable(True, True)
-        _centrar(ventana, self.root)
+        _centrar(ventana, self.parent)
         
         # Frame de búsqueda
         frame_busqueda = tk.Frame(ventana)
@@ -493,14 +493,30 @@ class VentanaCompra:
             # Generar folio
             fecha_actual = datetime.now()
             año = fecha_actual.strftime('%Y')
-            
+
             self.cursor.execute("""
-                SELECT COUNT(*) FROM compras
-                WHERE strftime('%Y', fecha_compra) = ?
-            """, (año,))
-            
-            consecutivo = self.cursor.fetchone()[0] + 1
-            folio = f"COMP-{año}-{consecutivo:04d}"
+                SELECT folio FROM compras
+                WHERE folio LIKE ?
+                ORDER BY folio DESC
+                LIMIT 1
+            """, (f"COMP-{año}-%",))
+
+            row = self.cursor.fetchone()
+            if row:
+                try:
+                    ultimo = int(row[0].split('-')[-1])
+                except (ValueError, IndexError):
+                    ultimo = 0
+            else:
+                ultimo = 0
+
+            consecutivo = ultimo + 1
+            while True:
+                folio = f"COMP-{año}-{consecutivo:04d}"
+                self.cursor.execute("SELECT 1 FROM compras WHERE folio = ?", (folio,))
+                if not self.cursor.fetchone():
+                    break
+                consecutivo += 1
             
             # Calcular total
             total = sum(p['total'] for p in self.productos_compra)
