@@ -49,9 +49,11 @@
                 <span class="text-xs text-gray-400 shrink-0 whitespace-nowrap">
                     {{ '{:,.2f}'.format(p.cantidad)|replace('.00','') }} {{ p.unidad_medida or '' }}
                 </span>
+                {% if user.rol != 'Solo lectura' %}
                 <span class="text-xs font-semibold text-gray-700 shrink-0 whitespace-nowrap">
                     ${{ '{:,.2f}'.format(p.total) }}
                 </span>
+                {% endif %}
             </div>
             {% else %}
             <p class="text-xs text-gray-400">Sin productos.</p>
@@ -60,10 +62,12 @@
     </div>
 
     <!-- Total -->
+    {% if user.rol != 'Solo lectura' %}
     <div class="flex items-center justify-between py-2.5 border-t border-gray-100 mb-4">
         <span class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Total</span>
         <span class="text-xl font-bold text-clf-green">${{ '{:,.2f}'.format(cot.total or 0) }}</span>
     </div>
+    {% endif %}
 
     <!-- Datos adicionales -->
     {% set extras = [

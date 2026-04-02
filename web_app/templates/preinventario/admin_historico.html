@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Historial de Inventarios — CLF Gestión{% endblock %}
+{% block body %}
+{% set subseccion = 'historico' %}
+{% include "preinventario/_nav.html" %}
+
+<main class="p-4 max-w-3xl mx-auto">
+
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-lg font-bold text-gray-800">📋 Historial de inventarios</h1>
+            <p class="text-xs text-gray-400 mt-0.5">Conteos aprobados — comparativa histórica</p>
+        </div>
+    </div>
+
+    {% if snapshots %}
+    <div class="space-y-3">
+        {% for s in snapshots %}
+        <a href="/preinventario/admin/historico/{{ s.id }}"
+           class="block bg-white rounded-xl border border-gray-100 shadow-sm p-4
+                  hover:shadow-md transition-all active:scale-[.99]">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-gray-800 truncate">{{ s.nombre }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                        Aprobado por {{ s.aprobado_por }} ·
+                        {{ s.fecha_aprobacion.strftime('%d/%m/%Y %H:%M') if s.fecha_aprobacion else '—' }}
+                    </p>
+                </div>
+                <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span class="text-xs text-gray-500">{{ s.total_items }} productos</span>
+                    {% if s.items_ajustados > 0 %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                        {{ s.items_ajustados }} ajustes
+                    </span>
+                    {% else %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                        Sin diferencias
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400">
+        <p class="text-4xl mb-3">📋</p>
+        <p class="text-sm">Aún no hay inventarios aprobados.</p>
+        <p class="text-xs mt-1 opacity-70">Los conteos aprobados aparecerán aquí.</p>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}

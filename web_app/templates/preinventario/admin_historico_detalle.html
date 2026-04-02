@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ hist.nombre }} — Historial CLF{% endblock %}
+{% block body %}
+{% set subseccion = 'historico' %}
+{% include "preinventario/_nav.html" %}
+
+<main class="p-4 max-w-4xl mx-auto pb-8">
+
+    <!-- Encabezado -->
+    <div class="flex items-start justify-between gap-2 mb-4">
+        <div>
+            <a href="/preinventario/admin/historico" class="text-xs text-gray-400 hover:text-clf-green">← Historial</a>
+            <h1 class="text-base font-bold text-gray-800 mt-0.5">{{ hist.nombre }}</h1>
+            <p class="text-xs text-gray-400">
+                Aprobado por {{ hist.aprobado_por }} ·
+                {{ hist.fecha_aprobacion.strftime('%d/%m/%Y %H:%M') if hist.fecha_aprobacion else '—' }}
+                · <a href="/preinventario/admin/sesion/{{ hist.sesion_id }}"
+                     class="hover:text-clf-green transition-colors">Ver sesión original</a>
+            </p>
+        </div>
+        <div class="flex flex-col items-end gap-1 shrink-0">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                ✅ Aprobado
+            </span>
+            <span class="text-xs text-gray-400">{{ hist.total_items }} productos · {{ hist.items_ajustados }} ajustados</span>
+        </div>
+    </div>
+
+    <!-- Resumen de ajustes -->
+    {% set con_ajuste = items | selectattr('diferencia') | list %}
+    {% if hist.items_ajustados > 0 %}
+    <div class="grid grid-cols-3 gap-3 mb-4">
+        {% set entradas = items | selectattr('diferencia') | selectattr('diferencia', 'gt', 0) | list %}
+        {% set salidas  = items | selectattr('diferencia') | selectattr('diferencia', 'lt', 0) | list %}
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
+            <p class="text-2xl font-bold text-green-600">{{ entradas | length }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">Entradas (+)</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
+            <p class="text-2xl font-bold text-red-500">{{ salidas | length }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">Salidas (−)</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
+            <p class="text-2xl font-bold text-gray-700">{{ hist.total_items - hist.items_ajustados }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">Sin cambio</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabla de snapshot -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Detalle del conteo</h3>
+            <span class="text-xs text-gray-400">{{ items | length }} productos</span>
+        </div>
+
+        {% if items %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm" data-sortable>
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
+                        <th data-col="0" class="px-4 py-2 text-left">Producto</th>
+                        <th data-col="1" class="px-4 py-2 text-right">Teórico</th>
+                        <th data-col="2" class="px-4 py-2 text-right">Físico</th>
+                        <th data-col="3" class="px-4 py-2 text-right">Ajustado</th>
+                        <th data-col="4" class="px-4 py-2 text-right">Stock antes</th>
+                        <th data-col="5" class="px-4 py-2 text-right">Stock después</th>
+                        <th data-col="6" class="px-4 py-2 text-right font-bold">Δ Aplicado</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for item in items %}
+                    {% set dif = item.diferencia or 0 %}
+                    <tr class="hover:bg-gray-50 transition-colors {% if dif != 0 %}font-medium{% endif %}">
+                        <td class="px-4 py-3">
+                            <p class="text-gray-800">{{ item.nombre }}</p>
+                            <p class="text-xs text-gray-400">{{ item.codigo or '—' }} · {{ item.unidad_medida or '' }}</p>
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-500">
+                            {{ '{:g}'.format(item.cantidad_teorica or 0) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-700">
+                            {{ '{:g}'.format(item.cantidad_fisica) }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            {% if item.cantidad_ajustada is not none %}
+                            <span class="text-purple-600">{{ '{:g}'.format(item.cantidad_ajustada) }}</span>
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-500">
+                            {{ '{:,.2f}'.format(item.stock_antes) }}
+                        </td>
+                        <td class="px-4 py-3 text-right text-gray-700">
+                            {{ '{:,.2f}'.format(item.stock_despues) }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-bold
+                            {% if dif > 0 %}text-green-600
+                            {% elif dif < 0 %}text-red-500
+                            {% else %}text-gray-400{% endif %}">
+                            {% if dif > 0.001 or dif < -0.001 %}
+                            {{ '+' if dif > 0 else '' }}{{ '{:,.2f}'.format(dif) }}
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="py-10 text-center text-gray-400 text-sm">Sin productos en este registro.</div>
+        {% endif %}
+    </div>
+
+</main>
+{% endblock %}

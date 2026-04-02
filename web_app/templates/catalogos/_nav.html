@@ -6,12 +6,16 @@
     <div class="w-px bg-navy-900 h-full"></div>
     <div class="flex items-center h-full flex-1 overflow-x-auto">
         <a href="/dashboard" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
+        {% if user.rol not in ('Almacenista',) %}
         <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
         <a href="/facturas"     class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
+        {% endif %}
         <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">📚 Catálogos</span>
         <a href="/stock" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
         <a href="/preinventario" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🔢 Pre-Inventario</a>
+        {% if user.rol not in ('Almacenista',) %}
         <a href="/analisis" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
+        {% endif %}
         {% if user.rol == 'Administrador' %}
         <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
         {% endif %}
@@ -30,7 +34,6 @@
         ('Clientes',    '/catalogos/clientes',    'clientes'),
         ('Productos',   '/catalogos/productos',   'productos'),
         ('Proveedores', '/catalogos/proveedores', 'proveedores'),
-        ('Est. Mercado', '/estudio-mercado',      'estudio_mercado'),
     ] %}
     <a href="{{ href }}"
        class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t
@@ -39,4 +42,12 @@
         {{ label }}
     </a>
     {% endfor %}
+    {% if user.rol not in ('Almacenista', 'Solo lectura') %}
+    <a href="/estudio-mercado"
+       class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t
+              {% if seccion == 'estudio_mercado' %}text-clf-green border-b-2 border-clf-green bg-white
+              {% else %}text-navy-400 hover:text-navy-700{% endif %}">
+        Est. Mercado
+    </a>
+    {% endif %}
 </div>

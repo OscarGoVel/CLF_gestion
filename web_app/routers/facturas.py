@@ -46,6 +46,8 @@ async def lista_facturas(
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") == "Almacenista":
+        raise HTTPException(status_code=403, detail="Sin acceso a facturas")
 
     where, params = [], []
     if buscar:
@@ -191,6 +193,8 @@ async def importar_xml(request: Request, archivo: UploadFile = File(...)):
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso para importar facturas")
 
     contenido = await archivo.read()
 
@@ -301,6 +305,8 @@ async def vincular_cotizacion(
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso para vincular facturas")
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         # Verificar que existe la cotización
@@ -370,6 +376,8 @@ async def desvincular_cotizacion(
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso para desvincular facturas")
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(

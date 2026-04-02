@@ -127,6 +127,8 @@ async def lista(
     if not user:
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/")
+    if user.get("rol") == "Almacenista":
+        raise HTTPException(status_code=403, detail="Sin acceso a cotizaciones")
 
     data       = _cargar_lista(user["empresa_db"], estado, buscar, pagina)
     total_pags = max(1, (data["total"] + POR_PAGINA - 1) // POR_PAGINA)
@@ -348,6 +350,8 @@ async def detalle(request: Request, cot_id: int):
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") == "Almacenista":
+        raise HTTPException(status_code=403, detail="Sin acceso a cotizaciones")
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
@@ -614,6 +618,11 @@ async def cambiar_estado(
         raise HTTPException(status_code=401)
     if user.get("rol") not in ("Administrador", "Operador"):
         raise HTTPException(status_code=403, detail="Sin permiso para cambiar estado")
+    if nuevo_estado == "Pagada" and user.get("rol") != "Administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el Administrador puede marcar una cotización como Pagada.",
+        )
     if nuevo_estado not in ESTADOS:
         raise HTTPException(status_code=400, detail="Estado no valido")
 

@@ -128,14 +128,20 @@
                         <td class="px-4 py-2.5 text-xs font-mono text-gray-400">{{ c.clave_prod_serv or '—' }}</td>
                         <td class="px-4 py-2.5 text-sm text-gray-600 text-right">{{ c.cantidad }}</td>
                         <td class="px-4 py-2.5 text-xs text-gray-400">{{ c.unidad or c.clave_unidad or '—' }}</td>
+                        {% if user.rol != 'Solo lectura' %}
                         <td class="px-4 py-2.5 text-sm font-semibold text-right">${{ '{:,.4f}'.format(c.valor_unitario or 0) }}</td>
                         <td class="px-4 py-2.5 text-sm font-bold text-right">${{ '{:,.2f}'.format(c.importe or 0) }}</td>
+                        {% else %}
+                        <td class="px-4 py-2.5 text-center text-gray-300">—</td>
+                        <td class="px-4 py-2.5 text-center text-gray-300">—</td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         <!-- Totales -->
+        {% if user.rol != 'Solo lectura' %}
         <div class="px-5 py-4 border-t border-gray-100 flex justify-end">
             <div class="w-56 space-y-1.5">
                 <div class="flex justify-between text-sm text-gray-500">
@@ -158,6 +164,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Cotizaciones vinculadas -->

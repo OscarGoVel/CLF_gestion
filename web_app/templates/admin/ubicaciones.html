@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Ubicaciones — CLF Gestión{% endblock %}
+{% block body %}
+
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 overflow-x-auto">
+        <a href="/dashboard"      class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
+        <a href="/cotizaciones"   class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
+        <a href="/facturas"       class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
+        <a href="/catalogos"      class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📚 Catálogos</a>
+        <a href="/stock"          class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
+        <a href="/analisis"       class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
+        <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
+        <span                     class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">🏢 Ubicaciones</span>
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-4xl mx-auto">
+
+    <div class="flex items-start justify-between mb-5">
+        <div>
+            <h2 class="text-xl font-bold text-white">Sucursales y Áreas</h2>
+            <p class="text-xs text-navy-400 mt-0.5">Define dónde se almacenan los productos para el control de inventario.</p>
+        </div>
+        <a href="/admin/usuarios" class="text-xs text-navy-400 hover:text-white transition-colors">← Volver</a>
+    </div>
+
+    {% if guardado %}
+    <div class="mb-4 px-4 py-3 rounded-lg bg-green-900 border border-green-600 text-green-200 text-sm font-medium">
+        ✅ Cambios guardados.
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {# ── Panel izquierdo: lista de sucursales / áreas ── #}
+        <div class="space-y-4">
+            {% if sucursales %}
+            {% for suc in sucursales %}
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                {# Cabecera sucursal #}
+                <div class="flex items-center justify-between px-4 py-3 bg-navy-700 border-b border-navy-500">
+                    <div>
+                        <p class="text-sm font-bold text-white">🏢 {{ suc.nombre }}</p>
+                        {% if suc.descripcion %}
+                        <p class="text-xs text-navy-400">{{ suc.descripcion }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="abrirEditarSucursal({{ suc.id }}, {{ suc.nombre|tojson }}, {{ (suc.descripcion or '')|tojson }})"
+                                class="text-xs text-navy-300 hover:text-white transition-colors px-2 py-1">
+                            ✏️
+                        </button>
+                        <form action="/admin/sucursales/{{ suc.id }}/eliminar" method="post"
+                              onsubmit="return confirm('¿Eliminar sucursal {{ suc.nombre }}? Se eliminarán también sus áreas.')">
+                            <button type="submit" class="text-xs text-navy-300 hover:text-red-400 transition-colors px-2 py-1">🗑</button>
+                        </form>
+                    </div>
+                </div>
+
+                {# Áreas de la sucursal #}
+                <ul class="divide-y divide-gray-100">
+                    {% for area in suc.areas %}
+                    <li class="flex items-center justify-between px-4 py-2.5">
+                        <span class="text-sm text-gray-700">📍 {{ area.nombre }}</span>
+                        <div class="flex items-center gap-1">
+                            <button onclick="abrirEditarArea({{ area.id }}, {{ area.nombre|tojson }})"
+                                    class="text-xs text-gray-400 hover:text-navy-700 transition-colors px-2 py-1">
+                                ✏️
+                            </button>
+                            <form action="/admin/areas/{{ area.id }}/eliminar" method="post"
+                                  onsubmit="return confirm('¿Eliminar área {{ area.nombre }}?')">
+                                <button type="submit" class="text-xs text-gray-400 hover:text-red-500 transition-colors px-2 py-1">🗑</button>
+                            </form>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="px-4 py-3 text-xs text-gray-400 italic">Sin áreas — agrega una →</li>
+                    {% endfor %}
+
+                    {# Inline: nueva área en esta sucursal #}
+                    <li class="px-4 py-2 bg-gray-50">
+                        <form action="/admin/areas" method="post" class="flex gap-2 items-center">
+                            <input type="hidden" name="sucursal_id" value="{{ suc.id }}">
+                            <input type="text" name="nombre" required placeholder="Nueva área…"
+                                   class="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg
+                                          focus:outline-none focus:ring-1 focus:ring-clf-green">
+                            <button type="submit"
+                                    class="px-3 py-1.5 bg-clf-green text-white text-xs font-semibold
+                                           rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap">
+                                + Área
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+                <p class="text-3xl mb-2">🏢</p>
+                <p class="text-sm">No hay sucursales aún.</p>
+                <p class="text-xs mt-1 opacity-70">Crea una en el panel de la derecha.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── Panel derecho: formulario nueva sucursal ── #}
+        <div class="space-y-4">
+            <div class="bg-white rounded-xl shadow-sm p-5">
+                <h3 class="text-sm font-bold text-gray-700 mb-4">+ Nueva sucursal</h3>
+                <form action="/admin/sucursales" method="post" class="space-y-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Nombre *</label>
+                        <input type="text" name="nombre" required
+                               placeholder="Ej: Bodega principal, Sucursal Norte…"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Descripción (opcional)</label>
+                        <input type="text" name="descripcion"
+                               placeholder="Dirección, notas…"
+                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green">
+                    </div>
+                    <button type="submit"
+                            class="w-full py-2.5 bg-clf-green text-white text-sm font-bold
+                                   rounded-lg hover:bg-green-700 transition-colors">
+                        Crear sucursal
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-navy-800 border border-navy-500 rounded-xl p-4 text-xs text-navy-300 space-y-1.5">
+                <p class="font-semibold text-white">💡 ¿Cómo funciona?</p>
+                <p>Crea las <strong class="text-white">sucursales</strong> (bodegas, tiendas, plantas) y dentro de cada una las <strong class="text-white">áreas</strong> (secciones, pasillos, anaqueles).</p>
+                <p>Desde <strong class="text-white">Stock → Ubicaciones</strong> podrás asignar cada producto a un área.</p>
+                <p>Al crear un inventario completo por área, los productos no contados se pondrán en <strong class="text-white">cero</strong> automáticamente.</p>
+            </div>
+        </div>
+    </div>
+</main>
+
+{# Modal editar sucursal #}
+<div id="modal-suc" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 class="text-base font-bold text-gray-800 mb-4">Editar sucursal</h3>
+        <form id="form-editar-suc" method="post" class="space-y-3">
+            <input type="text" name="nombre" id="suc-nombre" required
+                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <input type="text" name="descripcion" id="suc-desc" placeholder="Descripción (opcional)"
+                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <div class="flex gap-2 pt-1">
+                <button type="button" onclick="document.getElementById('modal-suc').classList.add('hidden')"
+                        class="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+                <button type="submit" class="flex-1 py-2.5 bg-clf-green text-white font-bold rounded-lg text-sm hover:bg-green-700">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Modal editar área #}
+<div id="modal-area" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 class="text-base font-bold text-gray-800 mb-4">Editar área</h3>
+        <form id="form-editar-area" method="post" class="space-y-3">
+            <input type="text" name="nombre" id="area-nombre" required
+                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <div class="flex gap-2 pt-1">
+                <button type="button" onclick="document.getElementById('modal-area').classList.add('hidden')"
+                        class="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+                <button type="submit" class="flex-1 py-2.5 bg-clf-green text-white font-bold rounded-lg text-sm hover:bg-green-700">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function abrirEditarSucursal(id, nombre, desc) {
+    document.getElementById('form-editar-suc').action = '/admin/sucursales/' + id + '/editar';
+    document.getElementById('suc-nombre').value = nombre;
+    document.getElementById('suc-desc').value = desc || '';
+    document.getElementById('modal-suc').classList.remove('hidden');
+    document.getElementById('suc-nombre').focus();
+}
+function abrirEditarArea(id, nombre) {
+    document.getElementById('form-editar-area').action = '/admin/areas/' + id + '/editar';
+    document.getElementById('area-nombre').value = nombre;
+    document.getElementById('modal-area').classList.remove('hidden');
+    document.getElementById('area-nombre').focus();
+}
+document.getElementById('modal-suc').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden'); });
+document.getElementById('modal-area').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden'); });
+</script>
+
+{% endblock %}

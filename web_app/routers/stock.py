@@ -228,6 +228,12 @@ async def registrar_entrada(
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador",):
+        return templates.TemplateResponse(
+            request=request,
+            name="stock/_mov_result.html",
+            context={"error": "Solo el Administrador puede registrar entradas manuales.", "user": user},
+        )
 
     if cantidad <= 0:
         return templates.TemplateResponse(
@@ -288,6 +294,12 @@ async def registrar_salida(
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador",):
+        return templates.TemplateResponse(
+            request=request,
+            name="stock/_mov_result.html",
+            context={"error": "Solo el Administrador puede registrar salidas manuales.", "user": user},
+        )
 
     if cantidad <= 0:
         return templates.TemplateResponse(
@@ -359,4 +371,140 @@ async def buscar_producto(request: Request, q: str = ""):
         request=request,
         name="stock/_producto_sugerencias.html",
         context={"resultados": resultados, "user": user},
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UBICACIONES — asignación producto → área
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _asegurar_stock_ubicaciones(empresa_db: str) -> None:
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sucursales (
+                id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, descripcion TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS areas (
+                id SERIAL PRIMARY KEY,
+                sucursal_id INTEGER NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+                nombre TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS stock_ubicaciones (
+                producto_id INTEGER PRIMARY KEY REFERENCES productos(id) ON DELETE CASCADE,
+                area_id     INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE
+            )
+        """)
+
+
+@router.get("/ubicaciones", response_class=HTMLResponse)
+async def vista_ubicaciones(request: Request, buscar: str = "", area_id: str = ""):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+
+    _asegurar_stock_ubicaciones(user["empresa_db"])
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        # Sucursales con áreas para el selector
+        cur.execute("""
+            SELECT a.id, a.nombre, s.nombre AS sucursal_nombre
+            FROM areas a JOIN sucursales s ON s.id = a.sucursal_id
+            ORDER BY s.nombre, a.nombre
+        """)
+        areas_raw = cur.fetchall()
+        sucursales_map: dict = {}
+        for aid, anom, snom in areas_raw:
+            sucursales_map.setdefault(snom, []).append({"id": aid, "nombre": anom})
+        sucursales = [{"nombre": k, "areas": v} for k, v in sucursales_map.items()]
+
+        # Productos con su ubicación actual
+        where, params = [], []
+        if buscar:
+            where.append("(p.nombre ILIKE %s OR p.codigo ILIKE %s)")
+            params += [f"%{buscar}%"] * 2
+        if area_id and area_id.isdigit():
+            where.append("su.area_id = %s")
+            params.append(int(area_id))
+        elif area_id == "sin":
+            where.append("su.area_id IS NULL")
+        w = ("WHERE " + " AND ".join(where)) if where else ""
+
+        cur.execute(f"""
+            SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
+                   su.area_id,
+                   a.nombre AS area_nombre,
+                   s.nombre AS sucursal_nombre
+            FROM productos p
+            LEFT JOIN stock_ubicaciones su ON su.producto_id = p.id
+            LEFT JOIN areas a ON a.id = su.area_id
+            LEFT JOIN sucursales s ON s.id = a.sucursal_id
+            {w}
+            ORDER BY p.nombre
+        """, params or None)
+        cols = [d[0] for d in cur.description]
+        productos = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    ctx = {
+        "user": user,
+        "productos": productos,
+        "sucursales": sucursales,
+        "buscar": buscar,
+        "area_sel": area_id,
+        "subseccion": "ubicaciones",
+        "seccion": "stock",
+    }
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(
+            request=request, name="stock/_ubicaciones_tabla.html", context=ctx
+        )
+    return templates.TemplateResponse(
+        request=request, name="stock/ubicaciones.html", context=ctx
+    )
+
+
+@router.post("/producto/{producto_id}/ubicar", response_class=HTMLResponse)
+async def ubicar_producto(
+    request: Request,
+    producto_id: int,
+    area_id: str = Form(""),
+):
+    user = get_usuario_actual(request)
+    if not user:
+        return HTMLResponse("", status_code=401)
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        if area_id and area_id.isdigit():
+            cur.execute("""
+                INSERT INTO stock_ubicaciones (producto_id, area_id) VALUES (%s, %s)
+                ON CONFLICT (producto_id) DO UPDATE SET area_id = EXCLUDED.area_id
+            """, (producto_id, int(area_id)))
+            cur.execute("""
+                SELECT a.nombre, s.nombre FROM areas a
+                JOIN sucursales s ON s.id = a.sucursal_id
+                WHERE a.id = %s
+            """, (int(area_id),))
+            row = cur.fetchone()
+            area_txt = f"{row[1]} › {row[0]}" if row else "—"
+        else:
+            cur.execute(
+                "DELETE FROM stock_ubicaciones WHERE producto_id = %s", (producto_id,)
+            )
+            area_txt = None
+
+    if area_txt:
+        return HTMLResponse(
+            f'<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 '
+            f'cursor-pointer hover:bg-blue-200" '
+            f'onclick="abrirUbicar({producto_id})" title="Cambiar área">'
+            f'📍 {area_txt}</span>'
+        )
+    return HTMLResponse(
+        f'<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400 '
+        f'cursor-pointer hover:bg-gray-200" '
+        f'onclick="abrirUbicar({producto_id})" title="Asignar área">'
+        f'Sin área</span>'
     )

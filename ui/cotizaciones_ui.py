@@ -3154,7 +3154,7 @@ class CotizacionesUI:
             self.cursor.execute("""
                 UPDATE cotizaciones
                 SET monto_pagado = ?,
-                    fecha_pago   = COALESCE(NULLIF(fecha_pago,''), ?),
+                    fecha_pago   = COALESCE(fecha_pago, ?),
                     estado       = 'Pagada'
                 WHERE id = ?
             """, (nuevo_pagado, _dt.now().strftime('%Y-%m-%d'), cotizacion_id))

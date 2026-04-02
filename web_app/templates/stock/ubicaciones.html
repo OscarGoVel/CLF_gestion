@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Ubicaciones de Stock — CLF Gestión{% endblock %}
+{% block body %}
+{% set subseccion = 'ubicaciones' %}
+{% include "stock/_nav.html" %}
+
+<main class="p-5 max-w-4xl mx-auto">
+
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-lg font-bold text-gray-800">📍 Ubicaciones de productos</h1>
+            <p class="text-xs text-gray-400 mt-0.5">Asigna cada producto a su área de almacenamiento.</p>
+        </div>
+        <span class="text-xs text-gray-400">
+            {% set sin_area = productos | selectattr('area_id', 'none') | list | length %}
+            {% if sin_area > 0 %}
+            <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+                ⚠️ {{ sin_area }} sin área
+            </span>
+            {% endif %}
+        </span>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-xl shadow-sm mb-4 px-4 py-3">
+        <form hx-get="/stock/ubicaciones" hx-target="#ubicaciones-wrapper" hx-swap="innerHTML"
+              hx-trigger="submit, change delay:300ms from:select"
+              class="flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[220px]">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                <input type="text" name="buscar" value="{{ buscar }}"
+                       placeholder="Buscar producto o código…"
+                       hx-get="/stock/ubicaciones" hx-target="#ubicaciones-wrapper"
+                       hx-swap="innerHTML" hx-trigger="keyup changed delay:350ms"
+                       hx-include="[name='area_id']"
+                       class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg
+                              bg-gray-50 focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+            <select name="area_id"
+                    class="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                           focus:outline-none focus:ring-2 focus:ring-clf-green cursor-pointer">
+                <option value="">Todas las áreas</option>
+                <option value="sin" {% if area_sel == 'sin' %}selected{% endif %}>Sin área asignada</option>
+                {% for suc in sucursales %}
+                <optgroup label="{{ suc.nombre }}">
+                    {% for area in suc.areas %}
+                    <option value="{{ area.id }}"
+                            {% if area_sel == area.id|string %}selected{% endif %}>
+                        {{ area.nombre }}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-gray-100 bg-gray-50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Producto</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Unidad</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Área asignada</th>
+                    </tr>
+                </thead>
+                <div id="ubicaciones-wrapper">
+                    {% include "stock/_ubicaciones_tabla.html" %}
+                </div>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<!-- Modal asignar área -->
+<div id="modal-ubicar" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 class="text-base font-bold text-gray-800 mb-4">📍 Asignar área</h3>
+        <form id="form-ubicar" method="post"
+              hx-target="this" hx-swap="none"
+              hx-on::after-request="manejarRespuestaUbicar(event)">
+            <select name="area_id"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-4
+                           focus:outline-none focus:ring-2 focus:ring-clf-green">
+                <option value="">— Sin área —</option>
+                {% for suc in sucursales %}
+                <optgroup label="{{ suc.nombre }}">
+                    {% for area in suc.areas %}
+                    <option value="{{ area.id }}">{{ area.nombre }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+            <div class="flex gap-2">
+                <button type="button" onclick="cerrarModalUbicar()"
+                        class="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        class="flex-1 py-2.5 bg-clf-green text-white font-bold rounded-lg text-sm hover:bg-green-700">
+                    Guardar
+                </button>
+            </div>
+        </form>
+        {% if not sucursales %}
+        <p class="text-xs text-amber-600 mt-3 text-center">
+            No hay áreas configuradas. Ve a
+            <a href="/admin/ubicaciones" class="underline hover:text-amber-800">Admin → Ubicaciones</a>
+            para crearlas.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+let _productoUbicarId = null;
+
+function abrirUbicar(productoId, areaActualId) {
+    _productoUbicarId = productoId;
+    document.getElementById('form-ubicar').action = '/stock/producto/' + productoId + '/ubicar';
+    document.getElementById('form-ubicar').setAttribute('hx-post', '/stock/producto/' + productoId + '/ubicar');
+    htmx.process(document.getElementById('form-ubicar'));
+    const sel = document.querySelector('#form-ubicar select[name="area_id"]');
+    sel.value = areaActualId !== null ? String(areaActualId) : '';
+    document.getElementById('modal-ubicar').classList.remove('hidden');
+}
+
+function cerrarModalUbicar() {
+    document.getElementById('modal-ubicar').classList.add('hidden');
+    _productoUbicarId = null;
+}
+
+function manejarRespuestaUbicar(evt) {
+    if (!evt.detail.successful) return;
+    // Actualizar el badge de la fila sin recargar
+    const badge = document.getElementById('ubi-badge-' + _productoUbicarId);
+    if (badge) badge.innerHTML = evt.detail.xhr.responseText;
+    cerrarModalUbicar();
+}
+
+document.getElementById('modal-ubicar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalUbicar();
+});
+</script>
+
+{% endblock %}

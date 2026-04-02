@@ -169,6 +169,7 @@
                 </div>
 
                 <!-- Totales -->
+                {% if user.rol != 'Solo lectura' %}
                 <div>
                     <p class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Subtotal</p>
                     <p class="text-sm font-semibold text-gray-700">${{ '{:,.2f}'.format(cot.subtotal or 0) }}</p>
@@ -185,6 +186,7 @@
                     <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Sin IVA</span>
                     {% endif %}
                 </div>
+                {% endif %}
             </div>
 
             <!-- Datos secundarios -->
@@ -233,10 +235,12 @@
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Descripción</th>
                         <th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Cant.</th>
                         <th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">U.M.</th>
+                        {% if user.rol != 'Solo lectura' %}
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">P. Unit.</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Subtotal</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">IVA</th>
                         <th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
@@ -252,6 +256,7 @@
                             {{ '{:,.2f}'.format(p.cantidad)|replace('.00','') }}
                         </td>
                         <td class="px-4 py-3 text-xs text-center text-gray-500">{{ p.unidad_medida or '—' }}</td>
+                        {% if user.rol != 'Solo lectura' %}
                         <td class="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap">
                             ${{ '{:,.2f}'.format(p.precio_unitario) }}
                         </td>
@@ -266,6 +271,7 @@
                         <td class="px-4 py-3 text-sm text-right font-bold text-gray-800 whitespace-nowrap">
                             ${{ '{:,.2f}'.format(p.total) }}
                         </td>
+                        {% endif %}
                     </tr>
                     {% else %}
                     <tr>
@@ -277,6 +283,7 @@
                 </tbody>
 
                 <!-- Totales finales -->
+                {% if user.rol != 'Solo lectura' %}
                 <tfoot class="border-t-2 border-gray-200 bg-gray-50">
                     <tr>
                         <td colspan="5" class="px-4 py-3"></td>
@@ -292,6 +299,7 @@
                         </td>
                     </tr>
                 </tfoot>
+                {% endif %}
             </table>
         </div>
     </div>

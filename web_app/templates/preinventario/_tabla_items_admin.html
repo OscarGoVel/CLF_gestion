@@ -1,13 +1,13 @@
 {% if items %}
 <div class="overflow-x-auto">
-    <table class="w-full text-sm">
+    <table class="w-full text-sm" data-sortable>
         <thead>
             <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
-                <th class="px-4 py-2 text-left">Producto</th>
-                <th class="px-4 py-2 text-right">Teórico</th>
-                <th class="px-4 py-2 text-right">Físico</th>
-                <th class="px-4 py-2 text-right">Ajuste</th>
-                <th class="px-4 py-2 text-right font-bold">Diferencia</th>
+                <th data-col="0" class="px-4 py-2 text-left">Producto</th>
+                <th data-col="1" class="px-4 py-2 text-right">Teórico</th>
+                <th data-col="2" class="px-4 py-2 text-right">Físico</th>
+                <th data-col="3" class="px-4 py-2 text-right">Ajuste</th>
+                <th data-col="4" class="px-4 py-2 text-right font-bold">Diferencia</th>
                 {% if sesion.estado == 'cerrada' %}
                 <th class="px-4 py-2 text-center">Acción</th>
                 {% endif %}

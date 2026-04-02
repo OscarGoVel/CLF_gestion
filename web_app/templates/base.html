@@ -55,13 +55,29 @@
     <nav id="bottom-nav"
          class="sm:hidden fixed bottom-0 inset-x-0 bg-navy-900 border-t border-navy-500
                 flex items-stretch h-16 z-50 select-none">
-        {% set nav_links = [
-            ('📊','Dashboard','/dashboard'),
-            ('📄','Cotizaciones','/cotizaciones'),
-            ('📚','Catálogos','/catalogos'),
-            ('🔢','Pre-Inv','/preinventario'),
-            ('📦','Stock','/stock'),
-        ] %}
+        {% if user is defined and user and user.rol == 'Almacenista' %}
+            {% set nav_links = [
+                ('📊','Dashboard','/dashboard'),
+                ('📦','Stock','/stock'),
+                ('📚','Catálogos','/catalogos'),
+                ('🔢','Pre-Inv','/preinventario'),
+            ] %}
+        {% elif user is defined and user and user.rol == 'Solo lectura' %}
+            {% set nav_links = [
+                ('📊','Dashboard','/dashboard'),
+                ('📄','Cotizaciones','/cotizaciones'),
+                ('📚','Catálogos','/catalogos'),
+                ('📦','Stock','/stock'),
+            ] %}
+        {% else %}
+            {% set nav_links = [
+                ('📊','Dashboard','/dashboard'),
+                ('📄','Cotizaciones','/cotizaciones'),
+                ('📚','Catálogos','/catalogos'),
+                ('🔢','Pre-Inv','/preinventario'),
+                ('📦','Stock','/stock'),
+            ] %}
+        {% endif %}
         {% for icon, label, href in nav_links %}
         <a href="{{ href }}" data-path="{{ href }}"
            class="flex-1 flex flex-col items-center justify-center gap-0.5 text-navy-400
@@ -90,6 +106,76 @@
                 }
             });
         })();
+    </script>
+
+    <!-- ── Tablas ordenables ─────────────────────────────────────────────── -->
+    <style>
+        th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }
+        th[data-col]:hover { opacity: .75; }
+        th[data-col] .si { margin-left: .25rem; opacity: .35; font-style: normal; }
+        th[data-col][data-dir] .si { opacity: 1; }
+    </style>
+    <script>
+    (function () {
+        function parseVal(cell) {
+            /* data-sort-value permite valor personalizado (ej. fechas ISO) */
+            var raw = (cell.dataset.sortValue !== undefined
+                ? cell.dataset.sortValue
+                : cell.textContent).trim();
+            /* Quitar símbolos monetarios/porcentaje y separadores de miles */
+            var num = parseFloat(raw.replace(/[$,%]/g, '').replace(/\./g, '').replace(',', '.'));
+            return isNaN(num) ? raw.toLowerCase() : num;
+        }
+
+        function attachSort(table) {
+            var ths = table.querySelectorAll('thead th[data-col]');
+            ths.forEach(function (th) {
+                /* Agregar indicador si aún no tiene */
+                if (!th.querySelector('.si')) {
+                    var si = document.createElement('i');
+                    si.className = 'si';
+                    si.textContent = '↕';
+                    th.appendChild(si);
+                }
+                th.addEventListener('click', function () {
+                    var col   = parseInt(th.dataset.col, 10);
+                    var asc   = th.dataset.dir !== 'asc';
+                    /* Resetear todos los encabezados de esta tabla */
+                    table.querySelectorAll('thead th[data-col]').forEach(function (h) {
+                        delete h.dataset.dir;
+                        var s = h.querySelector('.si');
+                        if (s) s.textContent = '↕';
+                    });
+                    th.dataset.dir = asc ? 'asc' : 'desc';
+                    th.querySelector('.si').textContent = asc ? ' ↑' : ' ↓';
+
+                    var tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    var rows = Array.from(tbody.querySelectorAll('tr')).filter(function (r) {
+                        return r.cells.length > 1; /* omitir filas de "sin resultados" */
+                    });
+                    rows.sort(function (a, b) {
+                        var av = parseVal(a.cells[col] || a.cells[0]);
+                        var bv = parseVal(b.cells[col] || b.cells[0]);
+                        if (typeof av === 'number' && typeof bv === 'number')
+                            return asc ? av - bv : bv - av;
+                        return asc
+                            ? String(av).localeCompare(String(bv), 'es')
+                            : String(bv).localeCompare(String(av), 'es');
+                    });
+                    rows.forEach(function (r) { tbody.appendChild(r); });
+                });
+            });
+        }
+
+        function initAll() {
+            document.querySelectorAll('table[data-sortable]').forEach(attachSort);
+        }
+
+        document.addEventListener('DOMContentLoaded', initAll);
+        /* Re-adjuntar tras cada swap de HTMX (el thead permanece, solo tbody cambia) */
+        document.addEventListener('htmx:afterSettle', initAll);
+    })();
     </script>
 </body>
 </html>

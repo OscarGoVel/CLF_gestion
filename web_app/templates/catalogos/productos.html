@@ -54,12 +54,15 @@
 
     <!-- Tabla -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-        <table class="w-full">
+        <table class="w-full" data-sortable>
             <thead>
                 <tr class="bg-gray-50 border-b border-gray-100">
-                    {% for col in ['Nombre / Categoría','Código','Unidad','Precio base','IVA','Stock'] %}
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{{ col }}</th>
-                    {% endfor %}
+                    <th data-col="0" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Nombre / Categoría</th>
+                    <th data-col="1" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Código</th>
+                    <th data-col="2" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Unidad</th>
+                    <th data-col="3" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Precio base</th>
+                    <th data-col="4" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">IVA</th>
+                    <th data-col="5" class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Stock</th>
                 </tr>
             </thead>
             <div id="productos-wrapper">

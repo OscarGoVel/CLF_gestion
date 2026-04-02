@@ -14,15 +14,72 @@
     <!-- Crear nueva sesión -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-5">
         <h2 class="text-sm font-semibold text-gray-700 mb-3">Nueva sesión de conteo</h2>
-        <form action="/preinventario/sesion" method="post" class="flex gap-2">
+        <form action="/preinventario/sesion" method="post" class="space-y-3" id="form-nueva-sesion">
+
             <input type="text" name="nombre" required
                    placeholder="Ej: Conteo Almacén A — Abril 2026"
-                   class="flex-1 px-3 py-3 text-sm border border-gray-200 rounded-lg
+                   class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
                           focus:outline-none focus:ring-2 focus:ring-clf-green">
+
+            <!-- Tipo de inventario -->
+            <div class="flex gap-3">
+                <label class="flex items-center gap-2 cursor-pointer flex-1 px-3 py-2.5 border border-gray-200
+                              rounded-lg hover:border-clf-green transition-colors has-[:checked]:border-clf-green
+                              has-[:checked]:bg-green-50">
+                    <input type="radio" name="tipo" value="parcial" checked
+                           onchange="toggleAreas()"
+                           class="accent-clf-green">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Conteo parcial</p>
+                        <p class="text-xs text-gray-400">Solo ajusta los productos contados</p>
+                    </div>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer flex-1 px-3 py-2.5 border border-gray-200
+                              rounded-lg hover:border-clf-green transition-colors has-[:checked]:border-clf-green
+                              has-[:checked]:bg-green-50">
+                    <input type="radio" name="tipo" value="completo"
+                           onchange="toggleAreas()"
+                           class="accent-clf-green">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Inventario completo</p>
+                        <p class="text-xs text-gray-400">No contados → stock = 0</p>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Selector de áreas (solo inventario completo) -->
+            <div id="panel-areas" class="hidden">
+                {% if sucursales %}
+                <p class="text-xs text-gray-500 mb-2 font-medium">Áreas a cubrir <span class="text-gray-400 font-normal">(dejar vacío = todo el catálogo)</span></p>
+                <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                    {% for suc in sucursales %}
+                    <div class="px-3 py-2">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">🏢 {{ suc.nombre }}</p>
+                        <div class="space-y-1 pl-2">
+                            {% for area in suc.areas %}
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="area_ids" value="{{ area.id }}"
+                                       class="w-3.5 h-3.5 accent-clf-green">
+                                <span class="text-sm text-gray-700">{{ area.nombre }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                    ⚠️ No hay áreas configuradas.
+                    <a href="/admin/ubicaciones" class="underline font-medium">Configúralas en Admin → Ubicaciones</a>
+                    para poder seleccionarlas aquí.
+                </div>
+                {% endif %}
+            </div>
+
             <button type="submit"
-                    class="px-4 py-3 bg-clf-green text-white text-sm font-semibold rounded-lg
-                           hover:bg-green-700 transition-colors whitespace-nowrap">
-                + Crear
+                    class="w-full py-2.5 bg-clf-green text-white text-sm font-semibold rounded-lg
+                           hover:bg-green-700 transition-colors">
+                + Crear sesión
             </button>
         </form>
     </div>
@@ -54,6 +111,9 @@
                         {{ s.estado.capitalize() }}
                     </span>
                     <span class="text-xs text-gray-400">{{ s.total_items }} productos</span>
+                    {% if s.tipo == 'completo' %}
+                    <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">Completo</span>
+                    {% endif %}
                 </div>
             </div>
         </a>
@@ -68,4 +128,11 @@
     {% endif %}
 
 </main>
+
+<script>
+function toggleAreas() {
+    const completo = document.querySelector('input[name="tipo"][value="completo"]').checked;
+    document.getElementById('panel-areas').classList.toggle('hidden', !completo);
+}
+</script>
 {% endblock %}

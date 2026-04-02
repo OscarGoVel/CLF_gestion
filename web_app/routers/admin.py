@@ -12,13 +12,19 @@ from fastapi.templating import Jinja2Templates
 
 from web_app import audit
 from web_app.auth import _hash_password
-from web_app.database import pool_usuarios
-from web_app.rbac import require_rol
+from web_app.database import pool_usuarios, get_pool_empresa
+from web_app.rbac import (
+    require_rol,
+    PERMISOS_DEFAULT,
+    PERMISOS_LABELS,
+    _get_permisos_empresa,
+    invalidar_cache_permisos,
+)
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
-ROLES = ["Administrador", "Operador", "Solo lectura"]
+ROLES = ["Administrador", "Operador", "Almacenista", "Solo lectura"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,3 +256,238 @@ async def toggle_usuario(
     return HTMLResponse(
         f'<button hx-post="/admin/usuarios/{uid}/toggle" hx-swap="outerHTML" class="{_cls_off}">Inactivo</button>'
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PERMISOS POR ROL
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/permisos", response_class=HTMLResponse)
+async def ver_permisos(
+    request: Request,
+    user=Depends(require_rol("Administrador")),
+):
+    permisos_actuales = _get_permisos_empresa(user["empresa_db"])
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/permisos.html",
+        context={
+            "user": user,
+            "permisos_default": PERMISOS_DEFAULT,
+            "permisos_labels": PERMISOS_LABELS,
+            "permisos_actuales": permisos_actuales,
+            "roles_configurables": ["Operador", "Almacenista", "Solo lectura"],
+            "guardado": "guardado" in request.query_params,
+        },
+    )
+
+
+@router.post("/permisos", response_class=HTMLResponse)
+async def guardar_permisos(
+    request: Request,
+    user=Depends(require_rol("Administrador")),
+):
+    form_data = await request.form()
+    roles_configurables = ["Operador", "Almacenista", "Solo lectura"]
+
+    checked: list[tuple[str, str]] = []
+    for key in PERMISOS_DEFAULT:
+        for rol in roles_configurables:
+            if form_data.get(f"perm_{key}_{rol}") == "on":
+                checked.append((key, rol))
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS config_permisos (
+                permiso_key TEXT NOT NULL,
+                rol         TEXT NOT NULL,
+                PRIMARY KEY (permiso_key, rol)
+            )
+        """)
+        cur.execute("DELETE FROM config_permisos WHERE rol != 'Administrador'")
+        for key, rol in checked:
+            cur.execute(
+                "INSERT INTO config_permisos (permiso_key, rol) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (key, rol),
+            )
+
+    invalidar_cache_permisos(user["empresa_db"])
+
+    audit.registrar(
+        "permisos_actualizados",
+        username=user.get("username"),
+        detalle=f"{len(checked)} permisos configurados",
+        ip=request.client.host if request.client else None,
+    )
+    return RedirectResponse("/admin/permisos?guardado=1", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UBICACIONES — Sucursales y Áreas
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _asegurar_ubicaciones(empresa_db: str) -> None:
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sucursales (
+                id          SERIAL PRIMARY KEY,
+                nombre      TEXT NOT NULL,
+                descripcion TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS areas (
+                id          SERIAL PRIMARY KEY,
+                sucursal_id INTEGER NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+                nombre      TEXT NOT NULL
+            )
+        """)
+
+
+def _cargar_sucursales(cur) -> list:
+    cur.execute("""
+        SELECT s.id, s.nombre, s.descripcion,
+               COUNT(a.id) AS total_areas
+        FROM sucursales s
+        LEFT JOIN areas a ON a.sucursal_id = s.id
+        GROUP BY s.id
+        ORDER BY s.nombre
+    """)
+    cols = [d[0] for d in cur.description]
+    sucursales = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for suc in sucursales:
+        cur.execute(
+            "SELECT id, nombre FROM areas WHERE sucursal_id = %s ORDER BY nombre",
+            (suc["id"],),
+        )
+        suc["areas"] = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+    return sucursales
+
+
+@router.get("/ubicaciones", response_class=HTMLResponse)
+async def ver_ubicaciones(
+    request: Request,
+    user=Depends(require_rol("Administrador")),
+):
+    _asegurar_ubicaciones(user["empresa_db"])
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        sucursales = _cargar_sucursales(cur)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/ubicaciones.html",
+        context={
+            "user": user,
+            "sucursales": sucursales,
+            "guardado": "guardado" in request.query_params,
+        },
+    )
+
+
+@router.post("/sucursales", response_class=HTMLResponse)
+async def crear_sucursal(
+    request: Request,
+    nombre: str = Form(...),
+    descripcion: str = Form(""),
+    user=Depends(require_rol("Administrador")),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        return RedirectResponse("/admin/ubicaciones", status_code=303)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "INSERT INTO sucursales (nombre, descripcion) VALUES (%s, %s)",
+            (nombre, descripcion.strip() or None),
+        )
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)
+
+
+@router.post("/sucursales/{suc_id}/editar", response_class=HTMLResponse)
+async def editar_sucursal(
+    request: Request,
+    suc_id: int,
+    nombre: str = Form(...),
+    descripcion: str = Form(""),
+    user=Depends(require_rol("Administrador")),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        return RedirectResponse("/admin/ubicaciones", status_code=303)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "UPDATE sucursales SET nombre = %s, descripcion = %s WHERE id = %s",
+            (nombre, descripcion.strip() or None, suc_id),
+        )
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)
+
+
+@router.post("/sucursales/{suc_id}/eliminar", response_class=HTMLResponse)
+async def eliminar_sucursal(
+    request: Request,
+    suc_id: int,
+    user=Depends(require_rol("Administrador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        # Verificar que no tenga áreas con productos asignados
+        cur.execute("""
+            SELECT COUNT(*) FROM stock_ubicaciones su
+            JOIN areas a ON a.id = su.area_id
+            WHERE a.sucursal_id = %s
+        """, (suc_id,))
+        if cur.fetchone()[0] > 0:
+            # Devolver error como HTMX fragment
+            return HTMLResponse(
+                '<p class="text-xs text-red-500 px-2">No se puede eliminar: hay productos asignados a áreas de esta sucursal.</p>'
+            )
+        cur.execute("DELETE FROM sucursales WHERE id = %s", (suc_id,))
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)
+
+
+@router.post("/areas", response_class=HTMLResponse)
+async def crear_area(
+    request: Request,
+    sucursal_id: int = Form(...),
+    nombre: str = Form(...),
+    user=Depends(require_rol("Administrador")),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        return RedirectResponse("/admin/ubicaciones", status_code=303)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "INSERT INTO areas (sucursal_id, nombre) VALUES (%s, %s)",
+            (sucursal_id, nombre),
+        )
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)
+
+
+@router.post("/areas/{area_id}/editar", response_class=HTMLResponse)
+async def editar_area(
+    request: Request,
+    area_id: int,
+    nombre: str = Form(...),
+    user=Depends(require_rol("Administrador")),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        return RedirectResponse("/admin/ubicaciones", status_code=303)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("UPDATE areas SET nombre = %s WHERE id = %s", (nombre, area_id))
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)
+
+
+@router.post("/areas/{area_id}/eliminar", response_class=HTMLResponse)
+async def eliminar_area(
+    request: Request,
+    area_id: int,
+    user=Depends(require_rol("Administrador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "SELECT COUNT(*) FROM stock_ubicaciones WHERE area_id = %s", (area_id,)
+        )
+        if cur.fetchone()[0] > 0:
+            return HTMLResponse(
+                '<p class="text-xs text-red-500 px-2">No se puede eliminar: hay productos asignados a esta área.</p>'
+            )
+        cur.execute("DELETE FROM areas WHERE id = %s", (area_id,))
+    return RedirectResponse("/admin/ubicaciones?guardado=1", status_code=303)

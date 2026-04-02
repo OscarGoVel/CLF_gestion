@@ -302,7 +302,7 @@ async def eliminar_cotizacion(
 async def aplicar_precio_ganador(
     request: Request,
     item_id: int,
-    user=Depends(require_rol("Administrador", "Operador")),
+    user=Depends(require_rol("Administrador")),
 ):
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         # Obtener item y precio mínimo

@@ -6,12 +6,16 @@
     <div class="w-px bg-navy-900 h-full"></div>
     <div class="flex items-center h-full flex-1 overflow-x-auto">
         <a href="/dashboard"       class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
+        {% if user.rol not in ('Almacenista',) %}
         <a href="/cotizaciones"    class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
         <a href="/facturas"        class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
+        {% endif %}
         <a href="/catalogos"       class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📚 Catálogos</a>
         <a href="/stock"           class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
         <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">🔢 Pre-Inventario</span>
+        {% if user.rol not in ('Almacenista',) %}
         <a href="/analisis"        class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
+        {% endif %}
         {% if user.rol == 'Administrador' %}
         <a href="/admin/usuarios"  class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
         {% endif %}
@@ -27,10 +31,11 @@
 {# Sub-nav de pre-inventario #}
 <div class="bg-[#f0f4fa] border-b border-[#d9e2f0] flex items-center px-5 gap-1 h-9 select-none">
     {% for label, href, key in [
-        ('Mis conteos',    '/preinventario',        'operario'),
-        ('Autorización',   '/preinventario/admin',  'admin'),
+        ('Mis conteos',    '/preinventario',                 'operario'),
+        ('Autorización',   '/preinventario/admin',           'admin'),
+        ('Historial',      '/preinventario/admin/historico', 'historico'),
     ] %}
-    {% if key != 'admin' or user.rol == 'Administrador' %}
+    {% if key == 'operario' or user.rol == 'Administrador' %}
     <a href="{{ href }}"
        class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t
               {% if subseccion == key %}text-clf-green border-b-2 border-clf-green bg-white

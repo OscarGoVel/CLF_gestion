@@ -26,7 +26,9 @@
         {% endif %}
     </td>
     <td class="px-4 py-3 text-sm text-right font-semibold text-gray-800 whitespace-nowrap">
+        {% if user.rol != 'Solo lectura' %}
         ${{ '{:,.2f}'.format(c.total) }}
+        {% else %}<span class="text-gray-300">—</span>{% endif %}
     </td>
     <td class="px-4 py-3 whitespace-nowrap">
         <span class="px-2.5 py-1 rounded-full text-xs font-bold {{ bg }} {{ fg }}">

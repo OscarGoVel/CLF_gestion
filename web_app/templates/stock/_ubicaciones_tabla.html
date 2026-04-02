@@ -1,0 +1,32 @@
+<tbody id="ubicaciones-body" class="divide-y divide-gray-100">
+{% for p in productos %}
+<tr class="hover:bg-slate-50 transition-colors" id="ubi-row-{{ p.id }}">
+    <td class="px-4 py-2.5">
+        <p class="text-sm font-semibold text-gray-800">{{ p.nombre }}</p>
+        <p class="text-xs text-gray-400 font-mono mt-0.5">{{ p.codigo or '—' }}</p>
+    </td>
+    <td class="px-4 py-2.5 text-xs text-gray-400">{{ p.unidad_medida or '—' }}</td>
+    <td class="px-4 py-2.5" id="ubi-badge-{{ p.id }}">
+        {% if p.area_id %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700
+                     cursor-pointer hover:bg-blue-200"
+              onclick='abrirUbicar({{ p.id }}, {{ p.area_id }})' title="Cambiar área">
+            📍 {{ p.sucursal_nombre }} › {{ p.area_nombre }}
+        </span>
+        {% else %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400
+                     cursor-pointer hover:bg-gray-200"
+              onclick='abrirUbicar({{ p.id }}, null)' title="Asignar área">
+            Sin área
+        </span>
+        {% endif %}
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="3" class="px-4 py-10 text-center text-sm text-gray-400">
+        No se encontraron productos.
+    </td>
+</tr>
+{% endfor %}
+</tbody>
