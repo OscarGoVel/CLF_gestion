@@ -11,8 +11,9 @@ from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from web_app.auth import verificar_password, crear_token, TOKEN_EXPIRE_HOURS
+from web_app.auth import verificar_password, hash_password, crear_token
 from web_app.database import pool_usuarios, get_empresas
+from web_app.config import settings
 from web_app import audit
 
 router = APIRouter()
@@ -54,25 +55,33 @@ async def login(
 
     # ── Consultar usuario ─────────────────────────────────────────────────
     try:
-        with pool_usuarios.conexion() as (_, cursor):
+        with pool_usuarios.conexion() as (conn, cursor):
             cursor.execute(
-                "SELECT id, nombre, password_hash, rol, activo FROM usuarios WHERE username = %s",
+                "SELECT id, nombre, password_hash, salt, rol, activo FROM usuarios WHERE username = %s",
                 (username,),
             )
             row = cursor.fetchone()
+            if row is None:
+                return _error("Usuario o contraseña incorrectos.")
+
+            uid, nombre, phash, salt, rol, activo = row
+
+            if not activo:
+                return _error("Usuario desactivado. Contacta al administrador.")
+
+            if not verificar_password(password, phash, salt):
+                return _error("Usuario o contraseña incorrectos.")
+
+            # Rolling upgrade: si el usuario aún usaba salt estático, re-hashear ahora
+            if not salt:
+                new_hash, new_salt = hash_password(password)
+                cursor.execute(
+                    "UPDATE usuarios SET password_hash = %s, salt = %s WHERE id = %s",
+                    (new_hash, new_salt, uid),
+                )
+
     except Exception as e:
         return _error(f"Error de conexión a la base de datos: {e}")
-
-    if row is None:
-        return _error("Usuario o contraseña incorrectos.")
-
-    uid, nombre, phash, rol, activo = row
-
-    if not activo:
-        return _error("Usuario desactivado. Contacta al administrador.")
-
-    if not verificar_password(password, phash):
-        return _error("Usuario o contraseña incorrectos.")
 
     # ── Login exitoso ─────────────────────────────────────────────────────
     audit.registrar(
@@ -99,6 +108,7 @@ async def login(
         value=token,
         httponly=True,
         samesite="lax",
+        secure=settings.es_produccion,
     )
     return response
 

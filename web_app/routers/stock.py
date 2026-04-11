@@ -13,19 +13,11 @@ from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
+from core.constants import MOTIVOS_SALIDA
+from core.stock import clasificar_abc
 
 router = APIRouter(prefix="/stock")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
-
-MOTIVOS_SALIDA = [
-    "Merma / Daño",
-    "Uso interno",
-    "Devolución a proveedor",
-    "Ajuste de inventario",
-    "Muestra / Demo",
-    "Pérdida",
-    "Otro",
-]
 
 
 def _floats(d: dict) -> dict:
@@ -33,25 +25,16 @@ def _floats(d: dict) -> dict:
 
 
 def _calcular_abc(productos: list) -> None:
-    """Asigna campo 'abc' y 'valor_inv' a cada producto in-place."""
-    con_valor = [
-        (p, (p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0))
-        for p in productos
+    """Asigna campo 'abc' y 'valor_inv' a cada producto in-place usando core.stock."""
+    datos = [
+        (i, (p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0))
+        for i, p in enumerate(productos)
     ]
-    total = sum(v for _, v in con_valor)
-    if total == 0:
-        for p, _ in con_valor:
-            p["abc"] = "C"
-            p["valor_inv"] = 0.0
-        return
-
-    con_valor.sort(key=lambda x: x[1], reverse=True)
-    acum = 0.0
-    for p, valor in con_valor:
-        acum += valor
-        pct = acum / total * 100
-        p["valor_inv"] = round(valor, 2)
-        p["abc"] = "A" if pct <= 80 else ("B" if pct <= 95 else "C")
+    resultado = clasificar_abc(datos)
+    for i, p in enumerate(productos):
+        info = resultado.get(i, {"categoria": "C", "valor": 0.0})
+        p["abc"]      = info["categoria"]
+        p["valor_inv"] = info["valor"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

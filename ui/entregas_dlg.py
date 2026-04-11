@@ -514,6 +514,17 @@ class VentanaEntregaParcial:
             
             total_cotizado, total_entregado = self.cursor.fetchone()
             
+            # Calcular monto acumulado entregado
+            self.cursor.execute("""
+                SELECT COALESCE(SUM(ep.cantidad_entregada * (cd.total / cd.cantidad)), 0)
+                FROM entregas_parciales ep
+                JOIN cotizacion_detalle cd
+                    ON cd.cotizacion_id = ep.cotizacion_id
+                    AND cd.producto_id  = ep.producto_id
+                WHERE ep.cotizacion_id = ?
+            """, (self.cotizacion_id,))
+            monto_entregado = self.cursor.fetchone()[0] or 0
+
             # Actualizar estado de la cotización
             if total_entregado >= total_cotizado:
                 # Entrega completa
@@ -521,19 +532,22 @@ class VentanaEntregaParcial:
                     UPDATE cotizaciones
                     SET estado = 'Entregada',
                         entrega_parcial = 0,
-                        fecha_entrega = ?
+                        fecha_entrega = ?,
+                        monto_entregado = ?
                     WHERE id = ?
-                """, (fecha_entrega, self.cotizacion_id))
-                
+                """, (fecha_entrega, monto_entregado, self.cotizacion_id))
+
                 estado_msg = "completada"
             else:
                 # Aún hay pendientes
                 self.cursor.execute("""
                     UPDATE cotizaciones
-                    SET entrega_parcial = 1
+                    SET estado = 'Parcialmente Entregada',
+                        entrega_parcial = 1,
+                        monto_entregado = ?
                     WHERE id = ?
-                """, (self.cotizacion_id,))
-                
+                """, (monto_entregado, self.cotizacion_id))
+
                 estado_msg = "parcial registrada"
             
             self.conn.commit()

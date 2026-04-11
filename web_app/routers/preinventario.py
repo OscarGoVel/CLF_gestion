@@ -26,6 +26,9 @@ from web_app.rbac import require_rol
 router = APIRouter(prefix="/preinventario")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+# Empresas cuyas tablas ya fueron inicializadas en esta ejecución del servidor
+_tablas_ok: set[str] = set()
+
 
 def _f(v):
     return float(v) if isinstance(v, Decimal) else v
@@ -104,6 +107,8 @@ CREATE TABLE IF NOT EXISTS preinventario_historico (
 
 
 def _asegurar_tablas(empresa_db: str) -> None:
+    if empresa_db in _tablas_ok:
+        return
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         for stmt in _DDL.strip().split(";"):
             stmt = stmt.strip()
@@ -111,6 +116,7 @@ def _asegurar_tablas(empresa_db: str) -> None:
                 cur.execute(stmt)
         # Migraciones para tablas existentes
         cur.execute("ALTER TABLE preinventario_sesiones ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'parcial'")
+    _tablas_ok.add(empresa_db)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

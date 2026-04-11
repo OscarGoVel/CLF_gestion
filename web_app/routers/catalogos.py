@@ -209,7 +209,7 @@ async def detalle_cliente(request: Request, cliente_id: int):
             "pendientes":  stats_row[3],
         }
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="catalogos/cliente_detalle.html",
@@ -604,7 +604,7 @@ async def detalle_producto(request: Request, producto_id: int):
         ucols    = [d[0] for d in cur.description]
         uso_cots = [_floats(dict(zip(ucols, r))) for r in cur.fetchall()]
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="catalogos/producto_detalle.html",

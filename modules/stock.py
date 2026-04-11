@@ -17,6 +17,9 @@ import sqlite3
 from datetime import datetime
 import sesion
 
+from core.constants import MOTIVOS_SALIDA
+from core.stock import calcular_abc_desde_cursor as calcular_abc
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  COLORES Y ESTILOS
@@ -30,86 +33,6 @@ COLOR_C       = '#6c757d'   # Gris — Categoría C
 COLOR_C_BG    = '#f8f9fa'
 COLOR_BAJO    = '#c0392b'   # Rojo — bajo stock mínimo
 COLOR_BAJO_BG = '#fde8e8'
-
-MOTIVOS_SALIDA = [
-    'Merma / Daño',
-    'Uso interno',
-    'Devolución a proveedor',
-    'Ajuste de inventario',
-    'Muestra / Demo',
-    'Pérdida',
-    'Otro',
-]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  LÓGICA ABC
-# ─────────────────────────────────────────────────────────────────────────────
-
-def calcular_abc(cursor):
-    """
-    Calcula la categoría ABC de cada producto basada en valor de inventario
-    (stock_actual × costo_promedio).
-
-    Reglas clásicas:
-      A → acumulado hasta  80 % del valor total
-      B → acumulado de 80 % a 95 %
-      C → acumulado de 95 % a 100 %
-
-    Retorna: dict  {producto_id: {'categoria': 'A'|'B'|'C',
-                                   'valor': float,
-                                   'porcentaje_acum': float}}
-    """
-    cursor.execute("""
-        SELECT p.id,
-               p.nombre,
-               p.codigo,
-               p.stock_actual,
-               COALESCE(
-                   (SELECT AVG(cd.costo_unitario)
-                    FROM compra_detalle cd
-                    WHERE cd.producto_id = p.id),
-                   0
-               ) AS costo_prom
-        FROM productos p
-        WHERE p.stock_actual > 0
-        ORDER BY (p.stock_actual * COALESCE(
-                   (SELECT AVG(cd.costo_unitario)
-                    FROM compra_detalle cd
-                    WHERE cd.producto_id = p.id), 0))
-        DESC
-    """)
-    rows = cursor.fetchall()
-
-    if not rows:
-        return {}
-
-    total_valor = sum(r[3] * r[4] for r in rows)
-    if total_valor == 0:
-        # Si no hay costos registrados, clasificar por cantidad
-        total_valor = sum(r[3] for r in rows)
-        datos = [(r[0], r[3]) for r in rows]   # (id, stock)
-    else:
-        datos = [(r[0], r[3] * r[4]) for r in rows]  # (id, valor)
-
-    resultado = {}
-    acum = 0.0
-    for pid, valor in datos:
-        acum += valor
-        pct = (acum / total_valor) * 100 if total_valor else 100
-        if pct <= 80:
-            cat = 'A'
-        elif pct <= 95:
-            cat = 'B'
-        else:
-            cat = 'C'
-        resultado[pid] = {
-            'categoria': cat,
-            'valor': valor,
-            'porcentaje_acum': round(pct, 1),
-        }
-
-    return resultado
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -495,6 +418,8 @@ class SeccionStock:
                  bg=self.C['toolbar_bg']).pack(side='left', padx=(12, 2))
         self.entry_buscar_hist = tk.Entry(tb, width=22, font=('Arial', 9))
         self.entry_buscar_hist.pack(side='left')
+        self.entry_buscar_hist.bind('<KeyRelease>', lambda e: self.cargar_historial())
+        self.entry_buscar_hist.bind('<Return>', lambda e: self.cargar_historial())
 
         tk.Button(tb, text='🔍 Buscar', font=('Arial', 9),
                   bg=self.C['accent2'], fg='white', bd=0, padx=10,

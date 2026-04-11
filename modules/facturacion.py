@@ -9,133 +9,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import sqlite3
 import os
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from ui.utils import centrar_ventana as _centrar
 from app_config import FACTURAS_XML_DIR
 
 
-def _attr(element, name, default=''):
-    """Obtiene un atributo de un elemento XML de forma segura."""
-    return element.get(name, default) if element is not None else default
-
-
-def parsear_cfdi(ruta_xml):
-    """
-    Parsea un archivo CFDI (3.3 o 4.0) y retorna un dict con los datos relevantes.
-    Lanza ValueError si el archivo no es un CFDI válido.
-    """
-    try:
-        tree = ET.parse(ruta_xml)
-        root = tree.getroot()
-    except ET.ParseError as e:
-        raise ValueError(f"El archivo no es un XML válido:\n{e}")
-
-    # Detectar versión y namespace
-    tag = root.tag
-    if 'cfd/4' in tag:
-        ns_cfdi = 'http://www.sat.gob.mx/cfd/4'
-    elif 'cfd/3' in tag:
-        ns_cfdi = 'http://www.sat.gob.mx/cfd/3'
-    else:
-        raise ValueError("El archivo no parece ser un CFDI SAT válido.\n"
-                         "Se esperaba namespace cfdi/3 o cfdi/4.")
-
-    def find(path):
-        # Intenta primero con versión detectada
-        el = root.find(path.replace('{cfdi}', f'{{{ns_cfdi}}}'))
-        return el
-
-    def findall(path):
-        return root.findall(path.replace('{cfdi}', f'{{{ns_cfdi}}}'))
-
-    # ── Datos del Comprobante ──────────────────────────────────────────────
-    version     = root.get('Version', root.get('version', ''))
-    serie       = root.get('Serie', '')
-    folio       = root.get('Folio', '')
-    fecha       = root.get('Fecha', '')
-    subtotal    = float(root.get('SubTotal', 0) or 0)
-    descuento   = float(root.get('Descuento', 0) or 0)
-    total       = float(root.get('Total', 0) or 0)
-    tipo        = root.get('TipoDeComprobante', '')
-    metodo_pago = root.get('MetodoPago', '')
-    forma_pago  = root.get('FormaPago', '')
-    moneda      = root.get('Moneda', 'MXN')
-
-    # ── IVA desde Impuestos ────────────────────────────────────────────────
-    iva = 0.0
-    impuestos = find('{cfdi}Impuestos')
-    if impuestos is not None:
-        iva = float(impuestos.get('TotalImpuestosTrasladados', 0) or 0)
-
-    # ── Emisor ────────────────────────────────────────────────────────────
-    emisor = find('{cfdi}Emisor')
-    rfc_emisor    = _attr(emisor, 'Rfc')
-    nombre_emisor = _attr(emisor, 'Nombre')
-    regimen_fiscal = _attr(emisor, 'RegimenFiscal')
-
-    # ── Receptor ─────────────────────────────────────────────────────────
-    receptor = find('{cfdi}Receptor')
-    rfc_receptor    = _attr(receptor, 'Rfc')
-    nombre_receptor = _attr(receptor, 'Nombre')
-    uso_cfdi        = _attr(receptor, 'UsoCFDI')
-
-    # ── Timbre Fiscal Digital (UUID) ───────────────────────────────────────
-    ns_tfd = 'http://www.sat.gob.mx/TimbreFiscalDigital'
-    complemento = find('{cfdi}Complemento')
-    uuid = ''
-    fecha_timbrado = ''
-    no_cert_sat = ''
-    if complemento is not None:
-        tfd = complemento.find(f'{{{ns_tfd}}}TimbreFiscalDigital')
-        if tfd is not None:
-            uuid           = tfd.get('UUID', '')
-            fecha_timbrado = tfd.get('FechaTimbrado', '')
-            no_cert_sat    = tfd.get('NoCertificadoSAT', '')
-
-    if not uuid:
-        raise ValueError("No se encontró el UUID (Timbre Fiscal Digital).\n"
-                         "El XML no está timbrado o no es un CFDI válido.")
-
-    # ── Conceptos ─────────────────────────────────────────────────────────
-    conceptos = []
-    for concepto in root.findall(f'.//{{{ns_cfdi}}}Concepto'):
-        conceptos.append({
-            'clave_prod_serv': concepto.get('ClaveProdServ', ''),
-            'no_identificacion': concepto.get('NoIdentificacion', ''),
-            'cantidad':          float(concepto.get('Cantidad', 0) or 0),
-            'clave_unidad':      concepto.get('ClaveUnidad', ''),
-            'unidad':            concepto.get('Unidad', ''),
-            'descripcion':       concepto.get('Descripcion', ''),
-            'valor_unitario':    float(concepto.get('ValorUnitario', 0) or 0),
-            'importe':           float(concepto.get('Importe', 0) or 0),
-            'descuento':         float(concepto.get('Descuento', 0) or 0),
-        })
-
-    return {
-        'version':        version,
-        'serie':          serie,
-        'folio':          folio,
-        'fecha':          fecha,
-        'fecha_timbrado': fecha_timbrado,
-        'uuid':           uuid,
-        'no_cert_sat':    no_cert_sat,
-        'rfc_emisor':     rfc_emisor,
-        'nombre_emisor':  nombre_emisor,
-        'regimen_fiscal': regimen_fiscal,
-        'rfc_receptor':   rfc_receptor,
-        'nombre_receptor':nombre_receptor,
-        'uso_cfdi':       uso_cfdi,
-        'subtotal':       subtotal,
-        'descuento':      descuento,
-        'iva':            iva,
-        'total':          total,
-        'tipo':           tipo,
-        'metodo_pago':    metodo_pago,
-        'forma_pago':     forma_pago,
-        'moneda':         moneda,
-        'conceptos':      conceptos,
-    }
+from core.cfdi import parsear_cfdi, _attr  # noqa: F401
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -274,6 +153,7 @@ class SeccionFacturacion:
                  font=('Arial', 9)).pack(side='left', padx=(8, 2))
         self._entry_buscar = tk.Entry(ff, font=('Arial', 9), width=28)
         self._entry_buscar.pack(side='left', padx=4)
+        self._entry_buscar.bind('<KeyRelease>', lambda e: self.cargar_facturas())
         self._entry_buscar.bind('<Return>', lambda e: self.cargar_facturas())
 
         tk.Label(ff, text='Vinculadas:', bg=self.C['toolbar_bg'],
@@ -959,13 +839,13 @@ class SeccionFacturacion:
                 fac_row    = self.cursor.fetchone()
                 factura_id = fac_row[0] if fac_row else None
 
-                # Generar folio
-                from datetime import datetime as _dt2
+                # Generar folio — usa MAX del sufijo para evitar duplicados por gaps
                 año_c = hoy[:4]
                 self.cursor.execute(
-                    "SELECT COUNT(*) FROM compras WHERE strftime('%Y', fecha_compra)=?",
-                    (año_c,))
-                consec_c = self.cursor.fetchone()[0] + 1
+                    "SELECT COALESCE(MAX(CAST(SUBSTR(folio, 11) AS INTEGER)), 0) + 1 "
+                    "FROM compras WHERE folio LIKE ?",
+                    (f"COMP-{año_c}-%",))
+                consec_c = self.cursor.fetchone()[0]
                 folio_compra = f"COMP-{año_c}-{consec_c:04d}"
 
                 # Totales
@@ -982,15 +862,25 @@ class SeccionFacturacion:
                     ya_existe = None
 
                 if not ya_existe:
-                    self.cursor.execute("""
-                        INSERT INTO compras
-                        (folio, proveedor_id, fecha_compra, subtotal, iva, total,
-                         notas, ticket_referencia, factura_xml_id)
-                        VALUES (?,?,?,?,?,?,?,?,?)
-                    """, (folio_compra, prov_id, hoy,
-                          subtotal_c, iva_c, total_c,
-                          f"Importado desde XML {serie_folio}",
-                          serie_folio, factura_id))
+                    # Retry hasta 5 veces si el folio colisiona (race condition o gap)
+                    for _intento in range(5):
+                        try:
+                            self.cursor.execute("""
+                                INSERT INTO compras
+                                (folio, proveedor_id, fecha_compra, subtotal, iva, total,
+                                 notas, ticket_referencia, factura_xml_id)
+                                VALUES (?,?,?,?,?,?,?,?,?)
+                            """, (folio_compra, prov_id, hoy,
+                                  subtotal_c, iva_c, total_c,
+                                  f"Importado desde XML {serie_folio}",
+                                  serie_folio, factura_id))
+                            break
+                        except Exception as _dup:
+                            if 'unique' in str(_dup).lower() or 'duplicad' in str(_dup).lower():
+                                consec_c += 1
+                                folio_compra = f"COMP-{año_c}-{consec_c:04d}"
+                            else:
+                                raise
                     compra_id_nuevo = self.cursor.lastrowid
 
                     # Detalle de compra: solo productos vinculados al catálogo

@@ -422,6 +422,7 @@ def inicializar_bd(db_path):
             username         TEXT UNIQUE NOT NULL,
             nombre           TEXT NOT NULL,
             password_hash    TEXT NOT NULL,
+            salt             TEXT,
             rol              TEXT NOT NULL DEFAULT 'Operador',
             activo           INTEGER NOT NULL DEFAULT 1,
             fecha_creacion   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -464,6 +465,31 @@ def inicializar_bd(db_path):
             FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
         )
     ''')
+
+    # ── Índices de rendimiento ───────────────────────────────────────────────────
+    for ddl in [
+        # Cotizaciones — consultas por estado, fecha y cliente son frecuentes
+        'CREATE INDEX IF NOT EXISTS idx_cot_estado       ON cotizaciones(estado)',
+        'CREATE INDEX IF NOT EXISTS idx_cot_fecha        ON cotizaciones(fecha)',
+        'CREATE INDEX IF NOT EXISTS idx_cot_fecha_entrega ON cotizaciones(fecha_entrega)',
+        'CREATE INDEX IF NOT EXISTS idx_cot_cliente      ON cotizaciones(cliente_id)',
+        # Facturas — búsqueda por UUID en importación CFDI
+        'CREATE INDEX IF NOT EXISTS idx_fac_uuid         ON facturas(uuid)',
+        'CREATE INDEX IF NOT EXISTS idx_fac_rfc_emisor   ON facturas(rfc_emisor)',
+        'CREATE INDEX IF NOT EXISTS idx_fac_rfc_receptor ON facturas(rfc_receptor)',
+        # Productos — matching por código en vinculación CFDI
+        'CREATE INDEX IF NOT EXISTS idx_prod_codigo      ON productos(codigo)',
+        # Detalle cotización y factura
+        'CREATE INDEX IF NOT EXISTS idx_cotdet_cotizacion ON cotizacion_detalle(cotizacion_id)',
+        'CREATE INDEX IF NOT EXISTS idx_facdet_factura    ON factura_conceptos(factura_id)',
+        # Movimientos de stock — consultas por producto y fecha
+        'CREATE INDEX IF NOT EXISTS idx_mov_producto     ON movimientos_stock(producto_id)',
+        'CREATE INDEX IF NOT EXISTS idx_mov_fecha        ON movimientos_stock(fecha)',
+    ]:
+        try:
+            cursor.execute(ddl)
+        except Exception:
+            pass
 
     # ── Migraciones columnas faltantes ───────────────────────────────────────────
     for tabla, cols in [

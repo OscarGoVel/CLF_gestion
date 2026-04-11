@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox
 import sqlite3
 import hashlib
+import secrets
 import os
 from ui.utils import centrar_ventana
 import db_connection
@@ -22,15 +23,34 @@ USERS_DB   = os.path.join(_BASE_DIR, 'app_usuarios.db')
 
 # ── Hashing ───────────────────────────────────────────────────────────────────
 
-def hash_nuevo(password: str) -> str:
-    """Hash seguro usando PBKDF2-HMAC-SHA256."""
+_SALT_LEGACY = b'clf_sistema'
+
+
+def _hash_legacy(password: str) -> str:
     return hashlib.pbkdf2_hmac(
-        'sha256', password.encode('utf-8'), b'clf_sistema', 200_000
+        'sha256', password.encode('utf-8'), _SALT_LEGACY, 200_000
     ).hex()
 
 
-def verificar_password(password: str, stored_hash: str) -> bool:
-    return hash_nuevo(password) == stored_hash
+def hash_nuevo(password: str):
+    """
+    Genera hash con salt aleatorio por usuario.
+    Retorna (password_hash, salt).
+    """
+    salt = secrets.token_hex(32)
+    phash = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt.encode('utf-8'), 200_000
+    ).hex()
+    return phash, salt
+
+
+def verificar_password(password: str, stored_hash: str, salt: str = None) -> bool:
+    if not salt:
+        return _hash_legacy(password) == stored_hash
+    computed = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt.encode('utf-8'), 200_000
+    ).hex()
+    return computed == stored_hash
 
 
 # ── Inicialización de la BD central ──────────────────────────────────────────
@@ -45,12 +65,17 @@ def _abrir_users_db():
                 username       TEXT UNIQUE NOT NULL,
                 nombre         TEXT NOT NULL,
                 password_hash  TEXT NOT NULL,
+                salt           TEXT,
                 rol            TEXT NOT NULL DEFAULT 'Operador',
                 activo         INTEGER NOT NULL DEFAULT 1,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 ultimo_acceso  TIMESTAMP
             )
         ''')
+        cursor.execute("PRAGMA table_info(usuarios)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if 'salt' not in cols:
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN salt TEXT")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS preferencias_usuario (
                 usuario_id  INTEGER NOT NULL,
@@ -67,9 +92,10 @@ def _crear_admin_inicial(cursor, conn) -> bool:
     """Crea el usuario admin por defecto si la tabla está vacía. Retorna True si lo creó."""
     cursor.execute('SELECT COUNT(*) FROM usuarios')
     if cursor.fetchone()[0] == 0:
+        phash, salt = hash_nuevo('admin123')
         cursor.execute(
-            'INSERT INTO usuarios (username, nombre, password_hash, rol) VALUES (?,?,?,?)',
-            ('admin', 'Administrador', hash_nuevo('admin123'), 'Administrador')
+            'INSERT INTO usuarios (username, nombre, password_hash, salt, rol) VALUES (?,?,?,?,?)',
+            ('admin', 'Administrador', phash, salt, 'Administrador')
         )
         conn.commit()
         return True
@@ -163,7 +189,7 @@ def mostrar_login(parent: tk.Misc | None = None) -> dict | None:
             return
 
         cursor.execute(
-            'SELECT id, nombre, password_hash, rol, activo FROM usuarios WHERE username = ?',
+            'SELECT id, nombre, password_hash, salt, rol, activo FROM usuarios WHERE username = ?',
             (username,)
         )
         row = cursor.fetchone()
@@ -173,16 +199,24 @@ def mostrar_login(parent: tk.Misc | None = None) -> dict | None:
             entry_pass.delete(0, 'end')
             return
 
-        uid, nombre, phash, rol, activo = row
+        uid, nombre, phash, salt, rol, activo = row
 
         if not activo:
             lbl_error.config(text='Usuario desactivado. Contacta al administrador.')
             return
 
-        if not verificar_password(password, phash):
+        if not verificar_password(password, phash, salt):
             lbl_error.config(text='Contraseña incorrecta.')
             entry_pass.delete(0, 'end')
             return
+
+        # Rolling upgrade: si aún usaba salt estático, re-hashear ahora
+        if not salt:
+            new_hash, new_salt = hash_nuevo(password)
+            cursor.execute(
+                'UPDATE usuarios SET password_hash = ?, salt = ? WHERE id = ?',
+                (new_hash, new_salt, uid)
+            )
 
         cursor.execute(
             'UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id = ?', (uid,)

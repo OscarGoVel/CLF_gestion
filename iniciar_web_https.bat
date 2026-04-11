@@ -1,6 +1,6 @@
 @echo off
 :: CLF Gestion Web — Arranque HTTPS (produccion)
-:: Accesible en: https://192.168.0.40:8443
+:: Accesible en: https://192.168.0.176:8443
 ::
 :: Primera vez: ejecuta  python tools/generar_cert.py  para crear ssl/server.crt
 

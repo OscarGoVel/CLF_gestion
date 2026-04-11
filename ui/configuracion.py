@@ -825,9 +825,10 @@ class _VentanaUsuario:
                                        parent=self._win)
                 return
             try:
+                phash, salt = hash_nuevo(p1)
                 self._cursor.execute(
-                    'INSERT INTO usuarios (username, nombre, password_hash, rol) VALUES (?,?,?,?)',
-                    (username, nombre, hash_nuevo(p1), rol)
+                    'INSERT INTO usuarios (username, nombre, password_hash, salt, rol) VALUES (?,?,?,?,?)',
+                    (username, nombre, phash, salt, rol)
                 )
                 self._conn.commit()
             except Exception as e:
@@ -889,9 +890,10 @@ class _DialogoCambiarPassword:
             if p1 != p2:
                 lbl_err.config(text='Las contraseñas no coinciden.')
                 return
+            new_hash, new_salt = hash_nuevo(p1)
             cursor.execute(
-                'UPDATE usuarios SET password_hash = ? WHERE id = ?',
-                (hash_nuevo(p1), usuario_id)
+                'UPDATE usuarios SET password_hash = ?, salt = ? WHERE id = ?',
+                (new_hash, new_salt, usuario_id)
             )
             conn.commit()
             messagebox.showinfo('Listo', 'Contraseña actualizada.', parent=win)

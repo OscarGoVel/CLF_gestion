@@ -4,13 +4,11 @@ web_app/routers/facturas.py
 Módulo de Facturas: lista, detalle, importar XML, vincular cotización.
 """
 
-import os
-import shutil
 from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa, get_empresas
@@ -138,7 +136,7 @@ async def detalle_factura(request: Request, factura_id: int):
         vcols      = [d[0] for d in cur.description]
         vinculadas = [_floats(dict(zip(vcols, r))) for r in cur.fetchall()]
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="facturas/detalle.html",
@@ -334,7 +332,7 @@ async def vincular_cotizacion(
         vcols      = [d[0] for d in cur.description]
         vinculadas = [_floats(dict(zip(vcols, r))) for r in cur.fetchall()]
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="facturas/_vinculadas.html",
@@ -395,7 +393,7 @@ async def desvincular_cotizacion(
         vcols      = [d[0] for d in cur.description]
         vinculadas = [_floats(dict(zip(vcols, r))) for r in cur.fetchall()]
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
         name="facturas/_vinculadas.html",

@@ -13,17 +13,10 @@ from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
+from core.constants import ESTADO_COLOR_HEX as ESTADO_COLOR
 
 router = APIRouter(prefix="/analisis")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
-
-ESTADO_COLOR = {
-    "Pagada":     "#3b82f6",
-    "Pendiente":  "#f59e0b",
-    "Entregada":  "#22c55e",
-    "Programada": "#a855f7",
-    "Cancelada":  "#ef4444",
-}
 
 
 def _f(v):

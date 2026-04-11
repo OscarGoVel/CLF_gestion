@@ -350,7 +350,7 @@ async def dashboard(request: Request):
         except Exception:
             kpis = {"activas": "—", "por_cobrar": "—", "vencidas": "—", "ventas_mes": "—"}
 
-    from web_app.routers.cotizaciones import ESTADO_COLOR
+    from core.constants import ESTADO_COLOR_CSS
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -359,7 +359,7 @@ async def dashboard(request: Request):
             "kpis": kpis,
             "recientes": recientes,
             "vencidas_list": vencidas_list,
-            "estado_color": ESTADO_COLOR,
+            "estado_color": ESTADO_COLOR_CSS,
         },
     )
 

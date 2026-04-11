@@ -776,7 +776,10 @@ if __name__ == '__main__':
         # ── 3. Sistema principal ──────────────────────────────────────────
         root = tk.Tk()
         SistemaGestion(root, empresa=empresa)
-        root.mainloop()
+        try:
+            root.mainloop()
+        except KeyboardInterrupt:
+            pass
         try:
             root.destroy()
         except Exception:

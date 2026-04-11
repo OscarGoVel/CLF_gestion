@@ -353,11 +353,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     username       TEXT UNIQUE NOT NULL,
     nombre         TEXT NOT NULL,
     password_hash  TEXT NOT NULL,
+    salt           TEXT,
     rol            TEXT NOT NULL DEFAULT 'Operador',
     activo         INTEGER NOT NULL DEFAULT 1,
     fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
     ultimo_acceso  TIMESTAMPTZ
 );
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS salt TEXT;
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -370,11 +372,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     username       TEXT UNIQUE NOT NULL,
     nombre         TEXT NOT NULL,
     password_hash  TEXT NOT NULL,
+    salt           TEXT,
     rol            TEXT NOT NULL DEFAULT 'Operador',
     activo         INTEGER NOT NULL DEFAULT 1,
     fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
     ultimo_acceso  TIMESTAMPTZ
 );
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS salt TEXT;
 
 CREATE TABLE IF NOT EXISTS preferencias_usuario (
     usuario_id INTEGER NOT NULL,
@@ -382,6 +386,27 @@ CREATE TABLE IF NOT EXISTS preferencias_usuario (
     valor      TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (usuario_id, clave)
 );
+"""
+
+# Índices de rendimiento — seguros de ejecutar múltiples veces (IF NOT EXISTS)
+INDICES_EMPRESA = """
+-- Cotizaciones
+CREATE INDEX IF NOT EXISTS idx_cot_estado        ON cotizaciones(estado);
+CREATE INDEX IF NOT EXISTS idx_cot_fecha         ON cotizaciones(fecha);
+CREATE INDEX IF NOT EXISTS idx_cot_fecha_entrega ON cotizaciones(fecha_entrega);
+CREATE INDEX IF NOT EXISTS idx_cot_cliente       ON cotizaciones(cliente_id);
+-- Facturas
+CREATE INDEX IF NOT EXISTS idx_fac_uuid          ON facturas(uuid);
+CREATE INDEX IF NOT EXISTS idx_fac_rfc_emisor    ON facturas(rfc_emisor);
+CREATE INDEX IF NOT EXISTS idx_fac_rfc_receptor  ON facturas(rfc_receptor);
+-- Productos
+CREATE INDEX IF NOT EXISTS idx_prod_codigo       ON productos(codigo);
+-- Detalle cotización y conceptos de factura
+CREATE INDEX IF NOT EXISTS idx_cotdet_cotizacion ON cotizacion_detalle(cotizacion_id);
+CREATE INDEX IF NOT EXISTS idx_facdet_factura    ON factura_conceptos(factura_id);
+-- Movimientos de stock
+CREATE INDEX IF NOT EXISTS idx_mov_producto      ON movimientos_stock(producto_id);
+CREATE INDEX IF NOT EXISTS idx_mov_fecha         ON movimientos_stock(fecha);
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -409,6 +434,7 @@ def crear_schema_empresa():
             conn.autocommit = True
             cur = conn.cursor()
             cur.execute(SCHEMA_EMPRESA)
+            cur.execute(INDICES_EMPRESA)
             # Métodos de pago por defecto
             for nombre, desc in [
                 ('Efectivo',        'Pago en efectivo'),

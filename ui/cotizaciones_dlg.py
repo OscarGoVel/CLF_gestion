@@ -26,9 +26,6 @@ class VentanaCotizacion:
         
         # Lista de productos agregados a la cotización
         self.productos_cotizacion = []
-
-        # Flag de IVA para esta cotización (el usuario puede cambiarlo manualmente)
-        self.var_iva = tk.BooleanVar(value=False)
         
         # Crear ventana
         self.ventana = tk.Toplevel(parent)
@@ -101,14 +98,7 @@ class VentanaCotizacion:
         self.label_info_cliente = tk.Label(frame_fila2, text="", font=('Arial', 9), fg='#6b7280')
         self.label_info_cliente.pack(side='left', padx=10)
 
-        # Checkbox IVA
-        tk.Checkbutton(
-            frame_fila2,
-            text="Aplicar IVA (16%)",
-            variable=self.var_iva,
-            command=self.recalcular_productos,
-            font=('Arial', 10)
-        ).pack(side='left', padx=15)
+        # IVA: se aplica por producto según catálogo (aplica_iva del producto)
         
         # Frame de productos
         frame_productos = tk.LabelFrame(self.ventana, text="Productos", font=('Arial', 10, 'bold'))
@@ -270,8 +260,7 @@ class VentanaCotizacion:
                 self.ventana.destroy()
                 return
 
-            folio, fecha, cliente_id, notas, aplica_iva_cot = row
-            self.var_iva.set(bool(aplica_iva_cot))
+            folio, fecha, cliente_id, notas, _aplica_iva_cot = row
             
             # Cargar folio
             self.label_folio.config(text=folio, fg='black')
@@ -397,9 +386,6 @@ class VentanaCotizacion:
                 
                 self.label_info_cliente.config(text=info)
             
-            # Preseleccionar IVA según tipo de cliente (el usuario puede cambiarlo)
-            self.var_iva.set(cliente['tipo'] == 'Gobierno')
-
             # Recalcular precios si ya hay productos
             if self.productos_cotizacion:
                 self.recalcular_productos()
@@ -829,8 +815,8 @@ class VentanaCotizacion:
                 # Calcular subtotal
                 subtotal = precio_unitario * cantidad
 
-                # IVA: solo si el checkbox de la cotización está activo Y el producto aplica IVA
-                iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
+                # IVA: según catálogo del producto (aplica_iva del catálogo, siempre)
+                iva = subtotal * 0.16 if aplica_iva else 0
                 total = subtotal + iva
                 
                 # Verificar stock
@@ -847,7 +833,8 @@ class VentanaCotizacion:
                     'iva': iva,
                     'total': total,
                     'tiene_stock': tiene_stock,
-                    'stock_disponible': stock
+                    'stock_disponible': stock,
+                    'aplica_iva': bool(aplica_iva),
                 })
                 
                 self.actualizar_tabla_productos()
@@ -931,7 +918,7 @@ class VentanaCotizacion:
         
         precio_unitario = precio_base * (1 + porcentaje_utilidad)
         subtotal = precio_unitario * nueva_cantidad
-        iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
+        iva = subtotal * 0.16 if aplica_iva else 0
         total = subtotal + iva
         tiene_stock = nueva_cantidad <= stock
         
@@ -1045,7 +1032,7 @@ class VentanaCotizacion:
                 precio_con_desc = precio * (1 - desc_pct / 100)
                 subtotal = cant * precio_con_desc
                 
-                iva_amt = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
+                iva_amt = subtotal * 0.16 if aplica_iva else 0
                 
                 total = subtotal + iva_amt
                 
@@ -1079,10 +1066,10 @@ class VentanaCotizacion:
             precio_final = nuevo_precio * (1 - desc_pct / 100)
             subtotal = nueva_cant * precio_final
             
-            iva_amt = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
-            
+            iva_amt = subtotal * 0.16 if aplica_iva else 0
+
             total = subtotal + iva_amt
-            
+
             # Stock check
             tiene_stock = nueva_cant <= prod['stock_disponible']
             
@@ -1194,7 +1181,7 @@ class VentanaCotizacion:
 
                 precio_con_desc = precio_unitario * (1 - desc_pct / 100)
                 subtotal = precio_con_desc * cantidad
-                iva = subtotal * 0.16 if (self.var_iva.get() and aplica_iva) else 0
+                iva = subtotal * 0.16 if aplica_iva else 0
                 total = subtotal + iva
 
                 prod['precio_unitario'] = precio_unitario
@@ -1514,10 +1501,9 @@ class VentanaCotizacion:
                 
                 # Insertar cotización
                 self.cursor.execute("""
-                    INSERT INTO cotizaciones (folio, fecha, cliente_id, subtotal, iva, total, notas, estado, aplica_iva)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)
-                """, (folio, fecha_actual.strftime('%Y-%m-%d'), cliente_id, subtotal, iva, total, notas,
-                      1 if self.var_iva.get() else 0))
+                    INSERT INTO cotizaciones (folio, fecha, cliente_id, subtotal, iva, total, notas, estado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente')
+                """, (folio, fecha_actual.strftime('%Y-%m-%d'), cliente_id, subtotal, iva, total, notas))
                 
                 cotizacion_id = self.cursor.lastrowid
                 
@@ -1556,10 +1542,9 @@ class VentanaCotizacion:
                 # Actualizar cotización existente
                 self.cursor.execute("""
                     UPDATE cotizaciones
-                    SET cliente_id = ?, subtotal = ?, iva = ?, total = ?, notas = ?, aplica_iva = ?
+                    SET cliente_id = ?, subtotal = ?, iva = ?, total = ?, notas = ?
                     WHERE id = ?
-                """, (cliente_id, subtotal, iva, total, notas,
-                      1 if self.var_iva.get() else 0, self.cotizacion_id))
+                """, (cliente_id, subtotal, iva, total, notas, self.cotizacion_id))
                 
                 # Eliminar detalle anterior
                 self.cursor.execute("""

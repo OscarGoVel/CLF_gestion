@@ -68,7 +68,7 @@ class PgPool:
             import psycopg2.pool
             cfg = _cfg()
             pg  = cfg.get("postgresql", {})
-            os.environ["PGPASSWORD"] = pg.get("password", "")
+            password = os.environ.get("CLF_PG_PASSWORD") or pg.get("password", "")
             os.environ["PGPASSFILE"] = os.devnull
             self._pool = psycopg2.pool.ThreadedConnectionPool(
                 self._minconn,
@@ -77,7 +77,7 @@ class PgPool:
                 port=pg.get("port", 5432),
                 dbname=self._dbname,
                 user=pg.get("user", "postgres"),
-                password=pg.get("password", ""),
+                password=password,
             )
 
     @contextmanager
@@ -158,7 +158,9 @@ def get_pool_empresa(pg_database: str) -> "PgPool":
     if pg_database not in _pools_empresa:
         with _pools_lock:
             if pg_database not in _pools_empresa:
-                _pools_empresa[pg_database] = PgPool(pg_database, minconn=2, maxconn=10)
+                _min = int(os.environ.get("CLF_POOL_MIN", 2))
+                _max = int(os.environ.get("CLF_POOL_MAX", 10))
+                _pools_empresa[pg_database] = PgPool(pg_database, minconn=_min, maxconn=_max)
     return _pools_empresa[pg_database]
 
 
@@ -173,7 +175,9 @@ def cerrar_todos_pools_empresa():
 # ── Pool de usuarios (único) ──────────────────────────────────────────────────
 
 _db_usuarios = _get_db_usuarios()
-pool_usuarios = PgPool(_db_usuarios, minconn=2, maxconn=5)
+pool_usuarios = PgPool(_db_usuarios,
+                       minconn=int(os.environ.get("CLF_POOL_USR_MIN", 2)),
+                       maxconn=int(os.environ.get("CLF_POOL_USR_MAX", 5)))
 
 # pool_empresa: alias al pool de la primera empresa (backward-compat para health/metrics)
 _empresas_cfg = get_empresas()

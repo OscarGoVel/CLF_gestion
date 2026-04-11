@@ -14,6 +14,13 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _CONFIG   = os.path.join(_BASE_DIR, 'config.json')
 _USERS_DB = os.path.join(_BASE_DIR, 'app_usuarios.db')
 
+# Cargar .env si existe (para obtener CLF_PG_PASSWORD sin exponerlo en config.json)
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(os.path.join(_BASE_DIR, '.env'))
+except ImportError:
+    pass
+
 
 def _cfg() -> dict:
     try:
@@ -234,16 +241,16 @@ def conectar_empresa(db_path: str = None, pg_database: str = None):
         import os as _os
         pg     = cfg['postgresql']
         dbname = pg_database or pg.get('database', 'clf_empresa')
-        _os.environ['PGPASSWORD'] = pg['password']
+        password = _os.environ.get('CLF_PG_PASSWORD') or pg.get('password', '')
         _os.environ['PGPASSFILE'] = _os.devnull
         raw    = psycopg2.connect(
             host=pg['host'],
             port=pg.get('port', 5432),
             dbname=dbname,
             user=pg['user'],
-            password=pg['password'],
+            password=password,
         )
-        raw.autocommit = True   # Igual que SQLite: cada sentencia es independiente
+        raw.autocommit = True   # Desktop usa commit() explícito; la web usa su propio pool (autocommit=False)
         conn = _PgConn(raw)
         return conn, conn.cursor()
 
@@ -265,16 +272,18 @@ def conectar_usuarios():
         import psycopg2
         import os as _os
         pg  = cfg['postgresql']
-        _os.environ['PGPASSWORD'] = pg['password']
+        password = _os.environ.get('CLF_PG_PASSWORD') or pg.get('password', '')
         _os.environ['PGPASSFILE'] = _os.devnull
         raw = psycopg2.connect(
             host=pg['host'],
             port=pg.get('port', 5432),
             dbname=pg.get('database_usuarios', 'clf_usuarios'),
             user=pg['user'],
-            password=pg['password'],
+            password=password,
         )
-        raw.autocommit = True   # Igual que SQLite: cada sentencia es independiente
+        raw.autocommit = True   # Desktop usa commit() explícito; la web usa su propio pool (autocommit=False)
+        # Migraciones automáticas de la tabla usuarios
+        _migrar_usuarios_pg(raw)
         conn = _PgConn(raw)
         return conn, conn.cursor()
 
@@ -282,3 +291,11 @@ def conectar_usuarios():
         import sqlite3
         conn = sqlite3.connect(_USERS_DB)
         return conn, conn.cursor()
+
+
+def _migrar_usuarios_pg(raw_conn) -> None:
+    """Aplica migraciones idempotentes a la tabla usuarios en PostgreSQL."""
+    cur = raw_conn.cursor()
+    cur.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS salt TEXT;")
+    raw_conn.commit()
+    cur.close()

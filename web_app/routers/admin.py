@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from web_app import audit
-from web_app.auth import _hash_password
+from web_app.auth import hash_password
 from web_app.database import pool_usuarios, get_pool_empresa
 from web_app.rbac import (
     require_rol,
@@ -103,14 +103,14 @@ async def crear_usuario(
             context={"user": user, "usr": vals, "roles": ROLES, "error": error},
         )
 
-    phash = _hash_password(password)
+    phash, salt = hash_password(password)
     try:
         with pool_usuarios.conexion() as (_, cur):
             cur.execute("""
-                INSERT INTO usuarios (username, nombre, password_hash, rol, activo)
-                VALUES (%s, %s, %s, %s, 1)
+                INSERT INTO usuarios (username, nombre, password_hash, salt, rol, activo)
+                VALUES (%s, %s, %s, %s, %s, 1)
                 RETURNING id
-            """, (username, nombre, phash, rol))
+            """, (username, nombre, phash, salt, rol))
             new_id = cur.fetchone()[0]
     except Exception as e:
         error = (f"El usuario '{username}' ya está en uso."
@@ -196,9 +196,10 @@ async def guardar_usuario(
 
     with pool_usuarios.conexion() as (_, cur):
         if password:
+            new_hash, new_salt = hash_password(password)
             cur.execute(
-                "UPDATE usuarios SET nombre = %s, rol = %s, password_hash = %s WHERE id = %s",
-                (nombre, rol, _hash_password(password), uid),
+                "UPDATE usuarios SET nombre = %s, rol = %s, password_hash = %s, salt = %s WHERE id = %s",
+                (nombre, rol, new_hash, new_salt, uid),
             )
         else:
             cur.execute(

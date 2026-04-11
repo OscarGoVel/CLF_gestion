@@ -10,47 +10,39 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_actual
+from core.constants import ESTADOS_COTIZACION as ESTADOS, ESTADO_COLOR_CSS as ESTADO_COLOR, formato_folio
 
 router = APIRouter(prefix="/cotizaciones")
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
-
-# ── Constantes ────────────────────────────────────────────────────────────────
-ESTADOS = ["Pendiente", "Programada", "Entregada", "Pagada", "Cancelada"]
-
-ESTADO_COLOR = {
-    "Pendiente":  ("bg-amber-100",  "text-amber-800"),
-    "Programada": ("bg-purple-100", "text-purple-800"),
-    "Entregada":  ("bg-green-100",  "text-green-800"),
-    "Pagada":     ("bg-blue-100",   "text-blue-800"),
-    "Cancelada":  ("bg-red-100",    "text-red-700"),
-}
 
 POR_PAGINA = 25
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _generar_folio(empresa_db: str) -> str:
-    """Genera el siguiente folio disponible para el año actual: COT-YYYY-NNNN."""
-    año = date.today().year
-    with get_pool_empresa(empresa_db).conexion() as (_, cur):
-        cur.execute(
-            """
-            SELECT COALESCE(
-                MAX(CAST(SPLIT_PART(folio, '-', 3) AS INTEGER)), 0
-            ) + 1
-            FROM cotizaciones
-            WHERE folio LIKE %s
-            """,
-            (f"COT-{año}-%",),
-        )
-        consecutivo = cur.fetchone()[0]
-    return f"COT-{año}-{consecutivo:04d}"
+def _generar_folio_en_tx(cur, año: int) -> str:
+    """
+    Genera el siguiente folio dentro de una transacción ya abierta.
+    Usa pg_advisory_xact_lock para serializar generaciones concurrentes:
+    el lock se libera automáticamente al hacer commit/rollback.
+    """
+    cur.execute("SELECT pg_advisory_xact_lock(hashtext('folio_cotizacion'))")
+    cur.execute(
+        """
+        SELECT COALESCE(
+            MAX(CAST(SPLIT_PART(folio, '-', 3) AS INTEGER)), 0
+        ) + 1
+        FROM cotizaciones
+        WHERE folio LIKE %s
+        """,
+        (f"COT-{año}-%",),
+    )
+    return formato_folio(año, cur.fetchone()[0])
 
 
 def _cargar_clientes(empresa_db: str) -> list:
@@ -290,9 +282,8 @@ async def crear(
     total    = (subtotal + iva).quantize(Decimal("0.01"))
     subtotal = subtotal.quantize(Decimal("0.01"))
 
-    folio = _generar_folio(user["empresa_db"])
-
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        folio = _generar_folio_en_tx(cur, date.today().year)
         cur.execute(
             """
             INSERT INTO cotizaciones
