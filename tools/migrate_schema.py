@@ -360,6 +360,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ultimo_acceso  TIMESTAMPTZ
 );
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS salt TEXT;
+ALTER TABLE producto_precio_historial ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id);
 """
 
 # ─────────────────────────────────────────────────────────────────────────────

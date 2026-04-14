@@ -145,4 +145,14 @@ function seleccionarProducto(id, nombre, stock) {
         if (e.target === this) cerrarModal(id);
     });
 });
+// Enter en buscador selecciona primera sugerencia
+['entrada','salida'].forEach(function(suffix) {
+    document.getElementById('buscar-' + suffix).addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const firstBtn = document.getElementById('sugerencias-' + suffix).querySelector('button');
+            if (firstBtn) firstBtn.click();
+        }
+    });
+});
 </script>

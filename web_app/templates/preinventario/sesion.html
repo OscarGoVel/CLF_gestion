@@ -131,6 +131,14 @@
 
 <script>
 // ── Selección de producto desde sugerencias ───────────────────────────────
+document.getElementById('input-buscar').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const firstBtn = document.getElementById('sugerencias').querySelector('button');
+        if (firstBtn) firstBtn.click();
+    }
+});
+
 function seleccionarProducto(id, nombre, stock, unidad) {
     document.getElementById('producto_id').value = id;
     document.getElementById('producto-nombre').textContent = nombre;

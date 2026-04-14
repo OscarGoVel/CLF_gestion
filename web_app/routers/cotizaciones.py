@@ -165,11 +165,17 @@ async def buscar_producto(request: Request, q: str = ""):
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(
             """
-            SELECT id, codigo, nombre, unidad_medida,
-                   COALESCE(precio_venta, precio_base, 0) AS precio, stock_actual
-            FROM productos
-            WHERE nombre ILIKE %s OR codigo ILIKE %s
-            ORDER BY nombre LIMIT 8
+            SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
+                   COALESCE(
+                       (SELECT MAX(h.precio)
+                        FROM producto_precio_historial h
+                        WHERE h.producto_id = p.id),
+                       p.precio_base, 0
+                   ) AS precio,
+                   p.stock_actual, p.aplica_iva
+            FROM productos p
+            WHERE p.nombre ILIKE %s OR p.codigo ILIKE %s
+            ORDER BY p.nombre LIMIT 8
             """,
             (f"%{q}%", f"%{q}%"),
         )
@@ -258,7 +264,6 @@ async def crear(
     fecha:          str = Form(...),
     orden_compra:   str = Form(""),
     notas:          str = Form(""),
-    aplica_iva:     str = Form(""),
     productos_json: str = Form(...),
 ):
     user = get_usuario_actual(request)
@@ -274,16 +279,40 @@ async def crear(
     if not prods:
         raise HTTPException(status_code=400, detail="Debe incluir al menos un producto")
 
-    iva_pct  = Decimal("0.16") if aplica_iva == "1" else Decimal("0")
-    subtotal = sum(
-        Decimal(str(p["cantidad"])) * Decimal(str(p["precio_unitario"])) for p in prods
-    )
-    iva      = (subtotal * iva_pct).quantize(Decimal("0.01"))
-    total    = (subtotal + iva).quantize(Decimal("0.01"))
-    subtotal = subtotal.quantize(Decimal("0.01"))
+    # IVA se calcula por producto según su aplica_iva del catálogo
+    subtotal_global = Decimal("0")
+    iva_global      = Decimal("0")
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         folio = _generar_folio_en_tx(cur, date.today().year)
+
+        detalle_rows = []
+        for p in prods:
+            cant   = Decimal(str(p["cantidad"]))
+            precio = Decimal(str(p["precio_unitario"]))
+            sub    = (cant * precio).quantize(Decimal("0.01"))
+
+            # Leer aplica_iva directamente de la BD (fuente de verdad)
+            cur.execute(
+                "SELECT precio_base, aplica_iva, COALESCE(stock_actual, 0) >= %s FROM productos WHERE id = %s",
+                (float(cant), p["producto_id"]),
+            )
+            pb_row = cur.fetchone()
+            costo_snap  = float(pb_row[0]) if pb_row else 0.0
+            prod_iva    = bool(pb_row[1]) if pb_row else False
+            tiene_stock = bool(pb_row[2]) if pb_row else False
+
+            p_iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if prod_iva else Decimal("0")
+            p_tot = (sub + p_iva).quantize(Decimal("0.01"))
+
+            subtotal_global += sub
+            iva_global      += p_iva
+            detalle_rows.append((p["producto_id"], cant, precio, sub, p_iva, p_tot,
+                                 tiene_stock, costo_snap))
+
+        total_global = (subtotal_global + iva_global).quantize(Decimal("0.01"))
+        hay_iva      = iva_global > 0
+
         cur.execute(
             """
             INSERT INTO cotizaciones
@@ -292,32 +321,14 @@ async def crear(
             VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s)
             """,
             (folio, fecha, cliente_id,
-             float(subtotal), float(iva), float(total),
-             notas or None, 1 if aplica_iva == "1" else 0,
+             float(subtotal_global), float(iva_global), float(total_global),
+             notas or None, 1 if hay_iva else 0,
              orden_compra or None),
         )
         cot_id = cur.lastrowid
 
-        for p in prods:
-            cant  = Decimal(str(p["cantidad"]))
-            precio = Decimal(str(p["precio_unitario"]))
-            sub   = (cant * precio).quantize(Decimal("0.01"))
-            p_iva = (sub * iva_pct).quantize(Decimal("0.01"))
-            p_tot = (sub + p_iva).quantize(Decimal("0.01"))
-
-            cur.execute(
-                "SELECT precio_base FROM productos WHERE id = %s", (p["producto_id"],)
-            )
-            pb  = cur.fetchone()
-            costo_snap = float(pb[0]) if pb else 0.0
-
-            cur.execute(
-                "SELECT COALESCE(stock_actual, 0) >= %s FROM productos WHERE id = %s",
-                (float(cant), p["producto_id"]),
-            )
-            ts_row     = cur.fetchone()
-            tiene_stock = bool(ts_row[0]) if ts_row else False
-
+        for (prod_id, cant, precio, sub, p_iva, p_tot,
+             tiene_stock, costo_snap) in detalle_rows:
             cur.execute(
                 """
                 INSERT INTO cotizacion_detalle
@@ -325,7 +336,7 @@ async def crear(
                    subtotal, iva, total, tiene_stock, costo_snapshot)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (cot_id, p["producto_id"],
+                (cot_id, prod_id,
                  float(cant), float(precio),
                  float(sub), float(p_iva), float(p_tot),
                  1 if tiene_stock else 0, costo_snap),
@@ -390,6 +401,32 @@ async def detalle(request: Request, cot_id: int):
         ecols    = [d[0] for d in cur.description]
         entregas = [_dec_to_float(dict(zip(ecols, r))) for r in cur.fetchall()]
 
+        # Presupuesto de compra: precio mínimo histórico + proveedor por producto
+        cur.execute("""
+            SELECT cd.producto_id,
+                   p.nombre,
+                   p.unidad_medida,
+                   cd.cantidad,
+                   cd.precio_unitario AS precio_venta,
+                   min_h.precio      AS precio_min_compra,
+                   prov.id           AS proveedor_id,
+                   prov.nombre       AS proveedor_nombre
+            FROM cotizacion_detalle cd
+            JOIN productos p ON p.id = cd.producto_id
+            LEFT JOIN LATERAL (
+                SELECT h.precio, h.proveedor_id
+                FROM producto_precio_historial h
+                WHERE h.producto_id = cd.producto_id
+                ORDER BY h.precio ASC
+                LIMIT 1
+            ) min_h ON true
+            LEFT JOIN proveedores prov ON prov.id = min_h.proveedor_id
+            WHERE cd.cotizacion_id = %s
+            ORDER BY cd.id
+        """, (cot_id,))
+        pcols      = [d[0] for d in cur.description]
+        presupuesto = [_dec_to_float(dict(zip(pcols, r))) for r in cur.fetchall()]
+
     # Calcular cantidad ya entregada por producto
     entregado_por_prod = {}
     for e in entregas:
@@ -405,6 +442,7 @@ async def detalle(request: Request, cot_id: int):
             "productos":          productos,
             "entregas":           entregas,
             "entregado_por_prod": entregado_por_prod,
+            "presupuesto":        presupuesto,
             "estados":            ESTADOS,
             "estado_color":       ESTADO_COLOR,
             "hoy":                date.today().isoformat(),
@@ -504,7 +542,6 @@ async def editar(
     fecha:          str = Form(...),
     orden_compra:   str = Form(""),
     notas:          str = Form(""),
-    aplica_iva:     str = Form(""),
     productos_json: str = Form(...),
 ):
     user = get_usuario_actual(request)
@@ -520,14 +557,6 @@ async def editar(
     if not prods:
         raise HTTPException(status_code=400, detail="Debe incluir al menos un producto")
 
-    iva_pct  = Decimal("0.16") if aplica_iva == "1" else Decimal("0")
-    subtotal = sum(
-        Decimal(str(p["cantidad"])) * Decimal(str(p["precio_unitario"])) for p in prods
-    )
-    iva      = (subtotal * iva_pct).quantize(Decimal("0.01"))
-    total    = (subtotal + iva).quantize(Decimal("0.01"))
-    subtotal = subtotal.quantize(Decimal("0.01"))
-
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT estado FROM cotizaciones WHERE id = %s", (cot_id,))
         row = cur.fetchone()
@@ -539,6 +568,36 @@ async def editar(
                 detail=f"No se puede editar en estado '{row[0]}'",
             )
 
+        # IVA se calcula por producto según su aplica_iva del catálogo
+        subtotal_global = Decimal("0")
+        iva_global      = Decimal("0")
+        detalle_rows    = []
+
+        for p in prods:
+            cant   = Decimal(str(p["cantidad"]))
+            precio = Decimal(str(p["precio_unitario"]))
+            sub    = (cant * precio).quantize(Decimal("0.01"))
+
+            cur.execute(
+                "SELECT precio_base, aplica_iva, COALESCE(stock_actual, 0) >= %s FROM productos WHERE id = %s",
+                (float(cant), p["producto_id"]),
+            )
+            pb_row = cur.fetchone()
+            costo_snap  = float(pb_row[0]) if pb_row else 0.0
+            prod_iva    = bool(pb_row[1]) if pb_row else False
+            tiene_stock = bool(pb_row[2]) if pb_row else False
+
+            p_iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if prod_iva else Decimal("0")
+            p_tot = (sub + p_iva).quantize(Decimal("0.01"))
+
+            subtotal_global += sub
+            iva_global      += p_iva
+            detalle_rows.append((p["producto_id"], cant, precio, sub, p_iva, p_tot,
+                                 tiene_stock, costo_snap))
+
+        total_global = (subtotal_global + iva_global).quantize(Decimal("0.01"))
+        hay_iva      = iva_global > 0
+
         cur.execute(
             """
             UPDATE cotizaciones
@@ -547,34 +606,16 @@ async def editar(
             WHERE id = %s
             """,
             (cliente_id, fecha, orden_compra or None, notas or None,
-             1 if aplica_iva == "1" else 0,
-             float(subtotal), float(iva), float(total), cot_id),
+             1 if hay_iva else 0,
+             float(subtotal_global), float(iva_global), float(total_global), cot_id),
         )
 
         cur.execute(
             "DELETE FROM cotizacion_detalle WHERE cotizacion_id = %s", (cot_id,)
         )
 
-        for p in prods:
-            cant  = Decimal(str(p["cantidad"]))
-            precio = Decimal(str(p["precio_unitario"]))
-            sub   = (cant * precio).quantize(Decimal("0.01"))
-            p_iva = (sub * iva_pct).quantize(Decimal("0.01"))
-            p_tot = (sub + p_iva).quantize(Decimal("0.01"))
-
-            cur.execute(
-                "SELECT precio_base FROM productos WHERE id = %s", (p["producto_id"],)
-            )
-            pb = cur.fetchone()
-            costo_snap = float(pb[0]) if pb else 0.0
-
-            cur.execute(
-                "SELECT COALESCE(stock_actual, 0) >= %s FROM productos WHERE id = %s",
-                (float(cant), p["producto_id"]),
-            )
-            ts_row      = cur.fetchone()
-            tiene_stock = bool(ts_row[0]) if ts_row else False
-
+        for (prod_id, cant, precio, sub, p_iva, p_tot,
+             tiene_stock, costo_snap) in detalle_rows:
             cur.execute(
                 """
                 INSERT INTO cotizacion_detalle
@@ -582,7 +623,7 @@ async def editar(
                    subtotal, iva, total, tiene_stock, costo_snapshot)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (cot_id, p["producto_id"],
+                (cot_id, prod_id,
                  float(cant), float(precio),
                  float(sub), float(p_iva), float(p_tot),
                  1 if tiene_stock else 0, costo_snap),

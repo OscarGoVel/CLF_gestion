@@ -304,6 +304,99 @@
         </div>
     </div>
 
+    <!-- ── Presupuesto de compra ─────────────────────────────────────────────── -->
+    {% if user.rol in ('Administrador', 'Operador') and presupuesto %}
+    {% set costo_total = presupuesto | selectattr('precio_min_compra') | sum(attribute='precio_min_compra') %}
+    <details class="bg-white rounded-xl shadow-sm overflow-hidden mt-4 group">
+        <summary class="px-5 py-3 border-b border-gray-100 flex items-center justify-between cursor-pointer
+                        hover:bg-gray-50 transition-colors select-none">
+            <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                🛒 Presupuesto de compra
+                <span class="text-xs font-normal text-gray-400">(precio mínimo histórico por producto)</span>
+            </h3>
+            <span class="text-xs text-gray-400 group-open:hidden">▶ Ver</span>
+            <span class="text-xs text-gray-400 hidden group-open:inline">▼ Ocultar</span>
+        </summary>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-amber-50 border-b border-amber-100">
+                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-amber-700 uppercase tracking-wide">Producto</th>
+                        <th class="px-4 py-2.5 text-center text-xs font-semibold text-amber-700 uppercase tracking-wide">Cant.</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-amber-700 uppercase tracking-wide whitespace-nowrap">P. compra mín.</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-amber-700 uppercase tracking-wide">Subtotal</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-semibold text-amber-700 uppercase tracking-wide">P. venta</th>
+                        <th class="px-4 py-2.5 text-left text-xs font-semibold text-amber-700 uppercase tracking-wide">Proveedor</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for row in presupuesto %}
+                    <tr class="hover:bg-amber-50/40 transition-colors">
+                        <td class="px-4 py-2.5 text-sm text-gray-700">{{ row.nombre }}</td>
+                        <td class="px-4 py-2.5 text-sm text-center text-gray-600">
+                            {{ '{:g}'.format(row.cantidad) }} {{ row.unidad_medida or '' }}
+                        </td>
+                        <td class="px-4 py-2.5 text-sm text-right font-semibold
+                                   {% if row.precio_min_compra %}text-amber-700{% else %}text-gray-300{% endif %}">
+                            {% if row.precio_min_compra %}
+                                ${{ '{:,.2f}'.format(row.precio_min_compra) }}
+                            {% else %}
+                                <span class="text-xs text-gray-400 italic">sin historial</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-sm text-right text-gray-700">
+                            {% if row.precio_min_compra %}
+                                ${{ '{:,.2f}'.format(row.precio_min_compra * row.cantidad) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-2.5 text-sm text-right text-clf-green font-semibold">
+                            ${{ '{:,.2f}'.format(row.precio_venta) }}
+                        </td>
+                        <td class="px-4 py-2.5 text-xs text-gray-500">
+                            {% if row.proveedor_nombre %}
+                            <a href="/catalogos/proveedores/{{ row.proveedor_id }}"
+                               class="hover:text-clf-green hover:underline transition-colors">
+                                {{ row.proveedor_nombre }}
+                            </a>
+                            {% else %}
+                            <span class="text-gray-300 italic">sin proveedor</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="border-t-2 border-amber-200 bg-amber-50">
+                    <tr>
+                        {% set total_compra = namespace(v=0) %}
+                        {% for row in presupuesto %}
+                            {% if row.precio_min_compra %}
+                                {% set total_compra.v = total_compra.v + row.precio_min_compra * row.cantidad %}
+                            {% endif %}
+                        {% endfor %}
+                        <td colspan="3" class="px-4 py-3 text-xs font-semibold text-amber-700 text-right uppercase tracking-wide">
+                            Costo total estimado
+                        </td>
+                        <td class="px-4 py-3 text-base font-bold text-amber-700 text-right whitespace-nowrap">
+                            ${{ '{:,.2f}'.format(total_compra.v) }}
+                        </td>
+                        <td class="px-4 py-3 text-base font-bold text-clf-green text-right whitespace-nowrap">
+                            ${{ '{:,.2f}'.format(cot.subtotal or 0) }}
+                        </td>
+                        <td class="px-4 py-3 text-xs text-gray-400">
+                            {% if total_compra.v > 0 and cot.subtotal %}
+                            {% set margen = ((cot.subtotal - total_compra.v) / cot.subtotal * 100) %}
+                            Margen: <span class="font-bold {% if margen >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ '{:.1f}'.format(margen) }}%
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </details>
+    {% endif %}
+
     <!-- ── Entregas parciales ──────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden mt-4">
         <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">

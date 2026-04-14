@@ -154,6 +154,7 @@ async def crear_cliente(
             INSERT INTO clientes (nombre_comercial, razon_social, tipo, rfc, contacto,
                                   telefono, email, direccion, regimen_fiscal, cp_fiscal, uso_cfdi)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             nombre_comercial, razon_social or None, tipo,
             rfc or None, contacto or None, telefono or None,
@@ -400,6 +401,44 @@ def _asegurar_col_codigo_barras(empresa_db: str) -> None:
         cur.execute("ALTER TABLE productos ADD COLUMN IF NOT EXISTS codigo_barras TEXT")
 
 
+def _asegurar_col_proveedor_historial(empresa_db: str) -> None:
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute(
+            "ALTER TABLE producto_precio_historial "
+            "ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id)"
+        )
+
+
+def _cargar_proveedores(empresa_db: str) -> list:
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT id, nombre FROM proveedores ORDER BY nombre")
+        return [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+
+
+def _historial_con_proveedores(cur, producto_id: int) -> list:
+    """Devuelve el historial de precios con nombre de proveedor unido."""
+    from datetime import datetime as _dt
+    cur.execute("""
+        SELECT h.id, h.precio, h.fecha, h.motivo, h.fuente, h.proveedor_id,
+               prov.nombre AS proveedor_nombre
+        FROM producto_precio_historial h
+        LEFT JOIN proveedores prov ON prov.id = h.proveedor_id
+        WHERE h.producto_id = %s
+        ORDER BY h.fecha DESC, h.fecha_registro DESC
+    """, (producto_id,))
+    hcols = [d[0] for d in cur.description]
+    historial = []
+    for r in cur.fetchall():
+        h = _floats(dict(zip(hcols, r)))
+        if isinstance(h.get("fecha"), str):
+            try:
+                h["fecha"] = _dt.fromisoformat(h["fecha"])
+            except (ValueError, TypeError):
+                h["fecha"] = None
+        historial.append(h)
+    return historial
+
+
 @router.get("/productos/nuevo", response_class=HTMLResponse)
 async def nuevo_producto_form(
     request: Request,
@@ -627,11 +666,14 @@ async def actualizar_precio(
     producto_id: int,
     precio_nuevo: float = Form(...),
     motivo: str = Form(""),
+    proveedor_id: str = Form(""),
     user=Depends(require_rol("Administrador", "Operador")),
 ):
     from datetime import date as _date
     if precio_nuevo < 0:
         raise HTTPException(400, "El precio no puede ser negativo.")
+
+    prov_id = int(proveedor_id) if proveedor_id.strip() else None
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT precio_base, nombre FROM productos WHERE id = %s", (producto_id,))
@@ -645,41 +687,27 @@ async def actualizar_precio(
                         (precio_nuevo, producto_id))
             cur.execute("""
                 INSERT INTO producto_precio_historial
-                    (producto_id, precio, fecha, motivo, fuente)
-                VALUES (%s, %s, %s, %s, 'manual')
+                    (producto_id, precio, fecha, motivo, fuente, proveedor_id)
+                VALUES (%s, %s, %s, %s, 'manual', %s)
             """, (producto_id, precio_nuevo,
                   _date.today().isoformat(),
-                  motivo.strip() or "Actualización manual"))
+                  motivo.strip() or "Actualización manual",
+                  prov_id))
             cambio = True
         else:
             cambio = False
 
-        # Devolver historial actualizado como fragment HTMX
-        cur.execute("""
-            SELECT id, precio, fecha, motivo, fuente
-            FROM producto_precio_historial
-            WHERE producto_id = %s
-            ORDER BY fecha DESC, fecha_registro DESC
-        """, (producto_id,))
-        from datetime import datetime as _dt
-        hcols = [d[0] for d in cur.description]
-        historial = []
-        for r in cur.fetchall():
-            h = _floats(dict(zip(hcols, r)))
-            if isinstance(h.get("fecha"), str):
-                try:
-                    h["fecha"] = _dt.fromisoformat(h["fecha"])
-                except (ValueError, TypeError):
-                    h["fecha"] = None
-            historial.append(h)
+        historial   = _historial_con_proveedores(cur, producto_id)
+        proveedores = _cargar_proveedores(user["empresa_db"])
 
     return templates.TemplateResponse(
         request=request,
         name="catalogos/_historial_completo.html",
         context={
-            "user": user,
-            "historial": historial,
-            "producto_id": producto_id,
+            "user":         user,
+            "historial":    historial,
+            "proveedores":  proveedores,
+            "producto_id":  producto_id,
             "precio_actual": precio_nuevo if cambio else precio_actual,
             "toast": f"Precio actualizado a ${precio_nuevo:,.2f}" if cambio else "Sin cambios (precio idéntico)",
         },
@@ -696,36 +724,23 @@ async def historial_precios(
     producto_id: int,
     user=Depends(require_rol("Administrador", "Operador")),
 ):
-    from datetime import datetime as _dt
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
-        cur.execute("""
-            SELECT id, precio, fecha, motivo, fuente
-            FROM producto_precio_historial
-            WHERE producto_id = %s
-            ORDER BY fecha DESC, fecha_registro DESC
-        """, (producto_id,))
-        hcols = [d[0] for d in cur.description]
-        historial = []
-        for r in cur.fetchall():
-            h = _floats(dict(zip(hcols, r)))
-            if isinstance(h.get("fecha"), str):
-                try:
-                    h["fecha"] = _dt.fromisoformat(h["fecha"])
-                except (ValueError, TypeError):
-                    h["fecha"] = None
-            historial.append(h)
+        historial = _historial_con_proveedores(cur, producto_id)
 
         cur.execute("SELECT precio_base FROM productos WHERE id = %s", (producto_id,))
         row = cur.fetchone()
         precio_actual = float(row[0] or 0) if row else 0.0
 
+        proveedores = _cargar_proveedores(user["empresa_db"])
+
     return templates.TemplateResponse(
         request=request,
         name="catalogos/_historial_completo.html",
         context={
-            "user": user,
-            "historial": historial,
-            "producto_id": producto_id,
+            "user":         user,
+            "historial":    historial,
+            "proveedores":  proveedores,
+            "producto_id":  producto_id,
             "precio_actual": precio_actual,
         },
     )
@@ -742,35 +757,24 @@ async def agregar_historial_manual(
     precio: float = Form(...),
     fecha: str = Form(...),
     motivo: str = Form(""),
+    proveedor_id: str = Form(""),
     user=Depends(require_rol("Administrador", "Operador")),
 ):
-    from datetime import datetime as _dt
     if precio < 0:
         raise HTTPException(400, "El precio no puede ser negativo.")
+
+    prov_id = int(proveedor_id) if proveedor_id.strip() else None
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
             INSERT INTO producto_precio_historial
-                (producto_id, precio, fecha, motivo, fuente)
-            VALUES (%s, %s, %s, %s, 'manual')
-        """, (producto_id, precio, fecha, motivo.strip() or "Registro manual"))
+                (producto_id, precio, fecha, motivo, fuente, proveedor_id)
+            VALUES (%s, %s, %s, %s, 'manual', %s)
+        """, (producto_id, precio, fecha,
+              motivo.strip() or "Registro manual", prov_id))
 
-        cur.execute("""
-            SELECT id, precio, fecha, motivo, fuente
-            FROM producto_precio_historial
-            WHERE producto_id = %s
-            ORDER BY fecha DESC, fecha_registro DESC
-        """, (producto_id,))
-        hcols = [d[0] for d in cur.description]
-        historial = []
-        for r in cur.fetchall():
-            h = _floats(dict(zip(hcols, r)))
-            if isinstance(h.get("fecha"), str):
-                try:
-                    h["fecha"] = _dt.fromisoformat(h["fecha"])
-                except (ValueError, TypeError):
-                    h["fecha"] = None
-            historial.append(h)
+        historial   = _historial_con_proveedores(cur, producto_id)
+        proveedores = _cargar_proveedores(user["empresa_db"])
 
         cur.execute("SELECT precio_base FROM productos WHERE id = %s", (producto_id,))
         row = cur.fetchone()
@@ -780,9 +784,10 @@ async def agregar_historial_manual(
         request=request,
         name="catalogos/_historial_completo.html",
         context={
-            "user": user,
-            "historial": historial,
-            "producto_id": producto_id,
+            "user":         user,
+            "historial":    historial,
+            "proveedores":  proveedores,
+            "producto_id":  producto_id,
             "precio_actual": precio_actual,
             "toast": "Registro agregado al historial.",
         },
@@ -1057,12 +1062,13 @@ async def crear_proveedor(
             INSERT INTO proveedores (nombre, razon_social, rfc, contacto, telefono, email,
                                      direccion, notas, regimen_fiscal, cp_fiscal, uso_cfdi)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             nombre, razon_social or None, rfc or None, contacto or None,
             telefono or None, email or None, direccion or None,
             notas or None, regimen_fiscal or None, cp_fiscal or None, uso_cfdi or None,
         ))
-        new_id = cur.lastrowid
+        new_id = cur.fetchone()[0]
 
     cache.invalidar(f"proveedores:{user['empresa_db']}")
     audit.registrar(

@@ -2,7 +2,7 @@
 <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-56 overflow-y-auto">
     {% for r in resultados %}
     <button type="button"
-            onclick='seleccionarProductoCot({{ r.id }}, {{ r.nombre | tojson }}, {{ r.precio or 0 }}, {{ (r.codigo or "") | tojson }}, {{ (r.unidad_medida or "") | tojson }})'
+            onclick='seleccionarProductoCot({{ r.id }}, {{ r.nombre | tojson }}, {{ r.precio or 0 }}, {{ (r.codigo or "") | tojson }}, {{ (r.unidad_medida or "") | tojson }}, {{ 1 if r.aplica_iva else 0 }})'
             class="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors">
         <p class="text-sm font-semibold text-gray-800">{{ r.nombre }}</p>
         <p class="text-xs text-gray-400 mt-0.5">

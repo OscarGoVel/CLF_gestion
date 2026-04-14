@@ -523,7 +523,14 @@ class _CotizacionesEstadosMixin:
                 messagebox.showinfo("Éxito", "Cotización marcada como entregada\nStock actualizado")
                 self.cargar_cotizaciones()
                 self.sistema.actualizar_dashboard()
-                
+                # Refrescar stock si el módulo está cargado
+                if hasattr(self.sistema, '_stock'):
+                    try:
+                        self.sistema._stock.cargar_vista_stock()
+                        self.sistema._stock.cargar_historial()
+                    except Exception:
+                        pass
+
             except sqlite3.Error as e:
                 self.conn.rollback()
                 messagebox.showerror("Error", f"No se pudo marcar como entregada:\n{str(e)}")
