@@ -13,6 +13,7 @@
     <button hx-delete="/facturas/{{ factura_id }}/vincular/{{ v.id }}"
             hx-target="#vinculadas-list" hx-swap="outerHTML"
             hx-confirm="¿Desvincular esta cotización?"
+            hx-on::after-request="if(event.detail.successful){ showToast('Cotización desvinculada', 'warn'); }"
             class="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-all px-2 py-1 rounded">
         ✕
     </button>

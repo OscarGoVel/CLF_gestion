@@ -1,0 +1,163 @@
+<!-- Partial: _selector_cotizaciones.html
+     Renderizado por GET /facturas/{id}/selector-cotizaciones?q=
+     Se incluye dentro del panel de vinculación en facturas/detalle.html
+-->
+<div id="selector-cot-panel">
+
+    <!-- Buscador -->
+    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
+        <input type="search"
+               name="q"
+               value="{{ q }}"
+               placeholder="Buscar por folio o cliente…"
+               autocomplete="off"
+               hx-get="/facturas/{{ factura_id }}/selector-cotizaciones"
+               hx-target="#selector-cot-panel"
+               hx-swap="outerHTML"
+               hx-trigger="input changed delay:350ms, search"
+               class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2
+                      focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+    </div>
+
+    {% if not cotizaciones %}
+    <p class="px-5 py-8 text-center text-sm text-gray-400">
+        {% if q %}
+            Sin resultados para "<span class="font-semibold">{{ q }}</span>".
+            Prueba con otro término.
+        {% else %}
+            No hay cotizaciones disponibles para vincular.
+        {% endif %}
+    </p>
+
+    {% else %}
+    <div class="divide-y divide-gray-100 max-h-[28rem] overflow-y-auto">
+
+        {% for cot in cotizaciones %}
+        {% set bg_e, fg_e = estado_color.get(cot.estado, ('bg-gray-100','text-gray-500')) %}
+        {% set prods = prods_por_cot.get(cot.id, []) %}
+
+        <details class="group">
+            <!-- ── Cabecera de la cotización (siempre visible) ────────────── -->
+            <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer
+                            hover:bg-gray-50 transition-colors select-none list-none">
+
+                <!-- Indicador expandir -->
+                <span class="text-gray-300 group-open:text-clf-green transition-colors shrink-0 text-xs">
+                    <span class="group-open:hidden">▶</span>
+                    <span class="hidden group-open:inline">▼</span>
+                </span>
+
+                <!-- Folio -->
+                <span class="font-mono text-sm font-bold text-navy-700 w-36 shrink-0">
+                    {{ cot.folio }}
+                </span>
+
+                <!-- Cliente -->
+                <span class="flex-1 text-sm text-gray-600 truncate min-w-0">
+                    {{ cot.cliente }}
+                </span>
+
+                <!-- Fecha -->
+                <span class="text-xs text-gray-400 shrink-0 hidden sm:inline">
+                    {{ cot.fecha.strftime('%d/%m/%Y') if cot.fecha else '—' }}
+                </span>
+
+                <!-- Estado badge -->
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg_e }} {{ fg_e }} shrink-0 hidden sm:inline">
+                    {{ cot.estado }}
+                </span>
+
+                <!-- Total -->
+                <span class="text-sm font-bold text-clf-green shrink-0 w-24 text-right">
+                    ${{ '{:,.2f}'.format(cot.total or 0) }}
+                </span>
+
+                <!-- Botón Vincular -->
+                {% if user.rol in ('Administrador', 'Operador') %}
+                <form hx-post="/facturas/{{ factura_id }}/vincular"
+                      hx-target="#vinculadas-list"
+                      hx-swap="outerHTML"
+                      hx-on::after-request="if(event.detail.successful){ showToast('Cotización {{ cot.folio }} vinculada', 'success'); this.closest('details').open=false; }"
+                      class="shrink-0 ml-2"
+                      onclick="event.stopPropagation()">
+                    <input type="hidden" name="cotizacion_id" value="{{ cot.id }}">
+                    <button type="submit"
+                            class="px-3 py-1 bg-clf-green hover:bg-clf-green-dk text-white
+                                   text-xs font-bold rounded-lg transition-colors whitespace-nowrap">
+                        🔗 Vincular
+                    </button>
+                </form>
+                {% endif %}
+            </summary>
+
+            <!-- ── Detalle expandido: productos ───────────────────────────── -->
+            <div class="px-4 pb-3 bg-gray-50 border-t border-gray-100">
+
+                <!-- Datos del encabezado adicionales en móvil -->
+                <div class="flex flex-wrap gap-3 py-2 sm:hidden mb-2">
+                    <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg_e }} {{ fg_e }}">
+                        {{ cot.estado }}
+                    </span>
+                    <span class="text-xs text-gray-400">
+                        {{ cot.fecha.strftime('%d/%m/%Y') if cot.fecha else '—' }}
+                    </span>
+                </div>
+
+                {% if prods %}
+                <table class="w-full text-xs mt-1">
+                    <thead>
+                        <tr class="text-gray-400 uppercase tracking-wide border-b border-gray-200">
+                            <th class="py-1.5 text-left font-semibold">Producto</th>
+                            <th class="py-1.5 text-center font-semibold w-16">Cant.</th>
+                            <th class="py-1.5 text-center font-semibold w-10">U.M.</th>
+                            <th class="py-1.5 text-right font-semibold w-24">P. Unit.</th>
+                            <th class="py-1.5 text-center font-semibold w-16">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for p in prods %}
+                        <tr class="{% if not p.tiene_stock %}bg-amber-50{% endif %}">
+                            <td class="py-1.5 text-gray-700">
+                                {% if p.codigo %}
+                                <span class="text-gray-400 font-mono mr-1">{{ p.codigo }}</span>
+                                {% endif %}
+                                {{ p.nombre[:70] }}{% if p.nombre|length > 70 %}…{% endif %}
+                            </td>
+                            <td class="py-1.5 text-center font-semibold text-gray-700">
+                                {{ '{:g}'.format(p.cantidad) }}
+                            </td>
+                            <td class="py-1.5 text-center text-gray-400">
+                                {{ p.unidad_medida or '—' }}
+                            </td>
+                            <td class="py-1.5 text-right text-gray-700">
+                                ${{ '{:,.2f}'.format(p.precio_unitario) }}
+                            </td>
+                            <td class="py-1.5 text-center">
+                                {% if p.tiene_stock %}
+                                <span class="text-green-600 font-bold">✓</span>
+                                {% else %}
+                                <span class="text-amber-500 font-bold" title="Sin stock al cotizar">⚠</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-xs text-gray-400 py-2 italic">Sin productos registrados.</p>
+                {% endif %}
+
+                <div class="flex justify-end mt-2 pt-2 border-t border-gray-200">
+                    <a href="/cotizaciones/{{ cot.id }}" target="_blank"
+                       class="text-xs text-clf-green hover:underline transition-colors">
+                        Ver cotización completa ↗
+                    </a>
+                </div>
+            </div>
+        </details>
+        {% endfor %}
+
+    </div>
+    {% endif %}
+
+</div>

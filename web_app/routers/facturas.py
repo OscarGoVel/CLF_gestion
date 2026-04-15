@@ -291,6 +291,85 @@ async def importar_xml(request: Request, archivo: UploadFile = File(...)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SELECTOR DE COTIZACIONES (panel HTMX para vincular)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{factura_id}/selector-cotizaciones", response_class=HTMLResponse)
+async def selector_cotizaciones(
+    request: Request,
+    factura_id: int,
+    q: str = "",
+):
+    """Retorna el panel de búsqueda/selección de cotizaciones para vincular a esta factura."""
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    q = q.strip()
+    params: list = [factura_id]
+    buscar_clause = ""
+    if q:
+        buscar_clause = "AND (c.folio ILIKE %s OR COALESCE(cl.nombre_comercial,'') ILIKE %s)"
+        params += [f"%{q}%", f"%{q}%"]
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT c.id, c.folio, c.fecha, c.total, c.estado,
+                   COALESCE(cl.nombre_comercial, '—') AS cliente,
+                   cl.rfc
+            FROM cotizaciones c
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.estado NOT IN ('Cancelada')
+              AND c.id NOT IN (
+                  SELECT fc.cotizacion_id
+                  FROM factura_cotizaciones fc
+                  WHERE fc.factura_id = %s
+              )
+              {buscar_clause}
+            ORDER BY c.fecha DESC, c.id DESC
+            LIMIT 50
+        """, params)
+        ccols = [d[0] for d in cur.description]
+        cotizaciones = [_floats(dict(zip(ccols, r))) for r in cur.fetchall()]
+
+        # Productos de todas las cotizaciones en una sola consulta
+        if cotizaciones:
+            cot_ids = [c["id"] for c in cotizaciones]
+            cur.execute("""
+                SELECT cd.cotizacion_id, p.codigo, p.nombre, p.unidad_medida,
+                       cd.cantidad, cd.precio_unitario, cd.tiene_stock
+                FROM cotizacion_detalle cd
+                JOIN productos p ON p.id = cd.producto_id
+                WHERE cd.cotizacion_id = ANY(%s)
+                ORDER BY cd.cotizacion_id, cd.id
+            """, (cot_ids,))
+            pcols = [d[0] for d in cur.description]
+            prods_raw = [_floats(dict(zip(pcols, r))) for r in cur.fetchall()]
+        else:
+            prods_raw = []
+
+    # Agrupar productos por cotizacion_id
+    from collections import defaultdict
+    prods_por_cot: dict = defaultdict(list)
+    for p in prods_raw:
+        prods_por_cot[p["cotizacion_id"]].append(p)
+
+    from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
+    return templates.TemplateResponse(
+        request=request,
+        name="facturas/_selector_cotizaciones.html",
+        context={
+            "user":          user,
+            "factura_id":    factura_id,
+            "cotizaciones":  cotizaciones,
+            "prods_por_cot": dict(prods_por_cot),
+            "estado_color":  ESTADO_COLOR,
+            "q":             q,
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # VINCULAR COTIZACIÓN
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -11,5 +11,5 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') 
 )
 
 echo Iniciando CLF Gestion Web ^(HTTP puerto 8000^)...
-python -m uvicorn web_app.main:app --host 0.0.0.0 --port 8000 --workers 1
+python -m uvicorn web_app.main:app --host 0.0.0.0 --port 8000 --workers 4 --loop asyncio
 pause

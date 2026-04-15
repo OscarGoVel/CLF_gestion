@@ -169,33 +169,54 @@
 
     <!-- Cotizaciones vinculadas -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+
+        <!-- Cabecera -->
         <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 class="text-sm font-bold text-gray-700">Cotizaciones vinculadas</h3>
-            <button onclick="document.getElementById('form-vincular').classList.toggle('hidden')"
-                    class="text-xs text-clf-green font-semibold hover:underline">
-                + Vincular cotización
-            </button>
-        </div>
-
-        <!-- Formulario vincular (oculto por defecto) -->
-        <div id="form-vincular" class="hidden px-5 py-3 bg-gray-50 border-b border-gray-100">
-            <form hx-post="/facturas/{{ factura.id }}/vincular"
-                  hx-target="#vinculadas-list"
-                  hx-swap="outerHTML"
-                  class="flex items-center gap-3">
-                <input type="number" name="cotizacion_id" placeholder="ID de cotización"
-                       class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg
-                              focus:outline-none focus:ring-2 focus:ring-clf-green bg-white"
-                       required>
-                <button type="submit"
-                        class="px-4 py-1.5 bg-clf-green text-white text-sm font-semibold
-                               rounded-lg hover:bg-clf-green/90 transition-colors">
-                    Vincular
-                </button>
-            </form>
         </div>
 
         {% include "facturas/_vinculadas.html" %}
+
+        <!-- Panel selector: se abre al hacer clic en el botón -->
+        {% if user.rol in ('Administrador', 'Operador') %}
+        <div class="border-t border-gray-100">
+            <button id="btn-vincular-cot"
+                    data-url="/facturas/{{ factura.id }}/selector-cotizaciones"
+                    onclick="toggleSelectorCot(this)"
+                    class="w-full flex items-center gap-2 px-5 py-2.5 text-left
+                           hover:bg-gray-50 transition-colors">
+                <span id="btn-vincular-cot-label"
+                      class="text-xs font-semibold text-clf-green">
+                    ＋ Vincular cotización
+                </span>
+            </button>
+
+            <div id="panel-vincular-cot" class="hidden">
+                <div id="selector-cot-panel-wrap">
+                    <!-- Se carga via HTMX al abrir -->
+                </div>
+            </div>
+        </div>
+        <script>
+        function toggleSelectorCot(btn) {
+            var panel = document.getElementById('panel-vincular-cot');
+            var wrap  = document.getElementById('selector-cot-panel-wrap');
+            var label = document.getElementById('btn-vincular-cot-label');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                label.textContent = '— Cerrar selector';
+                if (!wrap.dataset.loaded) {
+                    wrap.dataset.loaded = '1';
+                    htmx.ajax('GET', btn.dataset.url, {target: '#selector-cot-panel-wrap', swap: 'innerHTML'});
+                }
+            } else {
+                panel.classList.add('hidden');
+                label.textContent = '＋ Vincular cotización';
+            }
+        }
+        </script>
+        {% endif %}
+
     </div>
 
     <div class="mt-4">

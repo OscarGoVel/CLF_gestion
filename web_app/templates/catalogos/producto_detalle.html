@@ -111,21 +111,9 @@
             <div class="px-5 py-3 border-b border-gray-100">
                 <h3 class="text-sm font-bold text-gray-700">Proveedores</h3>
             </div>
-            {% if proveedores %}
-            <div class="divide-y divide-gray-50">
-                {% for prov in proveedores %}
-                <div class="px-5 py-3">
-                    <p class="text-sm font-semibold text-gray-800">{{ prov.nombre }}</p>
-                    <p class="text-xs text-gray-400 mt-0.5">
-                        {% if prov.telefono %}{{ prov.telefono }}{% endif %}
-                        {% if prov.email %} · {{ prov.email }}{% endif %}
-                    </p>
-                </div>
-                {% endfor %}
+            <div id="proveedores-wrapper">
+                {% include "catalogos/_proveedores_producto.html" %}
             </div>
-            {% else %}
-            <p class="px-5 py-6 text-sm text-gray-400 text-center">Sin proveedores vinculados.</p>
-            {% endif %}
         </div>
     </div>
 

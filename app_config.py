@@ -29,7 +29,7 @@ PREFS_DEFAULT = {
         'utilidad': {'Gobierno': 40, 'Hotel': 35, 'Empresa': 35},
     },
     'pdf': {
-        'logo_path':      'logo_clf.jpg',
+        'logo_path':      'assets/logo_clf.jpg',
         'vigencia':       '30 DÍAS',
         'lugar_entrega':  'MÉRIDA',
         'tiempo_entrega': '15 DÍAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA',
@@ -47,7 +47,7 @@ PREFS_DEFAULT = {
 UTILIDAD: dict = {'Gobierno': 40, 'Hotel': 35, 'Empresa': 35}
 
 PDF_CONFIG: dict = {
-    'logo_path':      'logo_clf.jpg',
+    'logo_path':      'assets/logo_clf.jpg',
     'vigencia':       '30 DÍAS',
     'lugar_entrega':  'MÉRIDA',
     'tiempo_entrega': '15 DÍAS, A PARTIR DEL ANTICIPO DEL 60% Y SALDO CONTRAENTREGA',

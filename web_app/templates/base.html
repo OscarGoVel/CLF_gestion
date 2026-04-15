@@ -108,6 +108,46 @@
         })();
     </script>
 
+    <!-- ── Toast de notificaciones ─────────────────────────────────────────── -->
+    <div id="toast-container"
+         class="fixed bottom-20 sm:bottom-6 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    </div>
+    <script>
+    function showToast(msg, type) {
+        var colors = {
+            success: 'bg-green-600 text-white',
+            error:   'bg-red-600 text-white',
+            info:    'bg-navy-700 text-white',
+            warn:    'bg-amber-500 text-white',
+        };
+        var icons = { success: '✓', error: '✕', info: 'ℹ', warn: '⚠' };
+        var cls   = colors[type] || colors.info;
+        var icon  = icons[type]  || icons.info;
+        var t = document.createElement('div');
+        t.className = cls + ' pointer-events-auto flex items-center gap-2 px-4 py-2.5 ' +
+                      'rounded-xl shadow-lg text-sm font-semibold transition-all duration-300 ' +
+                      'translate-y-2 opacity-0';
+        t.innerHTML = '<span>' + icon + '</span><span>' + msg + '</span>';
+        document.getElementById('toast-container').appendChild(t);
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                t.classList.remove('translate-y-2', 'opacity-0');
+            });
+        });
+        setTimeout(function() {
+            t.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(function() { t.remove(); }, 300);
+        }, 3500);
+    }
+
+    // Escuchar eventos personalizados de HTMX para mostrar toasts
+    document.addEventListener('htmx:responseError', function(e) {
+        var msg = (e.detail.xhr && e.detail.xhr.responseText) || 'Error al procesar la solicitud';
+        try { msg = JSON.parse(msg).detail || msg; } catch(_) {}
+        showToast(msg, 'error');
+    });
+    </script>
+
     <!-- ── Tablas ordenables ─────────────────────────────────────────────── -->
     <style>
         th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }

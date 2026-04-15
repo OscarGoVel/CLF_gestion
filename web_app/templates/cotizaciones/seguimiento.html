@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Seguimiento {{ cot.folio }} — CLF Gestión{% endblock %}
+
+{% block body %}
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 px-2 gap-1">
+        <a href="/dashboard" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            📊 Dashboard
+        </a>
+        <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            📄 Cotizaciones
+        </a>
+        <a href="/cotizaciones/{{ cot.id }}" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">
+            {{ cot.folio }}
+        </a>
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700">
+            📋 Seguimiento
+        </span>
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+{% set bg_e, fg_e = estado_color.get(cot.estado, ('bg-gray-100','text-gray-600')) %}
+
+<main class="p-5 max-w-3xl mx-auto">
+
+    <!-- ── Header ─────────────────────────────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-5">
+        <div class="h-1.5
+            {% if cot.estado == 'Pendiente' %}bg-amber-400
+            {% elif cot.estado == 'Programada' %}bg-purple-500
+            {% elif cot.estado == 'Entregada' %}bg-green-500
+            {% elif cot.estado == 'Pagada' %}bg-blue-500
+            {% else %}bg-red-400{% endif %}">
+        </div>
+        <div class="px-6 py-4">
+            <a href="/cotizaciones/{{ cot.id }}"
+               class="text-xs text-gray-400 hover:text-navy-600 transition-colors mb-2 inline-block">
+                ← Volver a la cotización
+            </a>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <h2 class="text-xl font-bold text-navy-700 font-mono">{{ cot.folio }}</h2>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold {{ bg_e }} {{ fg_e }}">
+                            {{ cot.estado }}
+                        </span>
+                    </div>
+                    <p class="text-sm text-gray-500">{{ cot.cliente }}</p>
+                </div>
+                {% if user.rol != 'Solo lectura' %}
+                <div class="text-right">
+                    <p class="text-xs text-gray-400">Total cotización</p>
+                    <p class="text-2xl font-bold text-clf-green">${{ '{:,.2f}'.format(cot.total or 0) }}</p>
+                    {% if user.rol == 'Administrador' %}
+                    <a href="/cotizaciones/{{ cot.id }}/costos"
+                       class="text-xs text-amber-500 hover:text-amber-700 hover:underline transition-colors mt-1 inline-block">
+                        💰 Ver análisis de costos →
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Barra de progreso -->
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-semibold text-gray-600">
+                        Progreso: {{ completadas }}/{{ total_etapas }} etapas completadas
+                    </span>
+                    <span class="text-xs font-bold text-purple-700">
+                        {{ (completadas / total_etapas * 100)|int }}%
+                    </span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-purple-600 h-2 rounded-full transition-all"
+                         style="width: {{ (completadas / total_etapas * 100)|int }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tarjetas de etapas ──────────────────────────────────────────────── -->
+    <div class="space-y-3">
+    {% for etapa in etapas %}
+    {% set etapa_slug = etapa.nombre | replace(' ', '_') | replace('á','a') | replace('é','e') | replace('ó','o') | replace('ú','u') %}
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden border-l-4
+                {% if etapa.completada %}{{ etapa.color_border }} {{ etapa.color_bg }}
+                {% else %}border-gray-200{% endif %}">
+        <div class="px-5 py-4">
+
+            <!-- Cabecera de tarjeta -->
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">{{ etapa.icono }}</span>
+                    <span class="font-bold text-sm
+                                 {% if etapa.completada %}{{ etapa.color_txt }}{% else %}text-gray-500{% endif %}">
+                        {{ etapa.nombre }}
+                    </span>
+                    {% if etapa.completada %}
+                    <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                        ✓ Completada
+                    </span>
+                    {% else %}
+                    <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                        Pendiente
+                    </span>
+                    {% endif %}
+                </div>
+                {% if etapa.completada and etapa.fecha_etapa %}
+                <span class="text-xs text-gray-400 font-mono">
+                    {{ etapa.fecha_etapa }}
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Datos guardados (modo lectura) -->
+            {% if etapa.completada and (etapa.referencia or etapa.notas) %}
+            <div class="flex flex-wrap gap-4 mb-3 text-sm">
+                {% if etapa.referencia %}
+                <div>
+                    <p class="text-xs text-gray-400">Referencia</p>
+                    <p class="font-semibold text-gray-700 font-mono">{{ etapa.referencia }}</p>
+                </div>
+                {% endif %}
+                {% if etapa.notas %}
+                <div class="flex-1">
+                    <p class="text-xs text-gray-400">Notas</p>
+                    <p class="text-gray-600 text-xs">{{ etapa.notas }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Facturas vinculadas solo en etapa "Facturada" -->
+            {% if etapa.nombre == 'Facturada' and facturas_vinculadas %}
+            <div class="mb-3 p-3 bg-cyan-50 rounded-lg">
+                <p class="text-xs font-semibold text-cyan-700 mb-1">Facturas de venta vinculadas</p>
+                {% for fac in facturas_vinculadas %}
+                <div class="flex items-center justify-between text-xs text-cyan-800 py-0.5">
+                    <span class="font-mono">{{ (fac.serie or '') ~ (fac.folio_factura or '') or fac.uuid[:8] ~ '…' }}</span>
+                    <span>{{ (fac.fecha or '')[:10] or '—' }}</span>
+                    {% if user.rol != 'Solo lectura' %}
+                    <span class="font-bold">${{ '{:,.2f}'.format(fac.total or 0) }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Compras vinculadas solo en etapa "Orden de Compra" -->
+            {% if etapa.nombre == 'Orden de Compra' and compras_vinculadas %}
+            <div class="mb-3 p-3 bg-blue-50 rounded-lg">
+                <p class="text-xs font-semibold text-blue-700 mb-1">Compras vinculadas a esta cotización</p>
+                {% for comp in compras_vinculadas %}
+                <div class="flex items-center justify-between text-xs text-blue-800 py-0.5">
+                    <span class="font-mono">{{ comp.nombre_emisor or '—' }}</span>
+                    <span>{{ (comp.fecha or '')[:10] or '—' }}</span>
+                    {% if user.rol != 'Solo lectura' %}
+                    <span class="font-bold">${{ '{:,.2f}'.format(comp.total or 0) }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Formulario de la etapa -->
+            {% if user.rol in ('Administrador', 'Operador') %}
+            <details {% if not etapa.completada %}open{% endif %} class="group">
+                <summary class="text-xs text-gray-400 cursor-pointer hover:text-navy-600 transition-colors
+                               select-none group-open:hidden">
+                    ✏️ {{ 'Editar' if etapa.completada else 'Registrar' }} esta etapa
+                </summary>
+
+                <form hx-post="/cotizaciones/{{ cot.id }}/seguimiento"
+                      hx-target="body"
+                      class="mt-3 pt-3 border-t border-gray-100">
+                    <input type="hidden" name="etapa_nombre" value="{{ etapa.nombre }}">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <!-- Referencia -->
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-0.5">
+                                {% if etapa.nombre == 'Orden de Compra' %}No. Orden de Compra
+                                {% elif etapa.nombre == 'Facturada' %}No. Factura
+                                {% elif etapa.nombre == 'Complemento de Pago' %}Referencia de pago
+                                {% elif etapa.nombre == 'Pagada' %}Monto pagado
+                                {% else %}Referencia{% endif %}
+                            </label>
+                            <input type="{% if etapa.nombre == 'Pagada' %}number{% else %}text{% endif %}"
+                                   name="referencia"
+                                   value="{{ etapa.referencia }}"
+                                   placeholder="{% if etapa.nombre == 'Pagada' %}0.00{% else %}—{% endif %}"
+                                   step="{% if etapa.nombre == 'Pagada' %}0.01{% else %}any{% endif %}"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5
+                                          focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                        </div>
+
+                        <!-- Fecha -->
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-0.5">Fecha</label>
+                            <input type="date" name="fecha_etapa"
+                                   value="{{ etapa.fecha_etapa or hoy }}"
+                                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5
+                                          focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                        </div>
+                    </div>
+
+                    <!-- Notas -->
+                    <div class="mb-3">
+                        <label class="block text-xs text-gray-400 mb-0.5">Notas</label>
+                        <textarea name="notas" rows="2"
+                                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5
+                                         focus:outline-none focus:ring-2 focus:ring-clf-green bg-white resize-none"
+                                  placeholder="Observaciones opcionales…">{{ etapa.notas }}</textarea>
+                    </div>
+
+                    <!-- Completada y botón -->
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="completada" value="1"
+                                   {% if etapa.completada %}checked{% endif %}
+                                   class="w-4 h-4 rounded border-gray-300 text-clf-green
+                                          focus:ring-clf-green cursor-pointer">
+                            <span class="text-sm font-semibold text-gray-700">Marcar como completada</span>
+                        </label>
+                        <button type="submit"
+                                class="px-4 py-1.5 bg-clf-green hover:bg-clf-green-dk text-white text-sm
+                                       font-semibold rounded-lg transition-colors">
+                            Guardar
+                        </button>
+                    </div>
+                </form>
+            </details>
+
+            <!-- Vincular factura (solo en etapa Facturada) -->
+            {% if etapa.nombre == 'Facturada' %}
+            <div class="mt-3 pt-3 border-t border-gray-100">
+                <button id="btn-sel-fac-{{ loop.index }}"
+                        data-url="/cotizaciones/{{ cot.id }}/selector-facturas"
+                        onclick="toggleSelectorFac(this, 'panel-sel-fac-{{ loop.index }}')"
+                        class="text-xs font-semibold text-cyan-600 hover:underline transition-colors">
+                    🔍 Buscar y vincular factura de venta
+                </button>
+                <div id="panel-sel-fac-{{ loop.index }}" class="hidden mt-2 border border-gray-200 rounded-xl overflow-hidden">
+                    <div id="selector-fac-wrap-{{ loop.index }}">
+                        <!-- Cargado via HTMX al abrir -->
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% endif %}{# /rol operador #}
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+
+</main>
+
+<script>
+function toggleSelectorFac(btn, panelId) {
+    var panel = document.getElementById(panelId);
+    var wrapId = panelId.replace('panel-sel-fac-', 'selector-fac-wrap-');
+    var wrap   = document.getElementById(wrapId);
+    if (!panel || !wrap) return;
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        btn.textContent = '— Cerrar';
+        if (!wrap.dataset.loaded) {
+            wrap.dataset.loaded = '1';
+            htmx.ajax('GET', btn.dataset.url, {target: '#' + wrapId, swap: 'innerHTML'});
+        }
+    } else {
+        panel.classList.add('hidden');
+        btn.textContent = '🔍 Buscar y vincular factura de venta';
+    }
+}
+</script>
+{% endblock %}

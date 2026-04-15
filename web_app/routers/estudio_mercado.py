@@ -166,7 +166,7 @@ async def detalle_estudio(
         proveedores = [dict(zip(["id", "nombre"], r)) for r in cur.fetchall()]
 
         # Productos para el selector de items
-        cur.execute("SELECT id, codigo, nombre FROM productos ORDER BY nombre LIMIT 200")
+        cur.execute("SELECT id, codigo, nombre FROM productos ORDER BY nombre")
         productos = [dict(zip(["id", "codigo", "nombre"], r)) for r in cur.fetchall()]
 
     return templates.TemplateResponse(

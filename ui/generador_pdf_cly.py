@@ -15,6 +15,18 @@ import os
 import app_config
 import sesion
 
+
+def _resolver_logo(nombre_base: str) -> str:
+    """Devuelve la ruta completa del logo probando extensiones comunes."""
+    base = os.path.join(app_config.BASE_DIR, nombre_base)
+    if os.path.exists(base):
+        return base
+    for ext in ('.jpg', '.jpeg', '.png', '.gif'):
+        ruta = base + ext
+        if os.path.exists(ruta):
+            return ruta
+    return base
+
 class GeneradorPDFCLY:
     """Genera PDFs con formato CLY que se ajustan automáticamente a 1 página"""
 
@@ -22,8 +34,9 @@ class GeneradorPDFCLY:
         self.color_oro = colors.HexColor('#D4AF37')
         self.color_negro = colors.HexColor('#1a1a1a')
         self.color_gris = colors.HexColor('#4a4a4a')
-        # Logo y términos se leen de la configuración activa
-        self.logo_path = app_config.PDF_CONFIG.get('logo_path', 'logo_clf.jpg')
+        # Logos separados para header y footer
+        self.logo_header = _resolver_logo('assets/logo_clf_header')
+        self.logo_footer = _resolver_logo('assets/logo_clf_footer')
         
         # Dimensiones de página
         self.ancho_pagina, self.alto_pagina = letter
@@ -276,9 +289,9 @@ class GeneradorPDFCLY:
             logo_w = 0.75 * inch
             logo_x = W - margen - logo_w - 6
             logo_y = box_y + (box_h - logo_w) / 2
-            if os.path.exists('logo_clf.jpg'):
+            if os.path.exists(self.logo_footer):
                 try:
-                    canvas.drawImage('logo_clf.jpg', logo_x, logo_y,
+                    canvas.drawImage(self.logo_footer, logo_x, logo_y,
                                      width=logo_w, height=logo_w,
                                      preserveAspectRatio=True, mask='auto')
                 except:
@@ -316,7 +329,7 @@ class GeneradorPDFCLY:
         logo_cell = ''
         if os.path.exists(self.logo_path):
             try:
-                logo_cell = Image(self.logo_path, width=1.1*inch, height=1.1*inch)
+                logo_cell = Image(self.logo_header, width=5*inch, height=5*inch)
             except:
                 logo_cell = ''
 
@@ -328,8 +341,8 @@ class GeneradorPDFCLY:
 
         header_tbl = Table(
             [[logo_cell, banner_txt]],
-            colWidths=[1.3*inch, ancho - 1.3*inch],
-            rowHeights=[1.1*inch]
+            colWidths=[1.7*inch, ancho - 1.7*inch],
+            rowHeights=[1.5*inch]
         )
         header_tbl.setStyle(TableStyle([
             ('BACKGROUND', (1, 0), (1, 0), self.color_oro),

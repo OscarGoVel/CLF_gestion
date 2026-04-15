@@ -10,7 +10,7 @@
             <p class="text-xs text-navy-400 mt-0.5">{{ facturas|length }} registros</p>
         </div>
         <!-- Botón importar -->
-        <button onclick="document.getElementById('modal-import').classList.remove('hidden')"
+        <button onclick="document.getElementById('import-result').innerHTML=''; document.getElementById('btn-importar').classList.remove('hidden'); document.querySelector('#modal-import form').reset(); document.getElementById('modal-import').classList.remove('hidden')"
                 class="px-4 py-2 bg-clf-green text-white text-sm font-semibold rounded-lg
                        hover:bg-clf-green/90 transition-colors flex items-center gap-2">
             ＋ Importar XML
@@ -70,7 +70,7 @@
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 class="text-base font-bold text-gray-800">Importar factura XML (CFDI)</h3>
-            <button onclick="document.getElementById('modal-import').classList.add('hidden')"
+            <button onclick="closeImportModal()"
                     class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
         <div class="px-6 py-5">
@@ -78,6 +78,7 @@
                   hx-target="#import-result"
                   hx-swap="innerHTML"
                   hx-encoding="multipart/form-data"
+                  hx-on::after-request="if(document.getElementById('import-ok')){ document.getElementById('btn-importar').classList.add('hidden'); }"
                   class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Archivo XML</label>
@@ -90,20 +91,31 @@
                 </div>
                 <div id="import-result"></div>
                 <div class="flex gap-3 pt-1">
-                    <button type="submit"
+                    <button id="btn-importar" type="submit"
                             class="flex-1 py-2 bg-clf-green text-white text-sm font-semibold rounded-lg
                                    hover:bg-clf-green/90 transition-colors">
                         Importar
                     </button>
                     <button type="button"
-                            onclick="document.getElementById('modal-import').classList.add('hidden')"
+                            onclick="closeImportModal()"
                             class="px-4 py-2 bg-gray-100 text-gray-600 text-sm font-semibold rounded-lg
                                    hover:bg-gray-200 transition-colors">
-                        Cancelar
+                        Cerrar
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+function closeImportModal() {
+    document.getElementById('modal-import').classList.add('hidden');
+    // Reset form state for next use
+    document.getElementById('import-result').innerHTML = '';
+    document.getElementById('btn-importar').classList.remove('hidden');
+    var form = document.querySelector('#modal-import form');
+    if (form) form.reset();
+}
+</script>
 {% endblock %}

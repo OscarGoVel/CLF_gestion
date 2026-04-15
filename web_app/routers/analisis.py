@@ -7,7 +7,7 @@ Módulo de Análisis: KPIs, tendencias, rankings de clientes y productos.
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -163,5 +163,119 @@ async def dashboard_analisis(request: Request):
             "max_producto": max_producto,
             "por_tipo": por_tipo,
             "seccion": "analisis",
+        },
+    )
+
+
+@router.get("/costos", response_class=HTMLResponse)
+async def analisis_costos(request: Request):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if user.get("rol") != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+
+        # ── KPIs globales de costo ────────────────────────────────────────
+        cur.execute("""
+            SELECT
+                COUNT(DISTINCT c.id)                                     AS total_cots,
+                COALESCE(SUM(cd.costo_snapshot * cd.cantidad), 0)        AS costo_snap_total,
+                COALESCE(SUM(cd.precio_unitario * cd.cantidad), 0)       AS venta_total
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            WHERE c.estado != 'Cancelada'
+        """)
+        r = cur.fetchone()
+        total_cots    = r[0] or 0
+        costo_snap_total = _f(r[1])
+        venta_total      = _f(r[2])
+
+        cur.execute("""
+            SELECT COUNT(DISTINCT cotizacion_id) FROM compra_detalle_cotizacion
+        """)
+        con_costo_real = cur.fetchone()[0] or 0
+        sin_costo_real = total_cots - con_costo_real
+
+        margen_snap_global = round(
+            (venta_total - costo_snap_total) / venta_total * 100, 1
+        ) if venta_total else 0
+
+        kpis_costos = {
+            "venta_total":       venta_total,
+            "costo_snap_total":  costo_snap_total,
+            "margen_snap":       margen_snap_global,
+            "sin_costo_real":    sin_costo_real,
+            "con_costo_real":    con_costo_real,
+            "total_cots":        total_cots,
+        }
+
+        # ── Tendencia mensual venta vs costo (12 meses) ──────────────────
+        cur.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', c.fecha), 'Mon YY')         AS mes_label,
+                DATE_TRUNC('month', c.fecha)                            AS mes_ord,
+                COALESCE(SUM(cd.precio_unitario * cd.cantidad), 0)      AS venta,
+                COALESCE(SUM(cd.costo_snapshot * cd.cantidad), 0)       AS costo_snap
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            WHERE c.fecha >= NOW() - INTERVAL '12 months'
+              AND c.estado != 'Cancelada'
+            GROUP BY mes_ord, mes_label
+            ORDER BY mes_ord
+        """)
+        tendencia = [
+            {"label": r[0], "venta": _f(r[2]), "costo_snap": _f(r[3])}
+            for r in cur.fetchall()
+        ]
+
+        # ── Lista de cotizaciones con márgenes ────────────────────────────
+        cur.execute("""
+            SELECT
+                c.id,
+                c.folio,
+                c.fecha,
+                c.estado,
+                COALESCE(cl.nombre_comercial, '—')                      AS cliente,
+                COALESCE(SUM(cd.precio_unitario * cd.cantidad), 0)      AS venta_sub,
+                COALESCE(SUM(cd.costo_snapshot * cd.cantidad), 0)       AS costo_snap_sum,
+                EXISTS(
+                    SELECT 1 FROM compra_detalle_cotizacion cdc
+                    WHERE cdc.cotizacion_id = c.id
+                )                                                        AS tiene_compras
+            FROM cotizaciones c
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            WHERE c.estado != 'Cancelada'
+            GROUP BY c.id, c.folio, c.fecha, c.estado, cl.nombre_comercial
+            ORDER BY c.fecha DESC
+            LIMIT 60
+        """)
+        cols = [d[0] for d in cur.description]
+        lista_cots = []
+        for row in cur.fetchall():
+            d = dict(zip(cols, row))
+            d["venta_sub"]      = _f(d["venta_sub"])
+            d["costo_snap_sum"] = _f(d["costo_snap_sum"])
+            d["fecha"]          = str(d["fecha"]) if d["fecha"] else ""
+            if d["venta_sub"] > 0:
+                d["margen_snap"] = round(
+                    (d["venta_sub"] - d["costo_snap_sum"]) / d["venta_sub"] * 100, 1
+                )
+            else:
+                d["margen_snap"] = None
+            lista_cots.append(d)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="analisis/costos.html",
+        context={
+            "user":        user,
+            "kpis":        kpis_costos,
+            "tendencia":   tendencia,
+            "lista_cots":  lista_cots,
+            "seccion":     "costos",
+            "ESTADO_COLOR": ESTADO_COLOR,
         },
     )

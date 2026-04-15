@@ -99,15 +99,40 @@
                 </div>
                 <div class="flex-1 min-w-[200px]">
                     <label class="block text-xs text-gray-500 mb-1">Vincular a producto del catálogo (opcional)</label>
-                    <select name="producto_id"
-                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
-                                   focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
-                        <option value="">— Sin vincular —</option>
+                    <input type="hidden" name="producto_id" id="prod-picker-id">
+                    <input type="text" id="prod-picker-input" autocomplete="off"
+                           list="prod-picker-list"
+                           placeholder="Buscar por nombre o código…"
+                           class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-clf-green">
+                    <datalist id="prod-picker-list">
                         {% for p in productos %}
-                        <option value="{{ p.id }}">{{ p.codigo }} — {{ p.nombre }}</option>
+                        <option value="{{ p.codigo }} — {{ p.nombre }}"></option>
                         {% endfor %}
-                    </select>
+                    </datalist>
                 </div>
+
+                <script>
+                (function() {
+                    const DATA = {
+                        {% for p in productos %}
+                        '{{ p.codigo }} — {{ p.nombre|replace("'", "\\'") }}': '{{ p.id }}',
+                        {% endfor %}
+                    };
+                    const input  = document.getElementById('prod-picker-input');
+                    const hidden = document.getElementById('prod-picker-id');
+
+                    input.addEventListener('input', () => {
+                        const match = DATA[input.value];
+                        hidden.value = match || '';
+                    });
+                    input.addEventListener('change', () => {
+                        const match = DATA[input.value];
+                        hidden.value = match || '';
+                        if (!match && input.value.trim()) input.value = '';
+                    });
+                })();
+                </script>
                 <button type="submit"
                         class="px-4 py-2 bg-navy-600 text-white text-sm font-semibold rounded-lg
                                hover:bg-navy-800 transition-colors whitespace-nowrap">

@@ -39,6 +39,20 @@ _FOOTER_BG = colors.HexColor('#3d3d3d')
 _M = 0.5 * inch
 
 
+def _resolver_logo(nombre_base: str) -> str:
+    """Devuelve la ruta completa del logo probando extensiones comunes.
+    nombre_base puede ser relativo a BASE_DIR (ej. 'assets/logo_clf_header').
+    """
+    base = os.path.join(app_config.BASE_DIR, nombre_base)
+    if os.path.exists(base):
+        return base
+    for ext in ('.jpg', '.jpeg', '.png', '.gif'):
+        ruta = base + ext
+        if os.path.exists(ruta):
+            return ruta
+    return base  # devuelve igual aunque no exista (el caller verifica)
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _f(v) -> float:
@@ -85,9 +99,9 @@ def _ajustar_columnas(datos: list, ancho_total: float, min_col: float = 0.4,
 def _params_tabla(n: int) -> tuple[float, float]:
     """Devuelve (tamaño_fuente, alto_fila) según número de productos."""
     tabla = [
-        (10, 9, 24), (15, 8.5, 20), (20, 8, 18),
-        (25, 7.5, 15), (30, 7, 13), (35, 6.5, 12),
-        (40, 6.3, 11), (45, 6.1, 10),
+        (10, 9, 22), (15, 8.5, 18), (20, 8, 16),
+        (25, 7.5, 14), (30, 7, 12), (35, 6.5, 11),
+        (40, 6.3, 10), (45, 6.1, 9.5),
     ]
     fuente, alto = 6.0, 9.0
     for limite, f, a in tabla:
@@ -95,7 +109,7 @@ def _params_tabla(n: int) -> tuple[float, float]:
             fuente, alto = f, a
             break
 
-    espacio = 420
+    espacio = 370
     estimado = (n + 4) * alto
     if estimado > espacio:
         factor = espacio / estimado * 0.95
@@ -164,9 +178,9 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
     valido_hasta = (fecha_dt + timedelta(days=30)).strftime('%d/%m/%Y')
 
     # ── Configuración ─────────────────────────────────────────────────────────
-    terminos  = app_config.PDF_CONFIG
-    logo_path = os.path.join(app_config.BASE_DIR,
-                             terminos.get('logo_path', 'logo_clf.jpg'))
+    terminos    = app_config.PDF_CONFIG
+    logo_header = _resolver_logo('assets/logo_clf_header')
+    logo_footer = _resolver_logo('assets/logo_clf_footer')
 
     # ── Parámetros de tabla ───────────────────────────────────────────────────
     fuente_tabla, alto_fila = _params_tabla(len(productos))
@@ -201,11 +215,11 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
             canvas.drawString(_M + 8, y_txt, linea)
             y_txt -= 9
 
-        if os.path.exists(logo_path):
+        if os.path.exists(logo_footer):
             try:
                 logo_w = 0.75 * inch
                 canvas.drawImage(
-                    logo_path,
+                    logo_footer,
                     W - _M - logo_w - 6,
                     box_y + (box_h - logo_w) / 2,
                     width=logo_w, height=logo_w,
@@ -238,15 +252,15 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
 
     # ── 1. HEADER: Logo + Banner ──────────────────────────────────────────────
     logo_cell = ''
-    if os.path.exists(logo_path):
+    if os.path.exists(logo_header):
         try:
-            logo_cell = Image(logo_path, width=1.1 * inch, height=1.1 * inch)
+            logo_cell = Image(logo_header, width=1.1 * inch, height=1.1 * inch)
         except Exception:
             pass
 
     banner_txt = Paragraph(
         'COTIZACIÓN',
-        ParagraphStyle('banner', fontSize=22, fontName='Helvetica-Bold',
+        ParagraphStyle('banner', fontSize=18, fontName='Helvetica-Bold',
                        textColor=colors.white, alignment=TA_CENTER),
     )
     header_tbl = Table([[logo_cell, banner_txt]],
@@ -262,7 +276,7 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
     elementos.append(header_tbl)
-    elementos.append(Spacer(1, 0.12 * inch))
+    elementos.append(Spacer(1, 0.07 * inch))
 
     # ── 2. INFO: Dirección empresa + Datos cliente ────────────────────────────
     addr_para = Paragraph(
@@ -299,7 +313,7 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
         ('RIGHTPADDING', (1, 0), (1, 0), 0),
     ]))
     elementos.append(info_tbl)
-    elementos.append(Spacer(1, 0.15 * inch))
+    elementos.append(Spacer(1, 0.09 * inch))
 
     # ── 3. TABLA DE PRODUCTOS ─────────────────────────────────────────────────
     datos_tabla = [['CONCEPTO', 'UNIDAD', 'CANTIDAD', 'P.U.', 'IMPORTE']]

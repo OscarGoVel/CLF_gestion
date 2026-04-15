@@ -64,6 +64,7 @@ async def lifespan(app: FastAPI):
     # Migraciones incrementales por empresa
     _MIGRACIONES = [
         "ALTER TABLE producto_precio_historial ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id)",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")

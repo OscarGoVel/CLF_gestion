@@ -1,0 +1,127 @@
+{# Fragment HTMX: gestión de proveedores vinculados a un producto #}
+
+{% if toast %}
+<div class="mb-3 px-4 py-2 bg-green-100 border border-green-300 text-green-800 text-sm rounded-lg
+            flex items-center gap-2"
+     _="on load wait 3s then add .opacity-0 .transition .duration-500 then wait 600ms then remove me">
+    ✅ {{ toast }}
+</div>
+{% endif %}
+
+<!-- Lista de proveedores vinculados -->
+{% if proveedores %}
+<div class="divide-y divide-gray-50">
+    {% for prov in proveedores %}
+    <div class="px-5 py-3 {% if prov.es_principal %}bg-amber-50{% endif %}">
+        <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                    {% if prov.es_principal %}
+                    <span class="text-amber-500 text-xs font-bold shrink-0">★ Principal</span>
+                    {% endif %}
+                    <p class="text-sm font-semibold text-gray-800 truncate">{{ prov.nombre }}</p>
+                </div>
+                <p class="text-xs text-gray-400 mt-0.5">
+                    {% if prov.telefono %}{{ prov.telefono }}{% endif %}
+                    {% if prov.email %} · {{ prov.email }}{% endif %}
+                </p>
+                {% if prov.notas %}
+                <p class="text-xs text-gray-500 italic mt-0.5">{{ prov.notas }}</p>
+                {% endif %}
+            </div>
+            {% if user.rol in ('Administrador', 'Operador') %}
+            <div class="flex items-center gap-1 shrink-0">
+                {% if not prov.es_principal %}
+                <button
+                    hx-post="/catalogos/productos/{{ producto_id }}/proveedores/{{ prov.pp_id }}/principal"
+                    hx-target="#proveedores-wrapper"
+                    hx-swap="innerHTML"
+                    title="Marcar como principal"
+                    class="px-2 py-1 text-xs text-amber-600 hover:bg-amber-100 rounded-lg transition-colors">
+                    ☆
+                </button>
+                {% endif %}
+                <!-- Botón editar notas -->
+                <button
+                    onclick="document.getElementById('notas-form-{{ prov.pp_id }}').classList.toggle('hidden')"
+                    title="Editar notas"
+                    class="px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 rounded-lg transition-colors">
+                    ✏️
+                </button>
+                <button
+                    hx-post="/catalogos/productos/{{ producto_id }}/proveedores/{{ prov.pp_id }}/quitar"
+                    hx-target="#proveedores-wrapper"
+                    hx-swap="innerHTML"
+                    hx-confirm="¿Quitar a {{ prov.nombre }} de este producto?"
+                    title="Quitar proveedor"
+                    class="px-2 py-1 text-xs text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                    ✕
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% if user.rol in ('Administrador', 'Operador') %}
+        <!-- Formulario inline de notas -->
+        <form id="notas-form-{{ prov.pp_id }}"
+              hx-post="/catalogos/productos/{{ producto_id }}/proveedores/{{ prov.pp_id }}/notas"
+              hx-target="#proveedores-wrapper"
+              hx-swap="innerHTML"
+              class="hidden mt-2 flex gap-2 items-center">
+            <input type="text" name="notas" value="{{ prov.notas or '' }}"
+                   placeholder="Notas (opcional)"
+                   class="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+            <button type="submit"
+                    class="px-3 py-1.5 bg-clf-green hover:bg-green-700 text-white text-xs
+                           font-semibold rounded-lg transition-colors">
+                Guardar
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="px-5 py-6 text-sm text-gray-400 text-center">Sin proveedores vinculados.</p>
+{% endif %}
+
+<!-- Formulario: agregar proveedor -->
+{% if user.rol in ('Administrador', 'Operador') %}
+<div class="px-5 py-3 border-t border-gray-100 bg-gray-50">
+    {% if proveedores_disponibles %}
+    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Agregar proveedor</p>
+    <form hx-post="/catalogos/productos/{{ producto_id }}/proveedores"
+          hx-target="#proveedores-wrapper"
+          hx-swap="innerHTML"
+          class="flex flex-wrap gap-2 items-end">
+        <div class="flex-1 min-w-[160px]">
+            <select name="proveedor_id" required
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                           focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                <option value="">Seleccionar proveedor…</option>
+                {% for p in proveedores_disponibles %}
+                <option value="{{ p.id }}">{{ p.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <input type="checkbox" name="es_principal" value="1" id="chk-principal-{{ producto_id }}"
+                   class="w-4 h-4 rounded text-amber-500">
+            <label for="chk-principal-{{ producto_id }}" class="text-xs text-gray-600">Principal</label>
+        </div>
+        <div class="flex-1 min-w-[140px]">
+            <input type="text" name="notas" placeholder="Notas (opcional)"
+                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+        </div>
+        <button type="submit"
+                class="px-4 py-2 bg-clf-green hover:bg-green-700 text-white text-sm
+                       font-semibold rounded-lg transition-colors">
+            + Agregar
+        </button>
+    </form>
+    {% else %}
+    <p class="text-xs text-gray-400 italic">Todos los proveedores ya están vinculados.</p>
+    {% endif %}
+</div>
+{% endif %}

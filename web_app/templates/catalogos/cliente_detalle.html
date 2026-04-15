@@ -7,6 +7,12 @@
 
 <main class="p-5 max-w-5xl mx-auto">
 
+    {% if msg == 'desactivado' %}
+    <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl flex items-center gap-2">
+        ⚠️ El cliente fue <strong>desactivado</strong> y ya no aparece en las listas. Puedes reactivarlo con el botón de arriba.
+    </div>
+    {% endif %}
+
     <!-- Header cliente -->
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
         <div class="h-1.5 {% if cliente.tipo=='Gobierno' %}bg-purple-500{% elif cliente.tipo=='Empresa' %}bg-blue-500{% else %}bg-green-500{% endif %}"></div>
@@ -20,18 +26,40 @@
                     <div class="flex items-center gap-3 mb-1">
                         <h2 class="text-2xl font-bold text-navy-700">{{ cliente.nombre_comercial }}</h2>
                         <span class="px-2.5 py-1 rounded-full text-xs font-bold {{ bg_t }} {{ fg_t }}">{{ cliente.tipo }}</span>
+                        {% if cliente.activo == false %}
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600">DESACTIVADO</span>
+                        {% endif %}
                     </div>
                     {% if cliente.razon_social and cliente.razon_social != cliente.nombre_comercial %}
                     <p class="text-sm text-gray-500">{{ cliente.razon_social }}</p>
                     {% endif %}
                 </div>
+                <div class="flex items-center gap-2 shrink-0">
                 {% if user.rol in ('Administrador', 'Operador') %}
                 <a href="/catalogos/clientes/{{ cliente.id }}/editar"
                    class="px-3 py-1.5 bg-navy-500 hover:bg-navy-700 text-white text-sm
-                          font-semibold rounded-lg transition-colors shrink-0">
+                          font-semibold rounded-lg transition-colors">
                     ✏️ Editar
                 </a>
                 {% endif %}
+                {% if user.rol == 'Administrador' %}
+                {% if cliente.activo == false %}
+                <form method="post" action="/catalogos/clientes/{{ cliente.id }}/reactivar">
+                    <button type="submit"
+                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm
+                                   font-semibold rounded-lg transition-colors">
+                        ✅ Reactivar
+                    </button>
+                </form>
+                {% else %}
+                <button type="button" id="btn-eliminar-cliente"
+                        class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm
+                               font-semibold rounded-lg transition-colors">
+                    🗑 Eliminar
+                </button>
+                {% endif %}
+                {% endif %}
+                </div>
             </div>
 
             <!-- Stats -->
@@ -106,4 +134,48 @@
         <a href="/catalogos/clientes" class="text-sm text-navy-400 hover:text-white transition-colors">← Volver a clientes</a>
     </div>
 </main>
+
+{% if user.rol == 'Administrador' and (cliente.activo is none or cliente.activo) %}
+<!-- Modal confirmación eliminar -->
+<div id="modal-eliminar" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Eliminar cliente</h3>
+        <p class="text-sm text-gray-600 mb-1">
+            ¿Confirmas que deseas eliminar a <strong>{{ cliente.nombre_comercial }}</strong>?
+        </p>
+        {% if stats.total_cots > 0 %}
+        <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            Este cliente tiene <strong>{{ stats.total_cots }} cotizacion(es)</strong> asociadas.
+            No se puede eliminar permanentemente — quedará <strong>desactivado</strong> y
+            dejará de aparecer en las listas.
+        </p>
+        {% else %}
+        <p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+            No tiene cotizaciones. Se eliminará <strong>permanentemente</strong> y no podrá recuperarse.
+        </p>
+        {% endif %}
+        <div class="flex gap-3 justify-end">
+            <button type="button" onclick="document.getElementById('modal-eliminar').classList.add('hidden')"
+                    class="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                Cancelar
+            </button>
+            <form method="post" action="/catalogos/clientes/{{ cliente.id }}/eliminar">
+                <button type="submit"
+                        class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+                    {% if stats.total_cots > 0 %}Desactivar{% else %}Eliminar{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('btn-eliminar-cliente').addEventListener('click', function() {
+    document.getElementById('modal-eliminar').classList.remove('hidden');
+});
+document.getElementById('modal-eliminar').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.add('hidden');
+});
+</script>
+{% endif %}
 {% endblock %}

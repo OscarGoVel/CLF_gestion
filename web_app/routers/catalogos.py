@@ -54,13 +54,13 @@ async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
     if not user:
         return RedirectResponse("/")
 
-    where, params = [], []
+    where, params = ["(c.activo IS NULL OR c.activo = TRUE)"], []
     if tipo:
         where.append("c.tipo = %s"); params.append(tipo)
     if buscar:
         where.append("(c.nombre_comercial ILIKE %s OR c.rfc ILIKE %s OR c.contacto ILIKE %s)")
         params += [f"%{buscar}%"] * 3
-    w = ("WHERE " + " AND ".join(where)) if where else ""
+    w = "WHERE " + " AND ".join(where)
 
     _ck = f"clientes:{user['empresa_db']}" if not tipo and not buscar else None
     cached = cache.get(_ck) if _ck else None
@@ -83,7 +83,7 @@ async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
             cols     = [d[0] for d in cur.description]
             clientes = [_floats(dict(zip(cols, r))) for r in cur.fetchall()]
 
-            cur.execute("SELECT DISTINCT tipo FROM clientes WHERE tipo IS NOT NULL ORDER BY tipo")
+            cur.execute("SELECT DISTINCT tipo FROM clientes WHERE tipo IS NOT NULL AND (activo IS NULL OR activo = TRUE) ORDER BY tipo")
             tipos = [r[0] for r in cur.fetchall()]
 
         if _ck:
@@ -174,7 +174,7 @@ async def crear_cliente(
 
 
 @router.get("/clientes/{cliente_id}", response_class=HTMLResponse)
-async def detalle_cliente(request: Request, cliente_id: int):
+async def detalle_cliente(request: Request, cliente_id: int, msg: str = ""):
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
@@ -220,6 +220,7 @@ async def detalle_cliente(request: Request, cliente_id: int):
             "tipo_color": TIPO_CLIENTE_COLOR,
             "estado_color": ESTADO_COLOR,
             "seccion": "clientes",
+            "msg": msg,
         },
     )
 
@@ -297,6 +298,59 @@ async def guardar_cliente(
         detalle=f"id={cliente_id} nombre={nombre_comercial}",
         ip=request.client.host if request.client else None,
     )
+    return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
+
+
+@router.post("/clientes/{cliente_id}/eliminar", response_class=HTMLResponse)
+async def eliminar_cliente(
+    request: Request,
+    cliente_id: int,
+    user=Depends(require_rol("Administrador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT nombre_comercial FROM clientes WHERE id = %s", (cliente_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Cliente no encontrado")
+        nombre = row[0]
+
+        cur.execute("SELECT COUNT(*) FROM cotizaciones WHERE cliente_id = %s", (cliente_id,))
+        n_cots = cur.fetchone()[0]
+
+        if n_cots == 0:
+            cur.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
+            cache.invalidar(f"clientes:{user['empresa_db']}")
+            audit.registrar("cliente_eliminado", username=user.get("username"),
+                            detalle=f"id={cliente_id} nombre={nombre}",
+                            ip=request.client.host if request.client else None)
+            return RedirectResponse("/catalogos/clientes", status_code=303)
+        else:
+            cur.execute("UPDATE clientes SET activo = FALSE WHERE id = %s", (cliente_id,))
+            cache.invalidar(f"clientes:{user['empresa_db']}")
+            audit.registrar("cliente_desactivado", username=user.get("username"),
+                            detalle=f"id={cliente_id} nombre={nombre} cots={n_cots}",
+                            ip=request.client.host if request.client else None)
+            return RedirectResponse(f"/catalogos/clientes/{cliente_id}?msg=desactivado", status_code=303)
+
+
+@router.post("/clientes/{cliente_id}/reactivar", response_class=HTMLResponse)
+async def reactivar_cliente(
+    request: Request,
+    cliente_id: int,
+    user=Depends(require_rol("Administrador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT nombre_comercial FROM clientes WHERE id = %s", (cliente_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Cliente no encontrado")
+        nombre = row[0]
+        cur.execute("UPDATE clientes SET activo = TRUE WHERE id = %s", (cliente_id,))
+
+    cache.invalidar(f"clientes:{user['empresa_db']}")
+    audit.registrar("cliente_reactivado", username=user.get("username"),
+                    detalle=f"id={cliente_id} nombre={nombre}",
+                    ip=request.client.host if request.client else None)
     return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
 
 
@@ -623,13 +677,25 @@ async def detalle_producto(request: Request, producto_id: int):
 
         # Proveedores vinculados
         cur.execute("""
-            SELECT prov.nombre, prov.telefono, prov.email
+            SELECT pp.id AS pp_id, prov.id, prov.nombre, prov.telefono, prov.email,
+                   pp.es_principal, pp.notas
             FROM producto_proveedor pp
             JOIN proveedores prov ON prov.id = pp.proveedor_id
             WHERE pp.producto_id = %s
+            ORDER BY pp.es_principal DESC, prov.nombre
         """, (producto_id,))
         pcols      = [d[0] for d in cur.description]
         proveedores = [dict(zip(pcols, r)) for r in cur.fetchall()]
+
+        # Todos los proveedores disponibles (para agregar)
+        cur.execute("""
+            SELECT id, nombre FROM proveedores
+            WHERE id NOT IN (
+                SELECT proveedor_id FROM producto_proveedor WHERE producto_id = %s
+            )
+            ORDER BY nombre
+        """, (producto_id,))
+        proveedores_disponibles = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
 
         # Ultimas cotizaciones donde aparece
         cur.execute("""
@@ -649,7 +715,9 @@ async def detalle_producto(request: Request, producto_id: int):
         name="catalogos/producto_detalle.html",
         context={
             "user": user, "producto": producto,
+            "producto_id": producto_id,
             "historial": historial, "proveedores": proveedores,
+            "proveedores_disponibles": proveedores_disponibles,
             "uso_cots": uso_cots, "estado_color": ESTADO_COLOR,
             "seccion": "productos",
         },
@@ -1186,4 +1254,133 @@ async def detalle_proveedor(request: Request, prov_id: int):
             "user": user, "proveedor": proveedor,
             "productos": productos, "seccion": "proveedores",
         },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GESTIÓN DE PROVEEDORES POR PRODUCTO (fragmentos HTMX)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ctx_proveedores_producto(cur, producto_id: int) -> dict:
+    """Devuelve proveedores vinculados y disponibles para el fragmento."""
+    cur.execute("""
+        SELECT pp.id AS pp_id, prov.id, prov.nombre, prov.telefono, prov.email,
+               pp.es_principal, pp.notas
+        FROM producto_proveedor pp
+        JOIN proveedores prov ON prov.id = pp.proveedor_id
+        WHERE pp.producto_id = %s
+        ORDER BY pp.es_principal DESC, prov.nombre
+    """, (producto_id,))
+    cols = [d[0] for d in cur.description]
+    proveedores = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    cur.execute("""
+        SELECT id, nombre FROM proveedores
+        WHERE id NOT IN (
+            SELECT proveedor_id FROM producto_proveedor WHERE producto_id = %s
+        )
+        ORDER BY nombre
+    """, (producto_id,))
+    disponibles = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+
+    return {"proveedores": proveedores, "proveedores_disponibles": disponibles}
+
+
+@router.post("/productos/{producto_id}/proveedores", response_class=HTMLResponse)
+async def agregar_proveedor_producto(
+    request: Request,
+    producto_id: int,
+    proveedor_id: int = Form(...),
+    es_principal: str = Form("0"),
+    notas: str = Form(""),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    principal = 1 if es_principal in ("1", "on", "true") else 0
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        if principal:
+            cur.execute(
+                "UPDATE producto_proveedor SET es_principal = 0 WHERE producto_id = %s",
+                (producto_id,)
+            )
+        cur.execute("""
+            INSERT INTO producto_proveedor (producto_id, proveedor_id, es_principal, notas)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (producto_id, proveedor_id) DO NOTHING
+        """, (producto_id, proveedor_id, principal, notas.strip() or None))
+        ctx = _ctx_proveedores_producto(cur, producto_id)
+
+    cache.invalidar(f"proveedores:{user['empresa_db']}")
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_proveedores_producto.html",
+        context={"user": user, "producto_id": producto_id, **ctx},
+    )
+
+
+@router.post("/productos/{producto_id}/proveedores/{pp_id}/quitar", response_class=HTMLResponse)
+async def quitar_proveedor_producto(
+    request: Request,
+    producto_id: int,
+    pp_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "DELETE FROM producto_proveedor WHERE id = %s AND producto_id = %s",
+            (pp_id, producto_id)
+        )
+        ctx = _ctx_proveedores_producto(cur, producto_id)
+
+    cache.invalidar(f"proveedores:{user['empresa_db']}")
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_proveedores_producto.html",
+        context={"user": user, "producto_id": producto_id, **ctx},
+    )
+
+
+@router.post("/productos/{producto_id}/proveedores/{pp_id}/principal", response_class=HTMLResponse)
+async def marcar_principal_producto(
+    request: Request,
+    producto_id: int,
+    pp_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "UPDATE producto_proveedor SET es_principal = 0 WHERE producto_id = %s",
+            (producto_id,)
+        )
+        cur.execute(
+            "UPDATE producto_proveedor SET es_principal = 1 WHERE id = %s AND producto_id = %s",
+            (pp_id, producto_id)
+        )
+        ctx = _ctx_proveedores_producto(cur, producto_id)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_proveedores_producto.html",
+        context={"user": user, "producto_id": producto_id, **ctx},
+    )
+
+
+@router.post("/productos/{producto_id}/proveedores/{pp_id}/notas", response_class=HTMLResponse)
+async def editar_notas_proveedor_producto(
+    request: Request,
+    producto_id: int,
+    pp_id: int,
+    notas: str = Form(""),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "UPDATE producto_proveedor SET notas = %s WHERE id = %s AND producto_id = %s",
+            (notas.strip() or None, pp_id, producto_id)
+        )
+        ctx = _ctx_proveedores_producto(cur, producto_id)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/_proveedores_producto.html",
+        context={"user": user, "producto_id": producto_id, **ctx},
     )
