@@ -9,6 +9,21 @@ import logging
 import logging.handlers
 from pathlib import Path
 
+
+# Filtro aplicado al importar el módulo para suprimir el WinError 10054 de
+# asyncio.ProactorEventLoop en Windows: ocurre cuando el browser cierra el
+# socket SSL antes que asyncio, y sock.shutdown() falla. Es ruido puro; no
+# afecta ninguna petición.
+class _FiltroProactor(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not (
+            "WinError 10054" in msg
+            or "_call_connection_lost" in msg
+        )
+
+logging.getLogger("asyncio").addFilter(_FiltroProactor())
+
 _LOG_DIR  = Path(__file__).parent.parent / "logs"
 _LOG_FILE = _LOG_DIR / "web_app.log"
 

@@ -361,6 +361,16 @@ CREATE TABLE IF NOT EXISTS usuarios (
 );
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS salt TEXT;
 ALTER TABLE producto_precio_historial ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id);
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
+ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS utilidad_pct NUMERIC(6,2) DEFAULT 0;
+CREATE TABLE IF NOT EXISTS compra_detalle_cotizacion (
+    id                SERIAL PRIMARY KEY,
+    compra_detalle_id INTEGER NOT NULL REFERENCES compra_detalle(id),
+    cotizacion_id     INTEGER REFERENCES cotizaciones(id),
+    cantidad          NUMERIC(14,4) NOT NULL,
+    notas             TEXT,
+    fecha_registro    TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 # ─────────────────────────────────────────────────────────────────────────────

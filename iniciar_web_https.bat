@@ -23,7 +23,6 @@ python -m uvicorn web_app.main:app ^
     --port 8443 ^
     --ssl-keyfile ssl/server.key ^
     --ssl-certfile ssl/server.crt ^
-    --workers 4 ^
     --loop asyncio
 
 pause

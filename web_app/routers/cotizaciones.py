@@ -166,6 +166,7 @@ async def buscar_producto(request: Request, q: str = ""):
         cur.execute(
             """
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
+                   p.precio_base AS costo_base,
                    COALESCE(
                        (SELECT MAX(h.precio)
                         FROM producto_precio_historial h
@@ -264,6 +265,7 @@ async def crear(
     fecha:          str = Form(...),
     orden_compra:   str = Form(""),
     notas:          str = Form(""),
+    utilidad_pct:   float = Form(0.0),
     productos_json: str = Form(...),
 ):
     user = get_usuario_actual(request)
@@ -317,13 +319,13 @@ async def crear(
             """
             INSERT INTO cotizaciones
               (folio, fecha, cliente_id, subtotal, iva, total,
-               notas, estado, aplica_iva, orden_compra)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s)
+               notas, estado, aplica_iva, orden_compra, utilidad_pct)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s)
             """,
             (folio, fecha, cliente_id,
              float(subtotal_global), float(iva_global), float(total_global),
              notas or None, 1 if hay_iva else 0,
-             orden_compra or None),
+             orden_compra or None, utilidad_pct),
         )
         cot_id = cur.lastrowid
 
@@ -521,6 +523,7 @@ async def editar_form(request: Request, cot_id: int):
             """
             SELECT cd.producto_id, p.codigo, p.nombre, p.unidad_medida,
                    cd.cantidad, cd.precio_unitario,
+                   COALESCE(cd.costo_snapshot, p.precio_base, 0) AS costo_base,
                    p.aplica_iva, p.stock_actual
             FROM cotizacion_detalle cd
             JOIN productos p ON p.id = cd.producto_id
@@ -545,6 +548,7 @@ async def editar_form(request: Request, cot_id: int):
             "clientes":            clientes,
             "hoy":                 date.today().isoformat(),
             "titulo":              f"Editar {cot['folio']}",
+            "utilidad_pct":        cot.get("utilidad_pct") or 0,
         },
     )
 
@@ -557,6 +561,7 @@ async def editar(
     fecha:          str = Form(...),
     orden_compra:   str = Form(""),
     notas:          str = Form(""),
+    utilidad_pct:   float = Form(0.0),
     productos_json: str = Form(...),
 ):
     user = get_usuario_actual(request)
@@ -617,12 +622,14 @@ async def editar(
             """
             UPDATE cotizaciones
             SET cliente_id = %s, fecha = %s, orden_compra = %s, notas = %s,
-                aplica_iva = %s, subtotal = %s, iva = %s, total = %s
+                aplica_iva = %s, subtotal = %s, iva = %s, total = %s,
+                utilidad_pct = %s
             WHERE id = %s
             """,
             (cliente_id, fecha, orden_compra or None, notas or None,
              1 if hay_iva else 0,
-             float(subtotal_global), float(iva_global), float(total_global), cot_id),
+             float(subtotal_global), float(iva_global), float(total_global),
+             utilidad_pct, cot_id),
         )
 
         cur.execute(

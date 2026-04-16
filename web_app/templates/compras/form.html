@@ -1,0 +1,534 @@
+{% extends "base.html" %}
+{% block title %}Nueva Compra — CLF Gestión{% endblock %}
+
+{% block body %}
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 px-2 gap-1">
+        <a href="/compras" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors">🛒 Compras</a>
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700">Nueva Compra</span>
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-5xl mx-auto">
+<form method="POST" action="/compras" id="form-compra">
+
+    <!-- ── Datos generales ─────────────────────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-4">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-gray-700">Datos de la Compra</h3>
+            <!-- Botón subir XML -->
+            <label class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100
+                          text-blue-700 text-xs font-semibold rounded-lg cursor-pointer transition-colors">
+                📎 Cargar XML CFDI
+                <input type="file" id="xml-input" accept=".xml" class="hidden">
+            </label>
+        </div>
+
+        <!-- Banner de estado XML -->
+        <div id="xml-banner" class="hidden mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200
+                                    rounded-lg text-xs text-blue-700 flex items-center gap-2">
+            <span class="text-base">📄</span>
+            <span id="xml-msg">XML cargado</span>
+        </div>
+        <div id="xml-error" class="hidden mb-4 px-4 py-2.5 bg-red-50 border border-red-200
+                                   rounded-lg text-xs text-red-700"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <!-- Proveedor -->
+            <div>
+                <label class="text-xs text-gray-500 font-medium mb-1 block" for="proveedor_id">
+                    Proveedor
+                    <span class="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <select name="proveedor_id" id="proveedor_id"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                               focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                    <option value="">— Sin proveedor registrado —</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.nombre }}{% if p.rfc %} · {{ p.rfc }}{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Fecha -->
+            <div>
+                <label class="text-xs text-gray-500 font-medium mb-1 block" for="fecha_compra">
+                    Fecha <span class="text-red-400">*</span>
+                </label>
+                <input type="date" name="fecha_compra" id="fecha_compra" required
+                       value="{{ hoy }}"
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                              focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+
+            <!-- Referencia / Folio del proveedor -->
+            <div>
+                <label class="text-xs text-gray-500 font-medium mb-1 block" for="ticket_referencia">
+                    Folio / Ticket / Referencia
+                    <span class="text-gray-400 font-normal">(folio de factura del proveedor)</span>
+                </label>
+                <input type="text" name="ticket_referencia" id="ticket_referencia"
+                       placeholder="Ej. A-0001, Ticket 2345, Fact. B-99..."
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                              focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+
+            <!-- Notas -->
+            <div>
+                <label class="text-xs text-gray-500 font-medium mb-1 block" for="notas">
+                    Notas
+                </label>
+                <input type="text" name="notas" id="notas"
+                       placeholder="Observaciones opcionales..."
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                              focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ── Productos ───────────────────────────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Productos Comprados</h3>
+            <span class="text-xs text-gray-400">Busca y agrega los productos recibidos</span>
+        </div>
+
+        <!-- Buscador -->
+        <div class="px-5 py-3 border-b border-gray-100">
+            <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input type="text" id="buscar-prod"
+                       placeholder="Buscar producto por nombre o código..."
+                       autocomplete="off"
+                       class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg
+                              bg-gray-50 focus:outline-none focus:ring-2 focus:ring-clf-green
+                              focus:bg-white transition">
+                <div id="sugerencias-prod" class="relative"></div>
+            </div>
+        </div>
+
+        <!-- Tabla de líneas -->
+        <div id="lineas-container">
+            <!-- generado por JS -->
+        </div>
+
+        <!-- Totales -->
+        <div class="px-5 py-3 bg-gray-50 border-t border-gray-200">
+            <div class="flex justify-end gap-8 text-sm">
+                <div class="text-right">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">Subtotal</p>
+                    <p class="font-semibold text-gray-700" id="tot-subtotal">$0.00</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">IVA</p>
+                    <p class="font-semibold text-blue-600" id="tot-iva">$0.00</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">Total</p>
+                    <p class="text-xl font-bold text-clf-green" id="tot-total">$0.00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" name="lineas_json" id="lineas-json" value="[]">
+
+    <!-- Botones -->
+    <div class="flex items-center gap-3">
+        <button type="submit"
+                class="px-5 py-2.5 bg-clf-green hover:bg-clf-green-dk text-white text-sm font-bold
+                       rounded-xl transition-colors shadow-sm">
+            💾 Registrar Compra
+        </button>
+        <a href="/compras"
+           class="px-5 py-2.5 bg-navy-500 hover:bg-navy-700 text-white text-sm font-semibold
+                  rounded-xl transition-colors">
+            Cancelar
+        </a>
+    </div>
+
+</form>
+</main>
+
+<script>
+// ── Estado ─────────────────────────────────────────────────────────────────
+let lineas = [];
+
+// Cotizaciones activas para el selector de asignación
+const COTIZACIONES = {{ cotizaciones | tojson }};
+
+// ── Formato ────────────────────────────────────────────────────────────────
+function fmt(n) {
+    return '$' + parseFloat(n || 0).toLocaleString('es-MX', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+}
+function escHtml(s) {
+    return String(s || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Recalcular totales globales ────────────────────────────────────────────
+function recalcular() {
+    let sub = 0, iva = 0;
+    lineas.forEach(ln => {
+        const s = (parseFloat(ln.cantidad) || 0) * (parseFloat(ln.costo_unitario) || 0);
+        const v = ln.aplica_iva ? s * 0.16 : 0;
+        sub += s; iva += v;
+    });
+    document.getElementById('tot-subtotal').textContent = fmt(sub);
+    document.getElementById('tot-iva').textContent      = fmt(iva);
+    document.getElementById('tot-total').textContent    = fmt(sub + iva);
+    document.getElementById('lineas-json').value = JSON.stringify(lineas);
+}
+
+// ── Calcular totales de una línea ─────────────────────────────────────────
+function totalesLinea(ln) {
+    const sub = (parseFloat(ln.cantidad) || 0) * (parseFloat(ln.costo_unitario) || 0);
+    const iva = ln.aplica_iva ? sub * 0.16 : 0;
+    return { sub, iva, tot: sub + iva };
+}
+
+// ── Suma de cantidades ya asignadas en una línea ───────────────────────────
+function sumaAsignada(ln) {
+    return (ln.asignaciones || []).reduce((a, x) => a + (parseFloat(x.cantidad) || 0), 0);
+}
+
+// ── Renderizar tabla completa ──────────────────────────────────────────────
+function renderLineas() {
+    const cont = document.getElementById('lineas-container');
+
+    if (lineas.length === 0) {
+        cont.innerHTML = `
+            <div class="px-5 py-12 text-center text-sm text-gray-400">
+                <div class="text-3xl mb-2">📦</div>
+                Busca productos arriba para agregarlos.
+            </div>`;
+        recalcular();
+        return;
+    }
+
+    cont.innerHTML = '';
+    lineas.forEach((ln, i) => renderLinea(cont, ln, i));
+    recalcular();
+}
+
+function renderLinea(cont, ln, i) {
+    const { sub, iva, tot } = totalesLinea(ln);
+    const asignada = sumaAsignada(ln);
+    const remanente = Math.max(0, (parseFloat(ln.cantidad) || 0) - asignada);
+    const excede    = asignada > (parseFloat(ln.cantidad) || 0);
+
+    const div = document.createElement('div');
+    div.id = `linea-${i}`;
+    div.className = 'border-b border-gray-100 last:border-0';
+
+    // Opciones para el select de cotizaciones
+    const opcionesCot = COTIZACIONES.map(c =>
+        `<option value="${c.id}">${escHtml(c.folio)} — ${escHtml(c.cliente)}</option>`
+    ).join('');
+
+    // Filas de asignaciones actuales
+    let filasAsig = (ln.asignaciones || []).map((a, j) => `
+        <tr class="border-t border-gray-100">
+            <td class="pl-2 py-1.5">
+                <select onchange="cambiarAsigCot(${i},${j},this.value)"
+                        class="w-full text-xs border border-gray-200 rounded px-2 py-1
+                               focus:outline-none focus:ring-1 focus:ring-clf-green">
+                    <option value="">— Stock general —</option>
+                    ${COTIZACIONES.map(c =>
+                        `<option value="${c.id}" ${c.id == a.cotizacion_id ? 'selected' : ''}>
+                            ${escHtml(c.folio)} — ${escHtml(c.cliente)}
+                        </option>`
+                    ).join('')}
+                </select>
+            </td>
+            <td class="py-1.5 pr-1">
+                <input type="number" min="0.01" step="0.01" value="${a.cantidad}"
+                       onchange="cambiarAsigCant(${i},${j},this.value)"
+                       class="w-20 text-xs border border-gray-200 rounded px-2 py-1 text-right
+                              focus:outline-none focus:ring-1 focus:ring-clf-green">
+            </td>
+            <td class="py-1.5 pl-1">
+                <button type="button" onclick="quitarAsig(${i},${j})"
+                        class="text-red-400 hover:text-red-600 text-lg leading-none font-bold px-1">×</button>
+            </td>
+        </tr>`).join('');
+
+    div.innerHTML = `
+        <!-- Fila principal del producto -->
+        <div class="grid grid-cols-12 gap-2 px-5 py-3 items-start">
+
+            <!-- Producto -->
+            <div class="col-span-4">
+                <p class="text-sm font-medium text-gray-800">${escHtml(ln.nombre)}</p>
+                <p class="text-xs text-gray-400">
+                    ${ln.codigo ? escHtml(ln.codigo) + ' · ' : ''}${ln.unidad_medida || ''}
+                    ${ln.aplica_iva ? '<span class="ml-1 px-1 bg-blue-100 text-blue-700 rounded text-[10px]">IVA</span>' : ''}
+                </p>
+            </div>
+
+            <!-- Cantidad -->
+            <div class="col-span-2">
+                <label class="text-xs text-gray-400 block mb-0.5">Cantidad</label>
+                <input type="number" step="0.01" min="0.01" value="${ln.cantidad}"
+                       onchange="cambiarCant(${i}, this.value)"
+                       class="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right
+                              focus:outline-none focus:ring-2 focus:ring-clf-green transition">
+            </div>
+
+            <!-- Costo unitario -->
+            <div class="col-span-2">
+                <label class="text-xs text-gray-400 block mb-0.5">Costo unit.</label>
+                <input type="number" step="0.01" min="0" value="${ln.costo_unitario}"
+                       onchange="cambiarCosto(${i}, this.value)"
+                       class="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-right
+                              focus:outline-none focus:ring-2 focus:ring-clf-green transition">
+            </div>
+
+            <!-- Total línea -->
+            <div class="col-span-3 text-right pt-5">
+                <span class="text-sm font-bold text-gray-800">${fmt(tot)}</span>
+                ${iva > 0 ? `<span class="text-xs text-blue-500 ml-1">(+${fmt(iva)} IVA)</span>` : ''}
+            </div>
+
+            <!-- Quitar -->
+            <div class="col-span-1 text-center pt-4">
+                <button type="button" onclick="quitarLinea(${i})"
+                        class="text-red-400 hover:text-red-600 text-xl font-bold leading-none">×</button>
+            </div>
+        </div>
+
+        <!-- Sección de asignación -->
+        <div class="px-5 pb-3 bg-gray-50 border-t border-gray-100">
+            <div class="flex items-center justify-between mb-2 pt-2">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Asignación a cotizaciones
+                </p>
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="${excede ? 'text-red-500 font-bold' : 'text-gray-400'}">
+                        Asignado: <strong>${asignada.toFixed(2)}</strong> / ${parseFloat(ln.cantidad || 0).toFixed(2)}
+                    </span>
+                    ${remanente > 0
+                        ? `<span class="text-amber-600">Stock general: ${remanente.toFixed(2)}</span>`
+                        : '<span class="text-green-600">✓ Todo asignado</span>'
+                    }
+                    <button type="button" onclick="agregarAsig(${i})"
+                            class="px-2 py-1 bg-white border border-gray-200 hover:border-clf-green
+                                   text-gray-600 hover:text-clf-green rounded text-xs transition-colors">
+                        + Asignar a cotización
+                    </button>
+                </div>
+            </div>
+
+            ${(ln.asignaciones || []).length > 0 ? `
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-gray-400">
+                        <th class="text-left pb-1 pl-2">Cotización</th>
+                        <th class="text-right pb-1 pr-1">Cantidad</th>
+                        <th class="w-8"></th>
+                    </tr>
+                </thead>
+                <tbody>${filasAsig}</tbody>
+            </table>` : `
+            <p class="text-xs text-gray-400 italic">
+                Sin asignaciones — toda la cantidad irá a stock general.
+            </p>`}
+        </div>
+    `;
+    cont.appendChild(div);
+}
+
+// ── Acciones de líneas ─────────────────────────────────────────────────────
+function cambiarCant(i, v)  { lineas[i].cantidad       = parseFloat(v) || 0; renderLineas(); }
+function cambiarCosto(i, v) { lineas[i].costo_unitario = parseFloat(v) || 0; renderLineas(); }
+function quitarLinea(i)     { lineas.splice(i, 1); renderLineas(); }
+
+// ── Acciones de asignaciones ───────────────────────────────────────────────
+function agregarAsig(i) {
+    if (!lineas[i].asignaciones) lineas[i].asignaciones = [];
+    lineas[i].asignaciones.push({ cotizacion_id: null, cantidad: 0 });
+    renderLineas();
+}
+function cambiarAsigCot(i, j, v)  {
+    lineas[i].asignaciones[j].cotizacion_id = v ? parseInt(v) : null;
+    // No re-renderizamos para no perder foco
+    document.getElementById('lineas-json').value = JSON.stringify(lineas);
+}
+function cambiarAsigCant(i, j, v) {
+    lineas[i].asignaciones[j].cantidad = parseFloat(v) || 0;
+    renderLineas();
+}
+function quitarAsig(i, j) {
+    lineas[i].asignaciones.splice(j, 1);
+    renderLineas();
+}
+
+// ── Seleccionar producto desde sugerencias ────────────────────────────────
+function seleccionarProducto(id, nombre, costoBase, codigo, unidad, aplicaIva) {
+    const existente = lineas.findIndex(l => l.producto_id === id);
+    if (existente >= 0) {
+        lineas[existente].cantidad += 1;
+    } else {
+        lineas.push({
+            producto_id:   id,
+            nombre:        nombre,
+            codigo:        codigo || '',
+            unidad_medida: unidad || '',
+            cantidad:      1,
+            costo_unitario: costoBase || 0,
+            aplica_iva:    !!aplicaIva,
+            asignaciones:  [],
+        });
+    }
+    renderLineas();
+    document.getElementById('buscar-prod').value = '';
+    document.getElementById('sugerencias-prod').innerHTML = '';
+}
+
+// ── Autocomplete ───────────────────────────────────────────────────────────
+const inputBuscar    = document.getElementById('buscar-prod');
+const divSugerencias = document.getElementById('sugerencias-prod');
+let debounce = null;
+
+inputBuscar.addEventListener('input', function () {
+    clearTimeout(debounce);
+    const q = this.value.trim();
+    if (q.length < 2) { divSugerencias.innerHTML = ''; return; }
+    debounce = setTimeout(() => {
+        fetch('/compras/buscar-producto?q=' + encodeURIComponent(q))
+            .then(r => r.text())
+            .then(html => { divSugerencias.innerHTML = html; });
+    }, 300);
+});
+
+inputBuscar.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const first = divSugerencias.querySelector('button');
+        if (first) first.click();
+    }
+});
+
+document.addEventListener('click', function (e) {
+    if (!inputBuscar.contains(e.target) && !divSugerencias.contains(e.target)) {
+        divSugerencias.innerHTML = '';
+    }
+});
+
+// ── Upload XML ─────────────────────────────────────────────────────────────
+document.getElementById('xml-input').addEventListener('change', async function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const banner = document.getElementById('xml-banner');
+    const errDiv = document.getElementById('xml-error');
+    banner.classList.add('hidden');
+    errDiv.classList.add('hidden');
+
+    const fd = new FormData();
+    fd.append('archivo', file);
+
+    try {
+        const resp = await fetch('/compras/parsear-xml', { method: 'POST', body: fd });
+        if (!resp.ok) {
+            const err = await resp.json();
+            errDiv.textContent = 'Error al procesar el XML: ' + (err.detail || resp.statusText);
+            errDiv.classList.remove('hidden');
+            return;
+        }
+        const datos = await resp.json();
+
+        // Rellenar campos del formulario
+        if (datos.proveedor_id) {
+            document.getElementById('proveedor_id').value = datos.proveedor_id;
+        }
+        if (datos.fecha) {
+            document.getElementById('fecha_compra').value = datos.fecha;
+        }
+        if (datos.folio_proveedor) {
+            document.getElementById('ticket_referencia').value = datos.folio_proveedor;
+        }
+
+        // Agregar conceptos como líneas (solo los que tienen producto_id)
+        let agregados = 0, sinVincular = 0;
+        for (const c of datos.conceptos) {
+            if (c.producto_id) {
+                const existente = lineas.findIndex(l => l.producto_id === c.producto_id);
+                if (existente >= 0) {
+                    lineas[existente].cantidad      += c.cantidad;
+                    lineas[existente].costo_unitario = c.valor_unitario;
+                } else {
+                    lineas.push({
+                        producto_id:    c.producto_id,
+                        nombre:         c.producto_nombre,
+                        codigo:         c.no_identificacion || '',
+                        unidad_medida:  c.producto_unidad || c.unidad || '',
+                        cantidad:       c.cantidad,
+                        costo_unitario: c.valor_unitario,
+                        aplica_iva:     true,
+                        asignaciones:   [],
+                    });
+                }
+                agregados++;
+            } else {
+                sinVincular++;
+            }
+        }
+
+        renderLineas();
+
+        let msg = `XML cargado: ${datos.nombre_emisor || datos.rfc_emisor}`;
+        if (agregados)    msg += ` · ${agregados} producto(s) agregado(s)`;
+        if (sinVincular)  msg += ` · ${sinVincular} concepto(s) sin producto vinculado (agrega manualmente)`;
+        document.getElementById('xml-msg').textContent = msg;
+        banner.classList.remove('hidden');
+
+    } catch (e) {
+        errDiv.textContent = 'Error de conexión al procesar el XML.';
+        errDiv.classList.remove('hidden');
+    }
+
+    // Limpiar input para poder cargar el mismo archivo otra vez
+    this.value = '';
+});
+
+// ── Validación al enviar ───────────────────────────────────────────────────
+document.getElementById('form-compra').addEventListener('submit', function (e) {
+    if (lineas.length === 0) {
+        e.preventDefault();
+        alert('Debes agregar al menos un producto a la compra.');
+        return;
+    }
+    // Validar que ninguna asignación exceda la cantidad
+    for (const ln of lineas) {
+        const total = parseFloat(ln.cantidad) || 0;
+        const asig  = sumaAsignada(ln);
+        if (asig > total + 0.001) {
+            e.preventDefault();
+            alert(`La cantidad asignada de "${ln.nombre}" (${asig}) supera la cantidad comprada (${total}).`);
+            return;
+        }
+    }
+    document.getElementById('lineas-json').value = JSON.stringify(lineas);
+});
+
+// ── Inicializar ────────────────────────────────────────────────────────────
+renderLineas();
+</script>
+
+{% endblock %}

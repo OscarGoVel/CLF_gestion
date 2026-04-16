@@ -37,6 +37,7 @@ from web_app.routers import analisis as analisis_router
 from web_app.routers import admin as admin_router
 from web_app.routers import preinventario as preinventario_router
 from web_app.routers import estudio_mercado as estudio_mercado_router
+from web_app.routers import compras as compras_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -65,6 +66,18 @@ async def lifespan(app: FastAPI):
     _MIGRACIONES = [
         "ALTER TABLE producto_precio_historial ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS utilidad_pct NUMERIC(6,2) DEFAULT 0",
+        # Tabla de asignación de costos de compra a cotizaciones (módulo compras web)
+        """
+        CREATE TABLE IF NOT EXISTS compra_detalle_cotizacion (
+            id                SERIAL PRIMARY KEY,
+            compra_detalle_id INTEGER NOT NULL REFERENCES compra_detalle(id),
+            cotizacion_id     INTEGER REFERENCES cotizaciones(id),
+            cantidad          NUMERIC(14,4) NOT NULL,
+            notas             TEXT,
+            fecha_registro    TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -163,6 +176,7 @@ app.include_router(analisis_router.router)
 app.include_router(admin_router.router)
 app.include_router(preinventario_router.router)
 app.include_router(estudio_mercado_router.router)
+app.include_router(compras_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────

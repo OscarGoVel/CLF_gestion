@@ -86,6 +86,28 @@
                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
                 </div>
 
+                <!-- % Utilidad -->
+                <div>
+                    <label class="text-xs text-gray-500 font-medium mb-1 block">
+                        % Utilidad
+                        <span class="text-gray-400 font-normal">(precio = costo × (1 + %/100))</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="utilidad-pct" name="utilidad_pct"
+                               min="0" max="9999" step="0.5"
+                               value="{{ utilidad_pct | default(0) }}"
+                               class="w-28 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                      focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white
+                                      transition text-right">
+                        <span class="text-sm text-gray-500">%</span>
+                        <button type="button" onclick="aplicarUtilidad()"
+                                class="px-3 py-2 text-xs font-semibold bg-clf-green hover:bg-clf-green-dk
+                                       text-white rounded-lg transition-colors">
+                            Aplicar
+                        </button>
+                    </div>
+                </div>
+
                 <!-- IVA: determinado automáticamente por producto desde el catálogo -->
                 <div class="flex items-center gap-2 pt-4 text-xs text-gray-400 italic">
                     <span>ℹ️</span>
@@ -193,6 +215,7 @@ productos = {{ productos_existentes | tojson }}.map(p => ({
     codigo:          p.codigo || '',
     cantidad:        parseFloat(p.cantidad) || 1,
     precio_unitario: parseFloat(p.precio_unitario) || 0,
+    costo_base:      parseFloat(p.costo_base) || 0,
     unidad_medida:   p.unidad_medida || '',
     aplica_iva:      !!p.aplica_iva
 }));
@@ -299,8 +322,24 @@ function quitarProd(i) {
     renderTabla();
 }
 
+// ── Utilidad ──────────────────────────────────────────────────────────────
+function getUtilidad() {
+    return parseFloat(document.getElementById('utilidad-pct').value) || 0;
+}
+
+function precioConUtilidad(costoBase) {
+    return parseFloat(((costoBase || 0) * (1 + getUtilidad() / 100)).toFixed(4));
+}
+
+function aplicarUtilidad() {
+    productos.forEach(p => {
+        p.precio_unitario = precioConUtilidad(p.costo_base);
+    });
+    renderTabla();
+}
+
 // Llamado desde _prod_sugerencias.html
-function seleccionarProductoCot(id, nombre, precio, codigo, unidad, aplicaIva) {
+function seleccionarProductoCot(id, nombre, costoBase, codigo, unidad, aplicaIva) {
     const existente = productos.findIndex(p => p.producto_id === id);
     if (existente >= 0) {
         productos[existente].cantidad += 1;
@@ -310,7 +349,8 @@ function seleccionarProductoCot(id, nombre, precio, codigo, unidad, aplicaIva) {
             nombre:          nombre,
             codigo:          codigo || '',
             cantidad:        1,
-            precio_unitario: precio || 0,
+            precio_unitario: precioConUtilidad(costoBase),
+            costo_base:      costoBase || 0,
             unidad_medida:   unidad || '',
             aplica_iva:      !!aplicaIva
         });
