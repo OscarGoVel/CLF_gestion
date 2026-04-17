@@ -1,0 +1,33 @@
+{
+  "motor": "postgresql",
+  "postgresql": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "postgres",
+    "password": "clf2024",
+    "database_usuarios": "clf_usuarios"
+  },
+  "empresas": [
+    {
+      "id": "emp_CLF240418U94_default",
+      "nombre": "COMERCIALIZADORA, LOGISTICA Y FUERZA YUCATECA",
+      "rfc": "CLF240418U94",
+      "razon_social": "Comercializadora, Logistica y Fuerza Yucateca S.A. de C.V.",
+      "email": "clfyucateca@gmail.com",
+      "telefono": "9993633880",
+      "direccion": "Calle 17 No. 56 Depto. 74, Kanasin, Yucatan",
+      "pg_database": "clf_empresa",
+      "fecha_registro": "2024-01-01"
+    },
+    {
+      "id": "emp_PTE150903KZ8_1773783949",
+      "nombre": "PRIMERO TU EMPRESA",
+      "rfc": "PTE150903KZ8",
+      "razon_social": "PRIMERO TU EMPRESA",
+      "email": "",
+      "telefono": "",
+      "pg_database": "clf_pte",
+      "fecha_registro": "2026-03-17"
+    }
+  ]
+}

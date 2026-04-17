@@ -9,7 +9,7 @@ Columnas: id, usuario_id, username, evento, detalle, ip, ts
 
 from datetime import datetime, timezone
 
-import db_connection
+from web_app.database import pool_usuarios
 
 # ── Tipos de evento ───────────────────────────────────────────────────────────
 LOGIN_OK      = "login_exitoso"
@@ -20,8 +20,7 @@ ACCESO_DENEGADO = "acceso_denegado"
 
 def _asegurar_tabla():
     """Crea la tabla audit_log si no existe (solo se llama una vez al arrancar)."""
-    conn, cursor = db_connection.conectar_usuarios()
-    try:
+    with pool_usuarios.conexion() as (conn, cursor):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 id         SERIAL PRIMARY KEY,
@@ -33,9 +32,6 @@ def _asegurar_tabla():
                 ts         TIMESTAMPTZ DEFAULT NOW()
             )
         """)
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def registrar(evento: str, *, username: str = None, usuario_id: int = None,
@@ -45,35 +41,30 @@ def registrar(evento: str, *, username: str = None, usuario_id: int = None,
     No lanza excepciones — el fallo de auditoria no debe interrumpir la peticion.
     """
     try:
-        conn, cursor = db_connection.conectar_usuarios()
-        cursor.execute(
-            """
-            INSERT INTO audit_log (usuario_id, username, evento, detalle, ip)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (usuario_id, username, evento, detalle, ip),
-        )
-        conn.commit()
-        conn.close()
+        with pool_usuarios.conexion() as (conn, cursor):
+            cursor.execute(
+                """
+                INSERT INTO audit_log (usuario_id, username, evento, detalle, ip)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (usuario_id, username, evento, detalle, ip),
+            )
     except Exception:
         pass  # auditoria silenciosa
 
 
 def obtener_ultimos(limite: int = 50) -> list[dict]:
     """Devuelve los ultimos eventos de auditoria como lista de dicts."""
-    conn, cursor = db_connection.conectar_usuarios()
-    try:
+    with pool_usuarios.conexion() as (conn, cursor):
         cursor.execute(
             """
             SELECT id, usuario_id, username, evento, detalle, ip, ts
             FROM audit_log
             ORDER BY ts DESC
-            LIMIT ?
+            LIMIT %s
             """,
             (limite,),
         )
         cols = [d[0] for d in cursor.description]
         rows = cursor.fetchall()
         return [dict(zip(cols, row)) for row in rows]
-    finally:
-        conn.close()

@@ -46,6 +46,122 @@ def _cfg() -> dict:
         return {}
 
 
+_TABLAS_SIN_ID = {'preferencias_usuario', 'producto_proveedor', 'seguimiento_etapas',
+                  'factura_cotizaciones', 'oc_cotizaciones', 'compra_detalle_cotizacion'}
+
+
+def _sql_tiene_id(sql: str) -> bool:
+    import re
+    m = re.search(r'INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(\w+)', sql, re.IGNORECASE)
+    if m:
+        return m.group(1).lower() not in _TABLAS_SIN_ID
+    return True
+
+
+class _PgCursor:
+    """Wrapper de psycopg2.cursor compatible con sqlite3.Cursor (? → %s, lastrowid, etc.)"""
+
+    def __init__(self, pg_cursor):
+        self._c = pg_cursor
+        self.lastrowid = None
+
+    def execute(self, sql: str, params=None):
+        import re as _re
+        was_ignore = bool(_re.search(r'INSERT\s+OR\s+IGNORE\s+INTO', sql, _re.IGNORECASE))
+        if was_ignore:
+            sql = _re.sub(r'INSERT\s+OR\s+IGNORE\s+INTO', 'INSERT INTO', sql, flags=_re.IGNORECASE)
+        sql = _re.sub(r'GROUP_CONCAT\(\s*DISTINCT\s+([\w\.]+)\s*\)', r"STRING_AGG(DISTINCT \1, ',')", sql, flags=_re.IGNORECASE)
+        sql = _re.sub(r'GROUP_CONCAT\(', 'STRING_AGG(', sql, flags=_re.IGNORECASE)
+        _STRFTIME_MAP = {'%Y-%m-%d': 'YYYY-MM-DD', '%Y-%m': 'YYYY-MM', '%Y': 'YYYY', '%m': 'MM', '%d': 'DD'}
+        def _strftime_to_tochar(m):
+            fmt_sqlite = m.group(1)
+            col = m.group(2)
+            fmt_pg = _STRFTIME_MAP.get(fmt_sqlite, fmt_sqlite.replace('%Y','YYYY').replace('%m','MM').replace('%d','DD'))
+            return f"TO_CHAR({col}, '{fmt_pg}')"
+        sql = _re.sub(r"strftime\(\s*'([^']+)'\s*,\s*([^)]+?)\s*\)", _strftime_to_tochar, sql, flags=_re.IGNORECASE)
+        sql = sql.replace('?', '%s')
+        stripped  = sql.strip().upper()
+        is_insert = stripped.startswith('INSERT')
+        has_return = 'RETURNING' in stripped
+        has_id_col = _sql_tiene_id(sql)
+        if is_insert and was_ignore:
+            conflict_sql = sql.rstrip().rstrip(';') + ' ON CONFLICT DO NOTHING'
+            self._c.execute(conflict_sql, params) if params else self._c.execute(conflict_sql)
+            self.lastrowid = None
+        elif is_insert and not has_return and has_id_col:
+            sql = sql.rstrip().rstrip(';') + ' RETURNING id'
+            self._c.execute(sql, params) if params else self._c.execute(sql)
+            row = self._c.fetchone()
+            self.lastrowid = row[0] if row else None
+        else:
+            self._c.execute(sql, params) if params else self._c.execute(sql)
+            self.lastrowid = None
+
+    def executemany(self, sql: str, seq):
+        self._c.executemany(sql.replace('?', '%s'), seq)
+        self.lastrowid = None
+
+    @staticmethod
+    def _norm(row):
+        if row is None:
+            return None
+        import decimal as _dec, datetime as _dt
+
+        class _DateStr(str):
+            __slots__ = ('_dt_obj',)
+            def strftime(self, fmt):
+                return self._dt_obj.strftime(fmt)
+
+        def _conv(v):
+            if isinstance(v, _dec.Decimal):
+                return float(v)
+            if isinstance(v, _dt.datetime):
+                s = _DateStr(v.strftime('%Y-%m-%d %H:%M:%S'))
+                s._dt_obj = v
+                return s
+            if isinstance(v, _dt.date):
+                s = _DateStr(v.strftime('%Y-%m-%d'))
+                s._dt_obj = v
+                return s
+            return v
+
+        return tuple(_conv(v) for v in row)
+
+    def fetchone(self):  return self._norm(self._c.fetchone())
+    def fetchall(self):  return [self._norm(r) for r in self._c.fetchall()]
+    def fetchmany(self, n=None):
+        rows = self._c.fetchmany(n) if n else self._c.fetchmany()
+        return [self._norm(r) for r in rows]
+
+    @property
+    def description(self): return self._c.description
+    @property
+    def rowcount(self):    return self._c.rowcount
+    def close(self):       self._c.close()
+
+
+class _PgConn:
+    """Wrapper de psycopg2.connection compatible con sqlite3.Connection."""
+
+    def __init__(self, pg_conn):
+        self._conn = pg_conn
+
+    def cursor(self):    return _PgCursor(self._conn.cursor())
+    def commit(self):    self._conn.commit()
+    def rollback(self):  self._conn.rollback()
+    def close(self):     self._conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *_):
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
+
+
 class PgPool:
     """
     Wrapper de psycopg2.pool.ThreadedConnectionPool con la interfaz de db_connection.
@@ -91,12 +207,6 @@ class PgPool:
                 cursor.execute("SELECT id FROM usuarios WHERE username = ?", (u,))
         """
         self._init()
-
-        # Importamos el wrapper de db_connection para mantener compatibilidad
-        import sys
-        if str(_BASE_DIR) not in sys.path:
-            sys.path.insert(0, str(_BASE_DIR))
-        from db_connection import _PgConn
 
         t0 = time.monotonic()
         raw_conn = self._pool.getconn()

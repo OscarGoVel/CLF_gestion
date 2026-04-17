@@ -43,13 +43,17 @@ class Settings:
     SSL_CERT: str = os.environ.get("CLF_SSL_CERT", str(_ROOT / "ssl" / "server.crt"))
     SSL_KEY:  str = os.environ.get("CLF_SSL_KEY",  str(_ROOT / "ssl" / "server.key"))
 
+    def __init__(self):
+        # Clave de desarrollo fija por sesión — se genera una sola vez al arrancar
+        self._dev_secret = "dev-" + secrets.token_hex(32)
+
     @property
     def es_produccion(self) -> bool:
         return self.ENVIRONMENT == "production"
 
     @property
     def secret_key_efectiva(self) -> str:
-        """Retorna el SECRET_KEY. En desarrollo genera uno temporal si no hay."""
+        """Retorna el SECRET_KEY. En desarrollo genera uno fijo por sesión si no hay."""
         if self.SECRET_KEY:
             return self.SECRET_KEY
         if self.es_produccion:
@@ -57,8 +61,7 @@ class Settings:
                 "CLF_SECRET_KEY no configurada. "
                 "Agrega CLF_SECRET_KEY=<valor-seguro> al archivo .env"
             )
-        # Desarrollo: clave temporal (nueva en cada reinicio — no persistente)
-        return "dev-" + secrets.token_hex(32)
+        return self._dev_secret
 
     @property
     def ssl_disponible(self) -> bool:
