@@ -111,6 +111,7 @@ async def vista_stock(
         "abc_valores": abc_valores,
         "motivos_salida": MOTIVOS_SALIDA,
         "seccion": "stock",
+        "subseccion": "inventario",
     }
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
@@ -185,6 +186,7 @@ async def historial_movimientos(
         "total_paginas": total_paginas,
         "total_movimientos": total_movimientos,
         "seccion": "stock",
+        "subseccion": "movimientos",
     }
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
@@ -289,6 +291,13 @@ async def registrar_salida(
             request=request,
             name="stock/_mov_result.html",
             context={"error": "La cantidad debe ser mayor a cero.", "user": user},
+        )
+
+    if motivo not in MOTIVOS_SALIDA:
+        return templates.TemplateResponse(
+            request=request,
+            name="stock/_mov_result.html",
+            context={"error": "Motivo de salida no válido.", "user": user},
         )
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):

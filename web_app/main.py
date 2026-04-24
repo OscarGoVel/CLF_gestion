@@ -340,65 +340,104 @@ async def dashboard(request: Request):
     if not user:
         return RedirectResponse("/")
 
-    from web_app.cache import cache, TTL_KPIS
-
-    kpis = {}
-    recientes = []
-    vencidas_list = []
+    rol = user.get("rol", "")
     empresa_db = user["empresa_db"]
-    _cache_key = f"dashboard:{empresa_db}"
-    cached = cache.get(_cache_key)
 
-    if cached:
-        kpis, recientes, vencidas_list = cached
-    else:
-        try:
-            with get_pool_empresa(empresa_db).conexion() as (_, cur):
-                cur.execute("""
-                    SELECT
-                        COUNT(*) FILTER (WHERE estado IN ('Pendiente','Programada')) AS activas,
-                        COUNT(*) FILTER (WHERE estado = 'Entregada'
-                                        AND (monto_pagado IS NULL OR monto_pagado < total)) AS por_cobrar,
-                        COUNT(*) FILTER (WHERE estado NOT IN ('Cancelada','Pagada')
-                                        AND fecha_entrega < CURRENT_DATE) AS vencidas,
-                        COALESCE(SUM(total) FILTER (
-                            WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', CURRENT_DATE)
-                            AND estado != 'Cancelada'), 0) AS ventas_mes
-                    FROM cotizaciones
-                """)
-                row = cur.fetchone()
-                kpis = {
-                    "activas":    row[0],
-                    "por_cobrar": row[1],
-                    "vencidas":   row[2],
-                    "ventas_mes": float(row[3]),
-                }
+    bloques = {}
+    _log_dash = logger.get("clf.dashboard")
 
+    try:
+        with get_pool_empresa(empresa_db).conexion() as (_, cur):
+
+            # ── Proceso Comercial ─────────────────────────────────────────────
+            if rol in ("Administrador", "Operador"):
                 cur.execute("""
-                    SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, c.total, c.estado
+                    SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, c.total
                     FROM cotizaciones c
                     LEFT JOIN clientes cl ON cl.id = c.cliente_id
-                    ORDER BY c.id DESC
-                    LIMIT 8
+                    WHERE c.estado = 'Pendiente'
+                      AND c.fecha < CURRENT_DATE - INTERVAL '15 days'
+                    ORDER BY c.fecha ASC
+                    LIMIT 20
                 """)
                 cols = [d[0] for d in cur.description]
-                recientes = [dict(zip(cols, r)) for r in cur.fetchall()]
+                sin_respuesta = [dict(zip(cols, r)) for r in cur.fetchall()]
 
                 cur.execute("""
-                    SELECT c.id, c.folio, c.fecha_entrega, cl.nombre_comercial, c.total, c.estado
+                    SELECT c.id, c.folio, c.fecha, cl.nombre_comercial, c.total
                     FROM cotizaciones c
                     LEFT JOIN clientes cl ON cl.id = c.cliente_id
-                    WHERE c.estado NOT IN ('Cancelada','Pagada')
-                      AND c.fecha_entrega < CURRENT_DATE
-                    ORDER BY c.fecha_entrega ASC
-                    LIMIT 5
+                    WHERE c.estado = 'Programada'
+                      AND (c.orden_compra IS NULL OR c.orden_compra = '')
+                    ORDER BY c.fecha ASC
+                    LIMIT 20
                 """)
-                cols2 = [d[0] for d in cur.description]
-                vencidas_list = [dict(zip(cols2, r)) for r in cur.fetchall()]
+                cols = [d[0] for d in cur.description]
+                sin_oc = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-            cache.set(_cache_key, (kpis, recientes, vencidas_list), ttl=TTL_KPIS)
-        except Exception:
-            kpis = {"activas": "—", "por_cobrar": "—", "vencidas": "—", "ventas_mes": "—"}
+                bloques["comercial"] = {
+                    "sin_respuesta": sin_respuesta,
+                    "sin_oc": sin_oc,
+                }
+
+            # ── Proceso Logístico ─────────────────────────────────────────────
+            if rol in ("Administrador", "Operador", "Almacenista"):
+                cur.execute("""
+                    SELECT DISTINCT c.id, c.folio, c.fecha_entrega,
+                           cl.nombre_comercial, c.total
+                    FROM cotizaciones c
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+                    JOIN productos p ON p.id = cd.producto_id
+                    WHERE c.estado = 'Programada'
+                      AND cd.cantidad > COALESCE(p.stock_actual, 0)
+                    ORDER BY c.fecha_entrega ASC NULLS LAST
+                    LIMIT 20
+                """)
+                cols = [d[0] for d in cur.description]
+                sin_stock = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT c.id, c.folio, c.fecha_entrega,
+                           cl.nombre_comercial, c.total, c.estado
+                    FROM cotizaciones c
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    WHERE c.estado IN ('Programada', 'Parcialmente Entregada')
+                    ORDER BY c.fecha_entrega ASC NULLS LAST
+                    LIMIT 20
+                """)
+                cols = [d[0] for d in cur.description]
+                entregas_pendientes = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+                bloques["logistico"] = {
+                    "sin_stock": sin_stock,
+                    "entregas_pendientes": entregas_pendientes,
+                }
+
+            # ── Proceso Administrativo ────────────────────────────────────────
+            if rol == "Administrador":
+                cur.execute("""
+                    SELECT c.id, c.folio, c.fecha, cl.nombre_comercial,
+                           c.total, COALESCE(c.monto_pagado, 0) AS monto_pagado
+                    FROM cotizaciones c
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    WHERE c.estado = 'Entregada'
+                      AND (c.monto_pagado IS NULL OR c.monto_pagado < c.total)
+                      AND EXISTS (
+                          SELECT 1 FROM facturas f WHERE f.cotizacion_id = c.id
+                      )
+                    ORDER BY c.fecha ASC
+                    LIMIT 20
+                """)
+                cols = [d[0] for d in cur.description]
+                facturas_sin_pago = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+                bloques["administrativo"] = {
+                    "facturas_sin_pago": facturas_sin_pago,
+                }
+
+    except Exception as e:
+        _log_dash.exception("Error cargando dashboard para %s: %s", empresa_db, e)
 
     from core.constants import ESTADO_COLOR_CSS
     return templates.TemplateResponse(
@@ -406,9 +445,7 @@ async def dashboard(request: Request):
         name="dashboard.html",
         context={
             "user": user,
-            "kpis": kpis,
-            "recientes": recientes,
-            "vencidas_list": vencidas_list,
+            "bloques": bloques,
             "estado_color": ESTADO_COLOR_CSS,
         },
     )

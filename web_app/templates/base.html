@@ -49,6 +49,97 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-navy-700 min-h-screen font-sans antialiased pb-16 sm:pb-0">
+
+    {# ── Barra de navegación principal (desktop, siempre idéntica) ──────────── #}
+    {% if user is defined and user %}
+    <nav id="top-nav"
+         class="hidden sm:flex bg-navy-900 border-b border-navy-700 h-10 items-center select-none sticky top-0 z-40">
+
+        {# Logo #}
+        <div class="flex items-center h-full px-4 shrink-0">
+            <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ CLF</span>
+        </div>
+        <div class="w-px bg-navy-700 h-6 shrink-0"></div>
+
+        {# Secciones principales #}
+        <div class="flex items-center h-full flex-1 overflow-x-auto">
+            <a id="nav-dashboard"   href="/dashboard"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                📊 Dashboard
+            </a>
+            {% if user.rol not in ('Almacenista',) %}
+            <a id="nav-cotizaciones" href="/cotizaciones"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                📄 Cotizaciones
+            </a>
+            {% endif %}
+            <a id="nav-stock"       href="/stock"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                📦 Stock
+            </a>
+            <a id="nav-catalogos"   href="/catalogos"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                📚 Catálogos
+            </a>
+            {% if user.rol not in ('Almacenista', 'Solo lectura') %}
+            <a id="nav-herramientas" href="/analisis"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                🔧 Herramientas
+            </a>
+            {% endif %}
+            {% if user.rol in ('Administrador', 'Operador') %}
+            <a id="nav-configuracion" href="/facturas"
+               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
+                ⚙ Configuración
+            </a>
+            {% endif %}
+        </div>
+
+        {# Usuario + logout #}
+        <div class="flex items-center h-full px-4 gap-3 shrink-0 border-l border-navy-700">
+            <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold
+                {% if user.rol == 'Administrador' %}bg-clf-blue text-white
+                {% elif user.rol == 'Operador' %}bg-clf-green text-white
+                {% else %}bg-navy-500 text-white{% endif %}">
+                {{ user.rol }}
+            </span>
+            <span class="text-xs text-navy-300 hidden md:inline">· {{ user.empresa_nombre }}</span>
+            <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+        </div>
+    </nav>
+    <script>
+    (function () {
+        var path = window.location.pathname;
+        var map = [
+            ['/dashboard',        'nav-dashboard'],
+            ['/cotizaciones',     'nav-cotizaciones'],
+            ['/stock',            'nav-stock'],
+            ['/preinventario',    'nav-stock'],
+            ['/compras',          'nav-stock'],
+            ['/catalogos',        'nav-catalogos'],
+            ['/estudio-mercado',  'nav-herramientas'],
+            ['/analisis',         'nav-herramientas'],
+            ['/estado-cuenta',    'nav-herramientas'],
+            ['/herramientas',     'nav-herramientas'],
+            ['/facturas',         'nav-configuracion'],
+            ['/admin',            'nav-configuracion'],
+            ['/configuracion',    'nav-configuracion'],
+        ];
+        for (var i = 0; i < map.length; i++) {
+            if (path === map[i][0] || path.startsWith(map[i][0] + '/')) {
+                var el = document.getElementById(map[i][1]);
+                if (el) {
+                    el.classList.remove('text-navy-400');
+                    el.classList.add('text-white', 'bg-navy-700', 'font-semibold', 'border-b-2', 'border-clf-teal');
+                }
+                break;
+            }
+        }
+    })();
+    </script>
+    {% endif %}
+
     {% block body %}{% endblock %}
 
     <!-- Barra de navegación inferior (solo móvil) -->

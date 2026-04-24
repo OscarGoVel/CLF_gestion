@@ -2,31 +2,8 @@
 {% block title %}Permisos por Rol — CLF Gestión{% endblock %}
 {% block body %}
 
-<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
-    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
-        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
-    </div>
-    <div class="w-px bg-navy-900 h-full"></div>
-    <div class="flex items-center h-full flex-1 overflow-x-auto">
-        <a href="/dashboard"    class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
-        <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
-        <a href="/facturas"     class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🧾 Facturas</a>
-        <a href="/catalogos"    class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📚 Catálogos</a>
-        <a href="/stock"        class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
-        <a href="/analisis"      class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
-        <a href="/estado-cuenta" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📋 Estado de Cta.</a>
-        <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
-        <span                   class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">🔐 Permisos</span>
-        <a href="/admin/ubicaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🏢 Ubicaciones</a>
-    </div>
-    <div class="flex items-center h-full px-4 gap-4 shrink-0">
-        <div class="w-px bg-navy-500 h-5"></div>
-        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
-        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
-        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
-    </div>
-</nav>
-
+{% set seccion = 'usuarios' %}
+{% include "facturas/_nav.html" %}
 <main class="p-5 max-w-5xl mx-auto">
 
     <div class="flex items-start justify-between mb-5">
