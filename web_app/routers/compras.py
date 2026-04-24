@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -48,7 +48,7 @@ def _cargar_proveedores(empresa_db: str) -> list:
 
 
 def _cargar_cotizaciones_activas(empresa_db: str) -> list:
-    """Cotizaciones Pendiente/Programada disponibles para vincular costos."""
+    """Cotizaciones no cerradas disponibles para vincular costos de compra."""
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute(
             """
@@ -56,7 +56,7 @@ def _cargar_cotizaciones_activas(empresa_db: str) -> list:
                    COALESCE(cl.nombre_comercial, '—') AS cliente
             FROM cotizaciones c
             LEFT JOIN clientes cl ON cl.id = c.cliente_id
-            WHERE c.estado IN ('Pendiente', 'Programada')
+            WHERE c.estado NOT IN ('Pagada', 'Cancelada')
             ORDER BY c.id DESC
             LIMIT 200
             """
@@ -296,24 +296,92 @@ async def cotizaciones_producto(request: Request, producto_id: int = 0):
 # ── Nueva compra (formulario) ─────────────────────────────────────────────────
 
 @router.get("/nueva", response_class=HTMLResponse)
-async def nueva(request: Request):
+async def nueva(request: Request, factura_id: int = Query(0)):
     user = get_usuario_actual(request)
     if not user:
         return RedirectResponse("/")
     if user.get("rol") not in ("Administrador", "Operador"):
         raise HTTPException(status_code=403, detail="Sin permiso")
 
-    proveedores = _cargar_proveedores(user["empresa_db"])
+    proveedores  = _cargar_proveedores(user["empresa_db"])
     cotizaciones = _cargar_cotizaciones_activas(user["empresa_db"])
+
+    factura_prefill = None
+    if factura_id:
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+            cur.execute(
+                """SELECT id, tipo, rfc_emisor, nombre_emisor,
+                          fecha, subtotal, iva, total, folio_factura, serie
+                   FROM facturas WHERE id = %s""",
+                (factura_id,),
+            )
+            frow = cur.fetchone()
+            if frow:
+                fcols = [d[0] for d in cur.description]
+                fdata = dict(zip(fcols, frow))
+
+                # Match proveedor by RFC
+                prov_id = None
+                if fdata.get("rfc_emisor"):
+                    cur.execute(
+                        "SELECT id FROM proveedores WHERE rfc = %s LIMIT 1",
+                        (fdata["rfc_emisor"],),
+                    )
+                    prow = cur.fetchone()
+                    if prow:
+                        prov_id = prow[0]
+
+                # Load conceptos for pre-fill
+                cur.execute(
+                    """SELECT descripcion, cantidad, valor_unitario,
+                              clave_prod_serv, clave_unidad, unidad, no_identificacion
+                       FROM factura_conceptos WHERE factura_id = %s ORDER BY id""",
+                    (factura_id,),
+                )
+                ccols    = [d[0] for d in cur.description]
+                conceptos = [dict(zip(ccols, r)) for r in cur.fetchall()]
+
+                fecha_str = ""
+                if fdata.get("fecha"):
+                    try:
+                        fecha_str = str(fdata["fecha"])[:10]
+                    except Exception:
+                        pass
+
+                folio_str = ((fdata.get("serie") or "") + (fdata.get("folio_factura") or "")).strip()
+
+                # Cotizaciones ya vinculadas a esta factura (para auto-asignar)
+                cur.execute("""
+                    SELECT c.id, c.folio,
+                           COALESCE(cl.nombre_comercial, '—') AS cliente
+                    FROM factura_cotizaciones fc
+                    JOIN cotizaciones c ON c.id = fc.cotizacion_id
+                    LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                    WHERE fc.factura_id = %s
+                    ORDER BY c.id
+                """, (factura_id,))
+                ccots = [d[0] for d in cur.description]
+                cots_vinculadas = [dict(zip(ccots, r)) for r in cur.fetchall()]
+
+                factura_prefill = {
+                    "factura_id":       factura_id,
+                    "proveedor_id":     prov_id,
+                    "nombre_emisor":    fdata.get("nombre_emisor") or fdata.get("rfc_emisor", ""),
+                    "fecha":            fecha_str,
+                    "folio":            folio_str,
+                    "conceptos":        conceptos,
+                    "cots_vinculadas":  cots_vinculadas,
+                }
 
     return templates.TemplateResponse(
         request=request,
         name="compras/form.html",
         context={
-            "user":         user,
-            "proveedores":  proveedores,
-            "cotizaciones": cotizaciones,
-            "hoy":          date.today().isoformat(),
+            "user":            user,
+            "proveedores":     proveedores,
+            "cotizaciones":    cotizaciones,
+            "hoy":             date.today().isoformat(),
+            "factura_prefill": factura_prefill,
         },
     )
 
@@ -328,6 +396,7 @@ async def crear(
     ticket_referencia: str  = Form(""),
     notas:             str  = Form(""),
     lineas_json:       str  = Form(...),
+    factura_id:        str  = Form(""),
 ):
     user = get_usuario_actual(request)
     if not user:
@@ -375,17 +444,18 @@ async def crear(
         total_global = subtotal_global + iva_global
 
         # ── Insertar compra ───────────────────────────────────────────────────
+        _factura_xml_id = int(factura_id) if factura_id.strip().isdigit() else None
         cur.execute(
             """
             INSERT INTO compras
               (folio, proveedor_id, fecha_compra, subtotal, iva, total,
-               ticket_referencia, notas)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+               ticket_referencia, notas, factura_xml_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 folio, prov_id, fecha_compra,
                 float(subtotal_global), float(iva_global), float(total_global),
-                ticket_referencia or None, notas or None,
+                ticket_referencia or None, notas or None, _factura_xml_id,
             ),
         )
         compra_id = cur.lastrowid

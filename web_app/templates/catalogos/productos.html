@@ -10,11 +10,18 @@
             <p class="text-xs text-navy-400 mt-0.5">{{ total }} registros</p>
         </div>
         {% if user.rol in ('Administrador', 'Operador') %}
-        <a href="/catalogos/productos/nuevo"
-           class="px-4 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-xs font-bold
-                  rounded-lg transition-colors shadow-sm shrink-0">
-            + Nuevo Producto
-        </a>
+        <div class="flex gap-2">
+            <a href="/catalogos/productos/importar"
+               class="px-4 py-2 bg-navy-600 hover:bg-navy-700 text-white text-xs font-bold
+                      rounded-lg transition-colors shadow-sm shrink-0">
+                ↑ Importar CSV
+            </a>
+            <a href="/catalogos/productos/nuevo"
+               class="px-4 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-xs font-bold
+                      rounded-lg transition-colors shadow-sm shrink-0">
+                + Nuevo Producto
+            </a>
+        </div>
         {% endif %}
     </div>
 

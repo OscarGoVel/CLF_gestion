@@ -5,13 +5,20 @@
             onclick='seleccionarProductoCot({{ r.id }}, {{ r.nombre | tojson }}, {{ r.costo_base or 0 }}, {{ (r.codigo or "") | tojson }}, {{ (r.unidad_medida or "") | tojson }}, {{ 1 if r.aplica_iva else 0 }})'
             class="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors">
         <p class="text-sm font-semibold text-gray-800">{{ r.nombre }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">
+        <p class="text-xs text-gray-400 mt-0.5 flex items-center flex-wrap gap-1">
             {% if r.codigo %}<span class="font-mono">{{ r.codigo }}</span> · {% endif %}
             Stock: <span class="font-semibold {% if r.stock_actual %}text-clf-green{% else %}text-red-400{% endif %}">
                 {{ r.stock_actual | int if r.stock_actual else 0 }}
             </span>
             {% if r.unidad_medida %} {{ r.unidad_medida }}{% endif %}
             · Costo: <span class="text-gray-600">${{ '{:,.2f}'.format(r.costo_base or 0) }}</span>
+            {% if r.proveedor_nombre %}
+            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold
+                         {% if r.proveedor_nombre|upper == 'AKSI' %}bg-blue-100 text-blue-700
+                         {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ r.proveedor_nombre|upper }}
+            </span>
+            {% endif %}
         </p>
     </button>
     {% endfor %}

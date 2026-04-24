@@ -344,10 +344,27 @@ async def dashboard(request: Request):
     empresa_db = user["empresa_db"]
 
     bloques = {}
+    kpis = {}
     _log_dash = logger.get("clf.dashboard")
 
     try:
         with get_pool_empresa(empresa_db).conexion() as (_, cur):
+
+            # ── KPIs de montos ────────────────────────────────────────────────
+            if rol in ("Administrador", "Operador"):
+                cur.execute("""
+                    SELECT
+                        COALESCE(SUM(total) FILTER (
+                            WHERE estado IN ('Programada','Entregada','Pagada')
+                        ), 0) AS monto_vendido,
+                        COALESCE(SUM(total - COALESCE(monto_pagado, 0)) FILTER (
+                            WHERE estado IN ('Programada','Entregada')
+                              AND (monto_pagado IS NULL OR monto_pagado < total)
+                        ), 0) AS pendiente_cobrar
+                    FROM cotizaciones
+                """)
+                r = cur.fetchone()
+                kpis = {"monto_vendido": float(r[0]), "pendiente_cobrar": float(r[1])}
 
             # ── Proceso Comercial ─────────────────────────────────────────────
             if rol in ("Administrador", "Operador"):
@@ -446,6 +463,7 @@ async def dashboard(request: Request):
         context={
             "user": user,
             "bloques": bloques,
+            "kpis": kpis,
             "estado_color": ESTADO_COLOR_CSS,
         },
     )

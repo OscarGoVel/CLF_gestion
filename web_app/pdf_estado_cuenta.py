@@ -168,7 +168,8 @@ def generar_pdf_estado_cuenta(empresa_db: str, filtros: dict) -> bytes:
                     ('Programada','Parcialmente Entregada','Entregada','Facturada','Pagada')
                     THEN COALESCE(c.monto_pagado, 0) ELSE 0 END), 0)  AS monto_cobrado,
                 COALESCE(SUM(CASE WHEN c.estado IN
-                    ('Programada','Parcialmente Entregada','Entregada','Facturada','Pagada')
+                    ('Programada','Parcialmente Entregada','Entregada','Facturada')
+                    AND (c.total - COALESCE(c.monto_pagado,0)) > 0.01
                     THEN c.total - COALESCE(c.monto_pagado,0) ELSE 0 END), 0) AS saldo_pend
             FROM cotizaciones c
             JOIN clientes cl ON cl.id = c.cliente_id

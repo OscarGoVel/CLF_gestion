@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Importar Productos CSV — CLF Gestión{% endblock %}
+{% block body %}
+{% set seccion = 'productos' %}
+{% include "catalogos/_nav.html" %}
+
+<main class="p-5 max-w-3xl mx-auto">
+
+    <div class="mb-5">
+        <h1 class="text-lg font-bold text-gray-800">Importar catálogo desde CSV</h1>
+        <p class="text-xs text-gray-400 mt-0.5">
+            Los productos se vinculan automáticamente al proveedor seleccionado.
+            Si el código ya existe, se actualiza el registro.
+        </p>
+    </div>
+
+    {% if resultado %}
+    <!-- Resultado de importación -->
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-5">
+        <h2 class="text-sm font-bold text-gray-700 mb-4">Resultado de importación — {{ resultado.proveedor }}</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="text-center">
+                <p class="text-2xl font-bold text-gray-700">{{ resultado.total }}</p>
+                <p class="text-xs text-gray-400">Total filas</p>
+            </div>
+            <div class="text-center">
+                <p class="text-2xl font-bold text-clf-green">{{ resultado.importados }}</p>
+                <p class="text-xs text-gray-400">Nuevos</p>
+            </div>
+            <div class="text-center">
+                <p class="text-2xl font-bold text-blue-500">{{ resultado.actualizados }}</p>
+                <p class="text-xs text-gray-400">Actualizados</p>
+            </div>
+            <div class="text-center">
+                <p class="text-2xl font-bold {% if resultado.errores %}text-red-500{% else %}text-gray-300{% endif %}">{{ resultado.errores }}</p>
+                <p class="text-xs text-gray-400">Errores</p>
+            </div>
+        </div>
+        {% if resultado.errores_detalle %}
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 mt-3">
+            <p class="text-xs font-semibold text-red-600 mb-2">Detalle de errores:</p>
+            <ul class="text-xs text-red-500 space-y-1">
+                {% for e in resultado.errores_detalle %}
+                <li>• {{ e }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <div class="flex gap-3 mt-4">
+            <a href="/catalogos/productos"
+               class="px-4 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-sm font-bold rounded-xl transition-colors">
+                Ver catálogo
+            </a>
+            <a href="/catalogos/productos/importar"
+               class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm rounded-xl transition-colors">
+                Importar otro archivo
+            </a>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Formulario de importación -->
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-5">
+        <form method="POST" action="/catalogos/productos/importar" enctype="multipart/form-data"
+              class="space-y-5">
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Proveedor</label>
+                <select name="proveedor_id" required
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                               focus:outline-none focus:ring-2 focus:ring-clf-green">
+                    <option value="">— Selecciona un proveedor —</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.nombre }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-gray-400 mt-1">
+                    Todos los productos importados quedarán vinculados como proveedor principal.
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Archivo CSV</label>
+                <input type="file" name="archivo" accept=".csv" required
+                       class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-4
+                              file:rounded-lg file:border-0 file:text-xs file:font-bold
+                              file:bg-navy-600 file:text-white hover:file:bg-navy-700 cursor-pointer">
+                <p class="text-xs text-gray-400 mt-1">
+                    Codificación UTF-8 o Latin-1. Primera fila: encabezados.
+                </p>
+            </div>
+
+            <button type="submit"
+                    class="px-5 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-sm font-bold
+                           rounded-xl shadow-sm transition-colors">
+                Importar
+            </button>
+        </form>
+    </div>
+
+    <!-- Descripción de columnas -->
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-bold text-gray-700">Columnas del archivo CSV</h2>
+            <a href="/catalogos/productos/plantilla-csv"
+               class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold
+                      rounded-lg transition-colors">
+                ↓ Descargar plantilla
+            </a>
+        </div>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-100">
+                    <th class="py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Columna</th>
+                    <th class="py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Obligatorio</th>
+                    <th class="py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Notas</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for col, req, nota in [
+                    ('codigo',          '✅', 'Clave única del producto. Si ya existe, se actualiza.'),
+                    ('nombre',          '✅', 'Nombre descriptivo del producto.'),
+                    ('descripcion',     '—',  'Descripción adicional (opcional).'),
+                    ('unidad_medida',   '—',  'Ej. pza, kg, m, lt.'),
+                    ('precio_base',     '✅', 'Número decimal con punto. Ej. 125.50'),
+                    ('aplica_iva',      '—',  '1 = aplica IVA (default), 0 = sin IVA.'),
+                    ('clave_sat',       '—',  'Clave de producto SAT.'),
+                    ('clave_unidad_sat','—',  'Clave de unidad SAT.'),
+                ] %}
+                <tr>
+                    <td class="py-2 font-mono text-xs text-navy-700">{{ col }}</td>
+                    <td class="py-2 text-center text-sm">{{ req }}</td>
+                    <td class="py-2 text-xs text-gray-500">{{ nota }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}

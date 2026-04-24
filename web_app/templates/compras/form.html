@@ -7,17 +7,50 @@
 <main class="p-5 max-w-5xl mx-auto">
 <form method="POST" action="/compras" id="form-compra">
 
+    {% if factura_prefill %}
+    <input type="hidden" name="factura_id" value="{{ factura_prefill.factura_id }}">
+    {% endif %}
+
     <!-- ── Datos generales ─────────────────────────────────────────────────── -->
     <div class="bg-white rounded-2xl shadow-sm p-6 mb-4">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-gray-700">Datos de la Compra</h3>
-            <!-- Botón subir XML -->
+            <!-- Botón subir XML (solo si no viene de factura) -->
+            {% if not factura_prefill %}
             <label class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100
                           text-blue-700 text-xs font-semibold rounded-lg cursor-pointer transition-colors">
                 📎 Cargar XML CFDI
                 <input type="file" id="xml-input" accept=".xml" class="hidden">
             </label>
+            {% endif %}
         </div>
+
+        {% if factura_prefill %}
+        <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <div class="flex items-center gap-2">
+                <span class="text-base">📄</span>
+                <span>
+                    Datos pre-llenados desde factura
+                    <strong>{{ factura_prefill.folio or factura_prefill.factura_id }}</strong>
+                    — {{ factura_prefill.nombre_emisor }}
+                </span>
+                <a href="/facturas/{{ factura_prefill.factura_id }}"
+                   class="ml-auto text-amber-600 hover:text-amber-800 font-semibold whitespace-nowrap">
+                    ← Ver factura
+                </a>
+            </div>
+            {% if factura_prefill.cots_vinculadas %}
+            <div class="mt-2 pt-2 border-t border-amber-200 flex flex-wrap gap-2 items-center">
+                <span class="text-amber-600 font-semibold">Cotizaciones vinculadas (se asignarán automáticamente):</span>
+                {% for cot in factura_prefill.cots_vinculadas %}
+                <span class="px-2 py-0.5 bg-amber-100 border border-amber-300 rounded font-mono font-bold text-amber-800">
+                    {{ cot.folio }} — {{ cot.cliente }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <!-- Banner de estado XML -->
         <div id="xml-banner" class="hidden mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200
@@ -416,7 +449,8 @@ document.addEventListener('click', function (e) {
 });
 
 // ── Upload XML ─────────────────────────────────────────────────────────────
-document.getElementById('xml-input').addEventListener('change', async function () {
+const _xmlInput = document.getElementById('xml-input');
+if (_xmlInput) _xmlInput.addEventListener('change', async function () {
     const file = this.files[0];
     if (!file) return;
 
@@ -511,6 +545,55 @@ document.getElementById('form-compra').addEventListener('submit', function (e) {
     }
     document.getElementById('lineas-json').value = JSON.stringify(lineas);
 });
+
+// ── Pre-llenado desde factura XML ─────────────────────────────────────────
+{% if factura_prefill %}
+(function () {
+    const pf = {{ factura_prefill | tojson }};
+
+    // Campos del encabezado
+    if (pf.proveedor_id) document.getElementById('proveedor_id').value = pf.proveedor_id;
+    if (pf.fecha)        document.getElementById('fecha_compra').value  = pf.fecha;
+    if (pf.folio)        document.getElementById('ticket_referencia').value = pf.folio;
+
+    // Si hay cotizaciones ya vinculadas a la factura, sobrescribir seleccionarProducto
+    // para que cada producto agregado quede asignado a ellas automáticamente.
+    // - 1 cotización: asigna el 100% de la cantidad.
+    // - Varias: agrega un renglón por cotización con cantidad 0 para que el usuario reparta.
+    if (pf.cots_vinculadas && pf.cots_vinculadas.length > 0) {
+        seleccionarProducto = function (id, nombre, costoBase, codigo, unidad, aplicaIva) {
+            const existente = lineas.findIndex(l => l.producto_id === id);
+            const buildAsig = (cantidad) => pf.cots_vinculadas.map((c, i) => ({
+                cotizacion_id: c.id,
+                cantidad: pf.cots_vinculadas.length === 1
+                    ? cantidad
+                    : 0,   // con múltiples cotizaciones el usuario decide el reparto
+            }));
+
+            if (existente >= 0) {
+                lineas[existente].cantidad += 1;
+                if (pf.cots_vinculadas.length === 1) {
+                    lineas[existente].asignaciones = buildAsig(lineas[existente].cantidad);
+                }
+            } else {
+                lineas.push({
+                    producto_id:    id,
+                    nombre:         nombre,
+                    codigo:         codigo || '',
+                    unidad_medida:  unidad || '',
+                    cantidad:       1,
+                    costo_unitario: costoBase || 0,
+                    aplica_iva:     !!aplicaIva,
+                    asignaciones:   buildAsig(1),
+                });
+            }
+            renderLineas();
+            document.getElementById('buscar-prod').value = '';
+            document.getElementById('sugerencias-prod').innerHTML = '';
+        };
+    }
+})();
+{% endif %}
 
 // ── Inicializar ────────────────────────────────────────────────────────────
 renderLineas();

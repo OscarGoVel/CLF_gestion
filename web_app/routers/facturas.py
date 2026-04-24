@@ -136,6 +136,13 @@ async def detalle_factura(request: Request, factura_id: int):
         vcols      = [d[0] for d in cur.description]
         vinculadas = [_floats(dict(zip(vcols, r))) for r in cur.fetchall()]
 
+        cur.execute(
+            "SELECT id, folio FROM compras WHERE factura_xml_id = %s LIMIT 1",
+            (factura_id,),
+        )
+        _row = cur.fetchone()
+        compra_vinculada = {"id": _row[0], "folio": _row[1]} if _row else None
+
     from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
@@ -150,6 +157,7 @@ async def detalle_factura(request: Request, factura_id: int):
             "metodo_label": METODO_LABEL,
             "estado_color": ESTADO_COLOR,
             "seccion": "facturas",
+            "compra_vinculada": compra_vinculada,
         },
     )
 
@@ -423,6 +431,94 @@ async def vincular_cotizacion(
 # ─────────────────────────────────────────────────────────────────────────────
 # DESVINCULAR COTIZACIÓN
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SELECTOR DE COMPRAS (panel HTMX para vincular compra existente)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{factura_id}/selector-compras", response_class=HTMLResponse)
+async def selector_compras(
+    request: Request,
+    factura_id: int,
+    q: str = "",
+):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403)
+
+    q = q.strip()
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        # Obtener RFC del emisor de la factura para pre-filtrar
+        cur.execute("SELECT rfc_emisor FROM facturas WHERE id = %s", (factura_id,))
+        frow = cur.fetchone()
+        rfc_emisor = frow[0] if frow else None
+
+        params: list = []
+        where_parts = ["c.factura_xml_id IS NULL"]
+
+        if q:
+            where_parts.append(
+                "(c.folio ILIKE %s OR COALESCE(p.nombre,'') ILIKE %s OR c.ticket_referencia ILIKE %s)"
+            )
+            params += [f"%{q}%", f"%{q}%", f"%{q}%"]
+
+        where_sql = " AND ".join(where_parts)
+
+        cur.execute(f"""
+            SELECT c.id, c.folio, c.fecha_compra, c.total, c.ticket_referencia,
+                   COALESCE(p.nombre, '—') AS proveedor,
+                   COALESCE(p.rfc, '') AS proveedor_rfc
+            FROM compras c
+            LEFT JOIN proveedores p ON p.id = c.proveedor_id
+            WHERE {where_sql}
+            ORDER BY c.fecha_compra DESC, c.id DESC
+            LIMIT 50
+        """, params)
+        ccols  = [d[0] for d in cur.description]
+        compras = [_floats(dict(zip(ccols, r))) for r in cur.fetchall()]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="facturas/_selector_compras.html",
+        context={
+            "user":       user,
+            "factura_id": factura_id,
+            "compras":    compras,
+            "rfc_emisor": rfc_emisor,
+            "q":          q,
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VINCULAR COMPRA EXISTENTE
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/{factura_id}/vincular-compra", response_class=HTMLResponse)
+async def vincular_compra(
+    request:   Request,
+    factura_id: int,
+    compra_id:  int = Form(...),
+):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id FROM compras WHERE id = %s", (compra_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Compra no encontrada")
+        cur.execute(
+            "UPDATE compras SET factura_xml_id = %s WHERE id = %s AND factura_xml_id IS NULL",
+            (factura_id, compra_id),
+        )
+
+    return RedirectResponse(f"/facturas/{factura_id}", status_code=303)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CAMBIAR TIPO

@@ -4,11 +4,13 @@ web_app/routers/catalogos.py
 Seccion Catalogos: Clientes, Productos y Proveedores.
 """
 
+import csv
+import io
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from web_app import audit
@@ -477,6 +479,142 @@ def _ctx_catalogo(empresa_db: str) -> dict:
     result = {"categorias": cats, "subcategorias": subs}
     cache.set(_ck, result, ttl=TTL_CATEGORIAS)
     return result
+
+
+_CSV_COLS = ["codigo", "nombre", "descripcion", "unidad_medida",
+             "precio_base", "aplica_iva", "clave_sat", "clave_unidad_sat"]
+
+@router.get("/productos/plantilla-csv")
+async def plantilla_csv(request: Request):
+    user = get_usuario_actual(request)
+    if not user or user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403)
+    content = ",".join(_CSV_COLS) + "\n"
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=plantilla_productos.csv"},
+    )
+
+
+@router.get("/productos/importar", response_class=HTMLResponse)
+async def importar_csv_form(request: Request):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id, nombre FROM proveedores ORDER BY nombre")
+        proveedores = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/importar_csv.html",
+        context={"user": user, "proveedores": proveedores, "seccion": "productos"},
+    )
+
+
+@router.post("/productos/importar", response_class=HTMLResponse)
+async def importar_csv_post(
+    request: Request,
+    archivo: UploadFile = File(...),
+    proveedor_id: int = Form(...),
+):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403)
+
+    contenido = await archivo.read()
+    try:
+        texto = contenido.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        texto = contenido.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(texto))
+    total = importados = actualizados = errores = 0
+    errores_detalle = []
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id FROM proveedores WHERE id = %s", (proveedor_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=400, detail="Proveedor no encontrado")
+
+        for fila in reader:
+            total += 1
+            codigo = (fila.get("codigo") or "").strip()
+            nombre = (fila.get("nombre") or "").strip()
+            if not codigo or not nombre:
+                errores += 1
+                errores_detalle.append(f"Fila {total}: codigo y nombre son obligatorios")
+                continue
+            try:
+                precio = float((fila.get("precio_base") or "0").strip().replace(",", "."))
+            except ValueError:
+                errores += 1
+                errores_detalle.append(f"Fila {total} ({codigo}): precio_base inválido")
+                continue
+
+            aplica_iva = int((fila.get("aplica_iva") or "1").strip() or "1")
+            descripcion = (fila.get("descripcion") or "").strip() or None
+            unidad = (fila.get("unidad_medida") or "").strip() or None
+            clave_sat = (fila.get("clave_sat") or "").strip() or None
+            clave_uni = (fila.get("clave_unidad_sat") or "").strip() or None
+
+            cur.execute("SELECT id FROM productos WHERE codigo = %s", (codigo,))
+            existente = cur.fetchone()
+            if existente:
+                prod_id = existente[0]
+                cur.execute("""
+                    UPDATE productos SET
+                        nombre = %s, descripcion = %s, unidad_medida = %s,
+                        precio_base = %s, aplica_iva = %s,
+                        clave_sat = COALESCE(%s, clave_sat),
+                        clave_unidad_sat = COALESCE(%s, clave_unidad_sat)
+                    WHERE id = %s
+                """, (nombre, descripcion, unidad, precio, aplica_iva,
+                      clave_sat, clave_uni, prod_id))
+                actualizados += 1
+            else:
+                cur.execute("""
+                    INSERT INTO productos
+                        (codigo, nombre, descripcion, unidad_medida,
+                         precio_base, aplica_iva, clave_sat, clave_unidad_sat)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                """, (codigo, nombre, descripcion, unidad,
+                      precio, aplica_iva, clave_sat, clave_uni))
+                prod_id = cur.fetchone()[0]
+                importados += 1
+
+            cur.execute("""
+                INSERT INTO producto_proveedor (producto_id, proveedor_id, es_principal)
+                VALUES (%s, %s, 1)
+                ON CONFLICT (producto_id, proveedor_id) DO NOTHING
+            """, (prod_id, proveedor_id))
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT nombre FROM proveedores WHERE id = %s", (proveedor_id,))
+        prov_nombre = cur.fetchone()[0]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/importar_csv.html",
+        context={
+            "user": user,
+            "proveedores": [],
+            "seccion": "productos",
+            "resultado": {
+                "total": total,
+                "importados": importados,
+                "actualizados": actualizados,
+                "errores": errores,
+                "errores_detalle": errores_detalle[:20],
+                "proveedor": prov_nombre,
+            },
+        },
+    )
 
 
 @router.get("/productos", response_class=HTMLResponse)

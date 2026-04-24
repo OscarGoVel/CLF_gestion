@@ -173,10 +173,13 @@ async def buscar_producto(request: Request, q: str = ""):
                         WHERE h.producto_id = p.id),
                        p.precio_base, 0
                    ) AS precio,
-                   p.stock_actual, p.aplica_iva
+                   p.stock_actual, p.aplica_iva,
+                   prov.nombre AS proveedor_nombre
             FROM productos p
+            LEFT JOIN producto_proveedor pp ON pp.producto_id = p.id AND pp.es_principal = 1
+            LEFT JOIN proveedores prov ON prov.id = pp.proveedor_id
             WHERE p.nombre ILIKE %s OR p.codigo ILIKE %s
-            ORDER BY p.nombre LIMIT 8
+            ORDER BY p.nombre LIMIT 12
             """,
             (f"%{q}%", f"%{q}%"),
         )
@@ -749,6 +752,21 @@ async def cambiar_estado(
             cot_id,
         ))
 
+    # Sincronizar seguimiento_etapas con el nuevo estado
+    _etapa_map = {"Entregada": "Entregada", "Pagada": "Pagada"}
+    if nuevo_estado in _etapa_map:
+        _etapa = _etapa_map[nuevo_estado]
+        _fecha_sync = _date(fecha_entrega) if nuevo_estado == "Entregada" else _date(fecha_pago)
+        with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur2):
+            cur2.execute("""
+                INSERT INTO seguimiento_etapas
+                    (cotizacion_id, etapa, completada, fecha_etapa)
+                VALUES (%s, %s, 1, %s::date)
+                ON CONFLICT (cotizacion_id, etapa) DO UPDATE SET
+                    completada  = 1,
+                    fecha_etapa = COALESCE(EXCLUDED.fecha_etapa, seguimiento_etapas.fecha_etapa)
+            """, (cot_id, _etapa, _fecha_sync))
+
     # Invalidar caché del dashboard (los KPIs habrán cambiado)
     from web_app.cache import cache as _cache
     _cache.invalidar(f"dashboard:{user['empresa_db']}")
@@ -845,6 +863,140 @@ async def registrar_entrega(
         "entrega_parcial",
         username=user.get("username"),
         detalle=f"cotizacion_id={cot_id} producto_id={producto_id} cantidad={cantidad}",
+        ip=request.client.host if request.client else None,
+    )
+
+    from fastapi.responses import Response as _Resp
+    redirect_url = f"/cotizaciones/{cot_id}"
+    if aviso:
+        redirect_url += f"?aviso={aviso}"
+    r = _Resp(status_code=200, content="")
+    r.headers["HX-Redirect"] = redirect_url
+    return r
+
+
+# ── Entrega en lote ──────────────────────────────────────────────────────────
+
+@router.post("/{cot_id}/entregas-lote", response_class=HTMLResponse)
+async def registrar_entregas_lote(request: Request, cot_id: int):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    form = await request.form()
+    fecha_entrega = (form.get("fecha_entrega") or "").strip()
+    notas_global = (form.get("notas") or "").strip() or None
+    producto_ids = form.getlist("producto_ids")
+
+    if not fecha_entrega:
+        raise HTTPException(status_code=400, detail="Fecha de entrega requerida")
+    if not producto_ids:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un producto")
+
+    aviso = None
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404)
+        folio = row[0]
+
+        for pid_str in producto_ids:
+            try:
+                pid = int(pid_str)
+            except ValueError:
+                continue
+            cant_str = (form.get(f"cantidad_{pid}") or "").strip()
+            try:
+                cantidad = float(cant_str)
+                if cantidad <= 0:
+                    continue
+            except (ValueError, TypeError):
+                continue
+
+            cur.execute("""
+                INSERT INTO entregas_parciales
+                    (cotizacion_id, producto_id, cantidad_entregada, fecha_entrega, notas, usuario)
+                VALUES (%s, %s, %s, %s::date, %s, %s)
+            """, (cot_id, pid, cantidad, fecha_entrega, notas_global, user.get("username")))
+
+            cur.execute("""
+                SELECT 1 FROM compra_detalle_cotizacion cdc
+                JOIN compra_detalle cd ON cd.id = cdc.compra_detalle_id
+                WHERE cdc.cotizacion_id = %s AND cd.producto_id = %s
+                LIMIT 1
+            """, (cot_id, pid))
+            tiene_compra = cur.fetchone() is not None
+
+            if not tiene_compra:
+                cur.execute("SELECT COALESCE(stock_actual,0) FROM productos WHERE id = %s", (pid,))
+                srow = cur.fetchone()
+                stock_actual = float(srow[0]) if srow else 0.0
+                if stock_actual <= 0:
+                    aviso = "sin_stock"
+                else:
+                    a_descontar = min(cantidad, stock_actual)
+                    stock_nuevo = stock_actual - a_descontar
+                    cur.execute(
+                        "UPDATE productos SET stock_actual = %s WHERE id = %s",
+                        (stock_nuevo, pid),
+                    )
+                    cur.execute("""
+                        INSERT INTO movimientos_stock
+                            (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues,
+                             referencia, notas, fecha)
+                        VALUES (%s,'salida','Entrega cotización',%s,%s,%s,%s,%s,%s::date)
+                    """, (pid, a_descontar, stock_actual, stock_nuevo,
+                          folio, f"Entrega parcial cotización {folio}", fecha_entrega))
+                    if a_descontar < cantidad and aviso != "sin_stock":
+                        aviso = "stock_parcial"
+
+        # Calcular estado basado en entregas totales vs pedido
+        cur.execute("""
+            SELECT cd.producto_id, cd.cantidad AS pedida,
+                   COALESCE(SUM(ep.cantidad_entregada), 0) AS entregada
+            FROM cotizacion_detalle cd
+            LEFT JOIN entregas_parciales ep
+                ON ep.cotizacion_id = cd.cotizacion_id AND ep.producto_id = cd.producto_id
+            WHERE cd.cotizacion_id = %s AND cd.producto_id IS NOT NULL
+            GROUP BY cd.producto_id, cd.cantidad
+        """, (cot_id,))
+        filas = cur.fetchall()
+        if filas:
+            todos_completos = all(float(f[2]) >= float(f[1]) for f in filas)
+            alguno_entregado = any(float(f[2]) > 0 for f in filas)
+            if todos_completos:
+                nuevo_estado = "Entregada"
+            elif alguno_entregado:
+                nuevo_estado = "Parcialmente Entregada"
+            else:
+                nuevo_estado = None
+
+            if nuevo_estado:
+                cur.execute(
+                    "UPDATE cotizaciones SET estado = %s WHERE id = %s",
+                    (nuevo_estado, cot_id),
+                )
+                if nuevo_estado == "Entregada":
+                    cur.execute("""
+                        INSERT INTO seguimiento_etapas
+                            (cotizacion_id, etapa, completada, fecha_etapa)
+                        VALUES (%s, 'Entregada', 1, %s::date)
+                        ON CONFLICT (cotizacion_id, etapa) DO UPDATE SET
+                            completada = 1,
+                            fecha_etapa = COALESCE(EXCLUDED.fecha_etapa, seguimiento_etapas.fecha_etapa)
+                    """, (cot_id, fecha_entrega))
+                from web_app.cache import cache as _cache
+                _cache.invalidar(f"dashboard:{user['empresa_db']}")
+
+    from web_app import audit as _audit
+    _audit.registrar(
+        "entregas_lote",
+        username=user.get("username"),
+        detalle=f"cotizacion_id={cot_id} productos={producto_ids}",
         ip=request.client.host if request.client else None,
     )
 
@@ -1031,6 +1183,17 @@ async def guardar_etapa_seguimiento(
                     f"UPDATE cotizaciones SET {', '.join(update_parts)} WHERE id = %s",
                     update_vals,
                 )
+        elif etapa_nombre == "Entregada" and es_completada:
+            update_parts, update_vals = ["estado = 'Entregada'"], []
+            if fecha:
+                update_parts.append("fecha_entrega = %s::date"); update_vals.append(fecha)
+            update_vals.append(cot_id)
+            cur.execute(
+                f"UPDATE cotizaciones SET {', '.join(update_parts)} WHERE id = %s",
+                update_vals,
+            )
+            from web_app.cache import cache as _cache
+            _cache.invalidar(f"dashboard:{user['empresa_db']}")
         elif etapa_nombre == "Pagada" and es_completada:
             update_parts, update_vals = ["estado = 'Pagada'"], []
             if fecha:
