@@ -1,0 +1,137 @@
+{# Partial: tabla de estado de cuenta — recargable vía HTMX #}
+
+<div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+  <table class="w-full text-xs" data-sortable>
+    <thead>
+      <tr class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wide">
+        <th class="px-3 py-2.5 text-left font-semibold" data-col="0">Folio</th>
+        <th class="px-3 py-2.5 text-left font-semibold" data-col="1">Fecha</th>
+        <th class="px-3 py-2.5 text-left font-semibold" data-col="2">Cliente</th>
+        <th class="px-3 py-2.5 text-right font-semibold" data-col="3">Total</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="4">Estado</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="5">F. Entrega</th>
+        <th class="px-3 py-2.5 text-right font-semibold" data-col="6">Mto. Entregado</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="7">Orden Compra</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="8">F. O.C.</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="9">N° Factura</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="10">F. Factura</th>
+        <th class="px-3 py-2.5 text-right font-semibold" data-col="11">Mto. Facturado</th>
+        <th class="px-3 py-2.5 text-center font-semibold" data-col="12">F. Pago</th>
+        <th class="px-3 py-2.5 text-right font-semibold" data-col="13">Mto. Pagado</th>
+        <th class="px-3 py-2.5 text-right font-semibold" data-col="14">Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr class="border-b border-gray-100 hover:brightness-95 transition-all {{ f.color_cls }}">
+        <td class="px-3 py-2 font-mono font-semibold text-navy-700 whitespace-nowrap">{{ f.folio }}</td>
+        <td class="px-3 py-2 whitespace-nowrap text-gray-500"
+            data-sort-value="{{ f.fecha | string | truncate(10, True, '') }}">
+          {{ f.fecha | string | truncate(10, True, '') if f.fecha else '—' }}
+        </td>
+        <td class="px-3 py-2 text-gray-700">{{ f.cliente }}</td>
+        <td class="px-3 py-2 text-right font-semibold text-gray-800 whitespace-nowrap"
+            data-sort-value="{{ f.total }}">
+          ${{ '{:,.2f}'.format(f.total or 0) }}
+        </td>
+        <td class="px-3 py-2 text-center whitespace-nowrap">
+          <span class="text-xs font-medium">{{ f.estado_label }}</span>
+        </td>
+        <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap"
+            data-sort-value="{{ f.fecha_entrega | string | truncate(10, True, '') if f.fecha_entrega else '' }}">
+          {{ f.fecha_entrega | string | truncate(10, True, '') if f.fecha_entrega else '—' }}
+        </td>
+        <td class="px-3 py-2 text-right text-gray-600 whitespace-nowrap"
+            data-sort-value="{{ f.monto_entregado or 0 }}">
+          {% if f.monto_entregado %}${{ '{:,.2f}'.format(f.monto_entregado) }}{% else %}—{% endif %}
+        </td>
+        <td class="px-3 py-2 text-center font-mono text-gray-500 whitespace-nowrap">
+          {{ f.orden_compra or '—' }}
+        </td>
+        <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+          {{ f.fecha_orden_compra | string | truncate(10, True, '') if f.fecha_orden_compra else '—' }}
+        </td>
+        <td class="px-3 py-2 text-center font-mono text-gray-500 whitespace-nowrap">
+          {{ f.numero_factura or '—' }}
+        </td>
+        <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+          {{ f.fecha_factura | string | truncate(10, True, '') if f.fecha_factura else '—' }}
+        </td>
+        <td class="px-3 py-2 text-right text-gray-600 whitespace-nowrap"
+            data-sort-value="{{ f.monto_facturado or 0 }}">
+          {% if f.monto_facturado %}${{ '{:,.2f}'.format(f.monto_facturado) }}{% else %}—{% endif %}
+        </td>
+        <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+          {{ f.fecha_pago | string | truncate(10, True, '') if f.fecha_pago else '—' }}
+        </td>
+        <td class="px-3 py-2 text-right text-gray-600 whitespace-nowrap"
+            data-sort-value="{{ f.monto_pagado or 0 }}">
+          {% if f.monto_pagado %}${{ '{:,.2f}'.format(f.monto_pagado) }}{% else %}—{% endif %}
+        </td>
+        <td class="px-3 py-2 text-right font-bold whitespace-nowrap
+                   {{ 'text-red-600' if f.saldo > 0.01 else 'text-green-600' }}"
+            data-sort-value="{{ f.saldo }}">
+          ${{ '{:,.2f}'.format(f.saldo) }}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="15" class="px-4 py-12 text-center text-gray-400">
+          <div class="text-3xl mb-2">📊</div>
+          No hay pedidos para los filtros seleccionados.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Resumen en dos secciones -->
+<div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3 px-1">
+
+  {# Sección 1 — Monto solicitado #}
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+      Monto solicitado en el período
+    </p>
+    <div class="flex items-center gap-6">
+      <div>
+        <p class="text-xs text-gray-400">Pedidos (excl. cancelados)</p>
+        <p class="text-xl font-bold text-gray-800">{{ totales.sol_n }}</p>
+      </div>
+      <div>
+        <p class="text-xs text-gray-400">Valor total solicitado</p>
+        <p class="text-xl font-bold text-gray-800">${{ '{:,.2f}'.format(totales.sol_total) }}</p>
+      </div>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">
+      Incluye cotizaciones Pendientes de confirmación y todas las activas.
+    </p>
+  </div>
+
+  {# Sección 2 — Balance del período #}
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+      Balance del período
+    </p>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-gray-500">Monto comprometido
+          <span class="text-gray-400">(Programada o superior)</span>
+        </span>
+        <span class="font-semibold text-gray-800">${{ '{:,.2f}'.format(totales.comprometido) }}</span>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-gray-500">Monto pagado</span>
+        <span class="font-semibold text-green-700">${{ '{:,.2f}'.format(totales.cobrado) }}</span>
+      </div>
+      <div class="border-t border-gray-100 pt-2 flex items-center justify-between">
+        <span class="text-xs font-bold text-amber-700">Saldo pendiente de pago</span>
+        <span class="text-base font-bold {{ 'text-red-600' if totales.saldo > 0.01 else 'text-green-600' }}">
+          ${{ '{:,.2f}'.format(totales.saldo) }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -153,12 +153,16 @@ def generar_pdf_cotizacion(empresa_db: str, cotizacion_id: int) -> bytes:
 
         cur.execute(
             """
-            SELECT p.codigo, p.nombre, cd.cantidad, p.unidad_medida,
-                   cd.precio_unitario, cd.subtotal, p.aplica_iva
+            SELECT COALESCE(p.codigo, '') AS codigo,
+                   COALESCE(p.nombre, cd.descripcion_libre, '') AS nombre,
+                   cd.cantidad,
+                   COALESCE(p.unidad_medida, '') AS unidad_medida,
+                   cd.precio_unitario, cd.subtotal,
+                   COALESCE(p.aplica_iva, 0) AS aplica_iva
             FROM cotizacion_detalle cd
-            JOIN productos p ON cd.producto_id = p.id
+            LEFT JOIN productos p ON cd.producto_id = p.id
             WHERE cd.cotizacion_id = %s
-            ORDER BY p.aplica_iva ASC
+            ORDER BY cd.id
             """,
             (cotizacion_id,),
         )

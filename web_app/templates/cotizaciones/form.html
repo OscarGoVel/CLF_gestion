@@ -63,6 +63,21 @@
                     </select>
                 </div>
 
+                <!-- Comprador -->
+                <div>
+                    <label class="text-xs text-gray-500 font-medium mb-1 block" for="comprador_id">
+                        Comprador
+                    </label>
+                    <select name="comprador_id" id="comprador_id"
+                            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50
+                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:bg-white transition">
+                        <option value="">— Sin comprador específico —</option>
+                        {% if cot and cot.comprador_id %}
+                        <option value="{{ cot.comprador_id }}" selected>{{ cot.comprador_nombre or 'Comprador #' ~ cot.comprador_id }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+
                 <!-- Fecha -->
                 <div>
                     <label class="text-xs text-gray-500 font-medium mb-1 block" for="fecha">
@@ -147,6 +162,61 @@
                                   focus:bg-white transition">
                     <div id="sugerencias-prod" class="relative"></div>
                 </div>
+                <button type="button" onclick="toggleLineaLibre()"
+                        class="mt-2 text-xs font-semibold text-amber-600 hover:text-amber-800 transition-colors">
+                    ➕ Agregar línea sin catálogo
+                </button>
+            </div>
+
+            <!-- Mini-form línea libre (oculto por default) -->
+            <div id="panel-linea-libre" class="hidden px-5 py-3 bg-amber-50 border-b border-amber-200">
+                <p class="text-xs font-semibold text-amber-700 mb-2">Nueva línea sin catálogo
+                    <span class="font-normal text-amber-600">— el admin recibirá una alerta para catalogarla después</span>
+                </p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                    <div class="md:col-span-2">
+                        <label class="text-xs text-gray-500 mb-0.5 block">Descripción *</label>
+                        <input type="text" id="ll-desc"
+                               placeholder="Describe el producto o servicio"
+                               class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white
+                                      focus:outline-none focus:ring-2 focus:ring-amber-400 transition">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-0.5 block">Unidad</label>
+                        <input type="text" id="ll-unidad" placeholder="PZA, KG, …"
+                               class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white
+                                      focus:outline-none focus:ring-2 focus:ring-amber-400 transition">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-0.5 block">Cantidad</label>
+                        <input type="number" id="ll-cant" value="1" min="0.01" step="0.01"
+                               class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white
+                                      focus:outline-none focus:ring-2 focus:ring-amber-400 transition text-right">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-0.5 block">Precio unitario</label>
+                        <input type="number" id="ll-precio" value="0" min="0" step="0.01"
+                               class="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white
+                                      focus:outline-none focus:ring-2 focus:ring-amber-400 transition text-right">
+                    </div>
+                    <div class="flex items-end pb-0.5">
+                        <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" id="ll-iva" class="w-4 h-4 accent-amber-500">
+                            <span class="text-sm text-gray-600">IVA 16%</span>
+                        </label>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button type="button" onclick="agregarLineaLibre()"
+                                class="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-sm
+                                       font-semibold rounded-lg transition-colors">
+                            Agregar
+                        </button>
+                        <button type="button" onclick="toggleLineaLibre()"
+                                class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Tabla de productos -->
@@ -210,14 +280,16 @@ let productos = [];
 // Inicializar con productos existentes (modo editar)
 {% if productos_existentes %}
 productos = {{ productos_existentes | tojson }}.map(p => ({
-    producto_id:     p.producto_id,
-    nombre:          p.nombre,
-    codigo:          p.codigo || '',
-    cantidad:        parseFloat(p.cantidad) || 1,
-    precio_unitario: parseFloat(p.precio_unitario) || 0,
-    costo_base:      parseFloat(p.costo_base) || 0,
-    unidad_medida:   p.unidad_medida || '',
-    aplica_iva:      !!p.aplica_iva
+    producto_id:      p.producto_id || null,
+    nombre:           p.nombre,
+    codigo:           p.codigo || '',
+    cantidad:         parseFloat(p.cantidad) || 1,
+    precio_unitario:  parseFloat(p.precio_unitario) || 0,
+    costo_base:       parseFloat(p.costo_base) || 0,
+    unidad_medida:    p.unidad_medida || '',
+    aplica_iva:       !!p.aplica_iva,
+    descripcion_libre: p.descripcion_libre || null,
+    es_libre:         !!p.pendiente_catalogo
 }));
 {% endif %}
 
@@ -271,13 +343,19 @@ function renderTabla() {
     productos.forEach((p, i) => {
         const tr = document.createElement('tr');
         tr.id = 'prod-row-' + i;
-        tr.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
+        tr.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors' + (p.es_libre ? ' bg-amber-50' : '');
+        const badgeLibre = p.es_libre
+            ? '<span class="ml-1 px-1.5 py-0 bg-amber-100 text-amber-700 rounded text-[10px] font-semibold">Sin catálogo</span>'
+            : '';
+        const badgeIva = p.aplica_iva
+            ? '<span class="ml-1 px-1 py-0 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">IVA 16%</span>'
+            : '';
         tr.innerHTML = `
             <td class="px-4 py-3">
-                <p class="text-sm text-gray-800 font-medium">${escHtml(p.nombre)}</p>
+                <p class="text-sm text-gray-800 font-medium">${escHtml(p.nombre)}${badgeLibre}</p>
                 <p class="text-xs text-gray-400">
-                    ${p.codigo ? escHtml(p.codigo) + ' · ' : ''}${p.unidad_medida || ''}
-                    ${p.aplica_iva ? '<span class="ml-1 px-1 py-0 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">IVA 16%</span>' : ''}
+                    ${!p.es_libre && p.codigo ? escHtml(p.codigo) + ' · ' : ''}${p.unidad_medida || ''}
+                    ${badgeIva}
                 </p>
             </td>
             <td class="px-4 py-3 text-center">
@@ -345,19 +423,63 @@ function seleccionarProductoCot(id, nombre, costoBase, codigo, unidad, aplicaIva
         productos[existente].cantidad += 1;
     } else {
         productos.push({
-            producto_id:     id,
-            nombre:          nombre,
-            codigo:          codigo || '',
-            cantidad:        1,
-            precio_unitario: precioConUtilidad(costoBase),
-            costo_base:      costoBase || 0,
-            unidad_medida:   unidad || '',
-            aplica_iva:      !!aplicaIva
+            producto_id:      id,
+            nombre:           nombre,
+            codigo:           codigo || '',
+            cantidad:         1,
+            precio_unitario:  precioConUtilidad(costoBase),
+            costo_base:       costoBase || 0,
+            unidad_medida:    unidad || '',
+            aplica_iva:       !!aplicaIva,
+            descripcion_libre: null,
+            es_libre:         false
         });
     }
     renderTabla();
     document.getElementById('buscar-prod').value = '';
     document.getElementById('sugerencias-prod').innerHTML = '';
+}
+
+// ── Línea libre ────────────────────────────────────────────────────────────
+function toggleLineaLibre() {
+    const panel = document.getElementById('panel-linea-libre');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        document.getElementById('ll-desc').focus();
+    }
+}
+
+function agregarLineaLibre() {
+    const desc   = document.getElementById('ll-desc').value.trim();
+    const unidad = document.getElementById('ll-unidad').value.trim();
+    const cant   = parseFloat(document.getElementById('ll-cant').value) || 1;
+    const precio = parseFloat(document.getElementById('ll-precio').value) || 0;
+    const iva    = document.getElementById('ll-iva').checked;
+
+    if (!desc) { document.getElementById('ll-desc').focus(); return; }
+
+    productos.push({
+        producto_id:      null,
+        nombre:           desc,
+        codigo:           '',
+        cantidad:         cant,
+        precio_unitario:  precio,
+        costo_base:       0,
+        unidad_medida:    unidad,
+        aplica_iva:       iva,
+        descripcion_libre: desc,
+        es_libre:         true
+    });
+
+    // limpiar form
+    document.getElementById('ll-desc').value   = '';
+    document.getElementById('ll-unidad').value  = '';
+    document.getElementById('ll-cant').value    = '1';
+    document.getElementById('ll-precio').value  = '0';
+    document.getElementById('ll-iva').checked   = false;
+    document.getElementById('panel-linea-libre').classList.add('hidden');
+
+    renderTabla();
 }
 
 // ── Autocomplete de producto ───────────────────────────────────────────────
@@ -402,6 +524,32 @@ document.getElementById('form-cotizacion').addEventListener('submit', function (
 
 // ── Inicializar ────────────────────────────────────────────────────────────
 renderTabla();
+
+// ── Compradores: cargar según cliente ──────────────────────────────────────
+const clienteSelect   = document.getElementById('cliente_id');
+const compradorSelect = document.getElementById('comprador_id');
+const compradorActual = {{ (cot.comprador_id if cot and cot.comprador_id else 0) | tojson }};
+
+async function cargarCompradores(clienteId) {
+    compradorSelect.innerHTML = '<option value="">— Sin comprador específico —</option>';
+    if (!clienteId) return;
+    try {
+        const resp = await fetch(`/catalogos/clientes/${clienteId}/compradores`);
+        const lista = await resp.json();
+        lista.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nombre + (c.cargo ? ` — ${c.cargo}` : '');
+            if (c.id === compradorActual) opt.selected = true;
+            compradorSelect.appendChild(opt);
+        });
+    } catch (e) { /* silencioso */ }
+}
+
+clienteSelect.addEventListener('change', () => cargarCompradores(clienteSelect.value));
+
+// Cargar compradores del cliente actual al iniciar (modo editar)
+if (clienteSelect.value) cargarCompradores(clienteSelect.value);
 </script>
 
 {% endblock %}

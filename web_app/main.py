@@ -38,6 +38,7 @@ from web_app.routers import admin as admin_router
 from web_app.routers import preinventario as preinventario_router
 from web_app.routers import estudio_mercado as estudio_mercado_router
 from web_app.routers import compras as compras_router
+from web_app.routers import estado_cuenta as estado_cuenta_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -78,6 +79,24 @@ async def lifespan(app: FastAPI):
             fecha_registro    TIMESTAMPTZ DEFAULT NOW()
         )
         """,
+        # Compradores: múltiples contactos de compra por cliente
+        """
+        CREATE TABLE IF NOT EXISTS compradores (
+            id             SERIAL PRIMARY KEY,
+            cliente_id     INTEGER NOT NULL REFERENCES clientes(id),
+            nombre         TEXT NOT NULL,
+            cargo          TEXT,
+            telefono       TEXT,
+            email          TEXT,
+            activo         BOOLEAN DEFAULT TRUE,
+            fecha_registro TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS comprador_id INTEGER REFERENCES compradores(id)",
+        # Línea libre en cotización (sin producto del catálogo)
+        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS descripcion_libre TEXT",
+        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS pendiente_catalogo BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE cotizacion_detalle ALTER COLUMN producto_id DROP NOT NULL",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -177,6 +196,7 @@ app.include_router(admin_router.router)
 app.include_router(preinventario_router.router)
 app.include_router(estudio_mercado_router.router)
 app.include_router(compras_router.router)
+app.include_router(estado_cuenta_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────

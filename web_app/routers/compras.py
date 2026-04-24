@@ -11,7 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa
@@ -466,6 +466,76 @@ async def crear(
             )
 
     return RedirectResponse(f"/compras/{compra_id}", status_code=303)
+
+
+# ── Presupuesto de compra: selección de pedidos ───────────────────────────────
+
+@router.get("/presupuesto", response_class=HTMLResponse)
+async def presupuesto_seleccion(request: Request):
+    user = get_usuario_actual(request)
+    if not user:
+        return RedirectResponse("/")
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            """
+            SELECT c.id, c.folio,
+                   COALESCE(cl.nombre_comercial, '— sin cliente —') AS cliente,
+                   c.fecha_entrega,
+                   COUNT(cd.id) AS productos_faltantes
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            JOIN productos p ON p.id = cd.producto_id
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.estado = 'Programada'
+              AND COALESCE(p.stock_actual, 0) < cd.cantidad
+            GROUP BY c.id, c.folio, cl.nombre_comercial, c.fecha_entrega
+            ORDER BY c.fecha_entrega ASC NULLS LAST
+            """,
+        )
+        cols = [d[0] for d in cur.description]
+        pedidos = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="compras/presupuesto.html",
+        context={"user": user, "pedidos": pedidos},
+    )
+
+
+@router.post("/presupuesto/generar")
+async def presupuesto_generar(request: Request):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    form = await request.form()
+    ids_raw = form.getlist("cotizacion_ids")
+    if not ids_raw:
+        raise HTTPException(status_code=400, detail="Seleccione al menos un pedido")
+
+    try:
+        cotizacion_ids = [int(i) for i in ids_raw]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="IDs inválidos")
+
+    from web_app.pdf_presupuesto_compra import generar_pdf_presupuesto_compra
+    try:
+        pdf_bytes = generar_pdf_presupuesto_compra(user["empresa_db"], cotizacion_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    from datetime import date as _date
+    filename = f"PresupuestoCompra_{_date.today().isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Detalle compra ────────────────────────────────────────────────────────────

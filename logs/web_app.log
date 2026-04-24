@@ -1,26 +1,220 @@
-2026-04-17 12:17:26 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-04-17 12:17:27 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-04-17 12:18:12 | WARNING  | clf.db | SLOW QUERY [clf_usuarios] 2112ms
-2026-04-17 12:18:13 | WARNING  | clf.request | SLOW POST /auth/login -> 302 en 2626ms
-2026-04-17 12:20:41 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-04-17 12:20:41 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
-2026-04-17 13:43:56 | ERROR    | asyncio | Task exception was never retrieved
-future: <Task finished name='Task-494' coro=<IocpProactor.accept.<locals>.accept_coro() done, defined at C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:564> exception=OSError(22, 'El nombre de red especificado ya no está disponible', None, 64, None)>
+2026-04-24 10:13:49 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-04-24 10:13:49 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+2026-04-24 10:29:29 | ERROR    | clf.error | 500 GET /cotizaciones/99 — DatatypeMismatch('los tipos integer y boolean no son coincidentes en COALESCE\nLINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...\n                                                  ^\n')
 Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 567, in accept_coro
-    await future
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
-    value = callback(transferred, key, ov)
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 556, in finish_accept
-    ov.getresult()
-    ~~~~~~~~~~~~^^
-OSError: [WinError 64] El nombre de red especificado ya no está disponible
-2026-04-17 13:43:56 | ERROR    | asyncio | Accept failed on a socket
-socket: <asyncio.TransportSocket fd=860, family=2, type=1, proto=6, laddr=('0.0.0.0', 8443)>
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\main.py", line 162, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\routers\cotizaciones.py", line 395, in detalle
+    cur.execute("""
+    ~~~~~~~~~~~^^^^
+        SELECT cd.id,
+        ^^^^^^^^^^^^^
+    ...<12 lines>...
+        ORDER BY cd.id
+        ^^^^^^^^^^^^^^
+    """, (cot_id,))
+    ^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\database.py", line 97, in execute
+    self._c.execute(sql, params) if params else self._c.execute(sql)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.DatatypeMismatch: los tipos integer y boolean no son coincidentes en COALESCE
+LINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...
+                                                  ^
+
+
+2026-04-24 10:29:39 | ERROR    | clf.error | 500 GET /cotizaciones/96 — DatatypeMismatch('los tipos integer y boolean no son coincidentes en COALESCE\nLINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...\n                                                  ^\n')
 Traceback (most recent call last):
-  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 845, in loop
-    conn, addr = f.result()
-                 ~~~~~~~~^^
-OSError: [WinError 64] El nombre de red especificado ya no está disponible
-2026-04-17 13:44:45 | INFO     | clf.startup | Iniciando CLF Gestion Web...
-2026-04-17 13:44:46 | INFO     | clf.startup | Pools de conexion PostgreSQL listos
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\main.py", line 162, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\routers\cotizaciones.py", line 395, in detalle
+    cur.execute("""
+    ~~~~~~~~~~~^^^^
+        SELECT cd.id,
+        ^^^^^^^^^^^^^
+    ...<12 lines>...
+        ORDER BY cd.id
+        ^^^^^^^^^^^^^^
+    """, (cot_id,))
+    ^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\database.py", line 97, in execute
+    self._c.execute(sql, params) if params else self._c.execute(sql)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.DatatypeMismatch: los tipos integer y boolean no son coincidentes en COALESCE
+LINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...
+                                                  ^
+
+
+2026-04-24 10:31:49 | ERROR    | clf.error | 500 GET /cotizaciones/99 — DatatypeMismatch('los tipos integer y boolean no son coincidentes en COALESCE\nLINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...\n                                                  ^\n')
+Traceback (most recent call last):
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\main.py", line 162, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\oscar\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\routers\cotizaciones.py", line 395, in detalle
+    cur.execute("""
+    ~~~~~~~~~~~^^^^
+        SELECT cd.id,
+        ^^^^^^^^^^^^^
+    ...<12 lines>...
+        ORDER BY cd.id
+        ^^^^^^^^^^^^^^
+    """, (cot_id,))
+    ^^^^^^^^^^^^^^^
+  File "C:\Users\oscar\OneDrive\Documentos\CLF Sistema\Gestion-CLF\web_app\database.py", line 97, in execute
+    self._c.execute(sql, params) if params else self._c.execute(sql)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+psycopg2.errors.DatatypeMismatch: los tipos integer y boolean no son coincidentes en COALESCE
+LINE 9:                    COALESCE(p.aplica_iva, FALSE) AS aplica_i...
+                                                  ^
+
+
+2026-04-24 10:32:00 | INFO     | clf.startup | Iniciando CLF Gestion Web...
+2026-04-24 10:32:00 | INFO     | clf.startup | Pools de conexion PostgreSQL listos

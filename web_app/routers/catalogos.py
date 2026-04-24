@@ -210,6 +210,14 @@ async def detalle_cliente(request: Request, cliente_id: int, msg: str = ""):
             "pendientes":  stats_row[3],
         }
 
+        cur.execute(
+            "SELECT id, nombre, cargo, telefono, email FROM compradores "
+            "WHERE cliente_id = %s AND activo = TRUE ORDER BY nombre",
+            (cliente_id,),
+        )
+        comp_cols = [d[0] for d in cur.description]
+        compradores = [dict(zip(comp_cols, r)) for r in cur.fetchall()]
+
     from core.constants import ESTADO_COLOR_CSS as ESTADO_COLOR
     return templates.TemplateResponse(
         request=request,
@@ -217,6 +225,7 @@ async def detalle_cliente(request: Request, cliente_id: int, msg: str = ""):
         context={
             "user": user, "cliente": cliente,
             "cotizaciones": cotizaciones, "stats": stats,
+            "compradores": compradores,
             "tipo_color": TIPO_CLIENTE_COLOR,
             "estado_color": ESTADO_COLOR,
             "seccion": "clientes",
@@ -351,6 +360,102 @@ async def reactivar_cliente(
     audit.registrar("cliente_reactivado", username=user.get("username"),
                     detalle=f"id={cliente_id} nombre={nombre}",
                     ip=request.client.host if request.client else None)
+    return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PENDIENTES DE CATALOGAR
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/pendientes-catalogo", response_class=HTMLResponse)
+async def pendientes_catalogo(
+    request: Request,
+    user=Depends(require_rol("Administrador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT cd.id, cd.descripcion_libre, cd.cantidad, cd.precio_unitario,
+                   c.id AS cot_id, c.folio, c.fecha,
+                   cl.nombre_comercial AS cliente
+            FROM cotizacion_detalle cd
+            JOIN cotizaciones c ON c.id = cd.cotizacion_id
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE cd.pendiente_catalogo = TRUE
+            ORDER BY c.fecha DESC, c.id DESC
+        """)
+        cols = [d[0] for d in cur.description]
+        pendientes = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogos/pendientes_catalogo.html",
+        context={"user": user, "pendientes": pendientes, "seccion": "pendientes"},
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPRADORES
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/clientes/{cliente_id}/compradores")
+async def listar_compradores(
+    request: Request,
+    cliente_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    from fastapi.responses import JSONResponse as _JSON
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "SELECT id, nombre, cargo, telefono, email, activo "
+            "FROM compradores WHERE cliente_id = %s AND activo = TRUE ORDER BY nombre",
+            (cliente_id,),
+        )
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    return _JSON(rows)
+
+
+@router.post("/clientes/{cliente_id}/compradores", response_class=HTMLResponse)
+async def crear_comprador(
+    request: Request,
+    cliente_id: int,
+    nombre:   str = Form(...),
+    cargo:    str = Form(""),
+    telefono: str = Form(""),
+    email:    str = Form(""),
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    nombre = nombre.strip()
+    if not nombre:
+        raise HTTPException(400, "Nombre requerido")
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "SELECT id FROM clientes WHERE id = %s", (cliente_id,)
+        )
+        if not cur.fetchone():
+            raise HTTPException(404, "Cliente no encontrado")
+        cur.execute(
+            "INSERT INTO compradores (cliente_id, nombre, cargo, telefono, email) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (cliente_id, nombre, cargo.strip() or None,
+             telefono.strip() or None, email.strip() or None),
+        )
+    return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
+
+
+@router.post("/clientes/{cliente_id}/compradores/{comp_id}/eliminar", response_class=HTMLResponse)
+async def eliminar_comprador(
+    request: Request,
+    cliente_id: int,
+    comp_id: int,
+    user=Depends(require_rol("Administrador", "Operador")),
+):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "UPDATE compradores SET activo = FALSE "
+            "WHERE id = %s AND cliente_id = %s",
+            (comp_id, cliente_id),
+        )
     return RedirectResponse(f"/catalogos/clientes/{cliente_id}", status_code=303)
 
 

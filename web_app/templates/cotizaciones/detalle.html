@@ -198,7 +198,7 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-100">
 
                 <!-- Cliente -->
-                <div class="md:col-span-2">
+                <div class="{% if cot.comprador_nombre %}{% else %}md:col-span-2{% endif %}">
                     <p class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Cliente</p>
                     <p class="text-sm font-bold text-gray-800">{{ cot.cliente }}</p>
                     {% if cot.tipo_cliente %}
@@ -211,6 +211,23 @@
                     <p class="text-xs text-gray-400">{{ cot.cliente_email }}</p>
                     {% endif %}
                 </div>
+
+                {% if cot.comprador_nombre %}
+                <!-- Comprador -->
+                <div>
+                    <p class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Comprador</p>
+                    <p class="text-sm font-semibold text-gray-800">{{ cot.comprador_nombre }}</p>
+                    {% if cot.comprador_cargo %}
+                    <p class="text-xs text-gray-500">{{ cot.comprador_cargo }}</p>
+                    {% endif %}
+                    {% if cot.comprador_tel %}
+                    <p class="text-xs text-gray-400">{{ cot.comprador_tel }}</p>
+                    {% endif %}
+                    {% if cot.comprador_email %}
+                    <p class="text-xs text-gray-400">{{ cot.comprador_email }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <!-- Totales -->
                 {% if user.rol != 'Solo lectura' %}
@@ -262,6 +279,85 @@
         </div>
     </div>
 
+    <!-- ── Panel de estado por área (visible desde Programada) ─────────────── -->
+    {% if cot.estado in ('Programada', 'Entregada', 'Pagada') %}
+
+    {# Derivar estado logístico #}
+    {% if cot.estado in ('Entregada', 'Pagada') %}
+      {% set log_label = 'Entregado' %}
+      {% set log_bg = 'bg-green-50' %}{% set log_border = 'border-green-300' %}{% set log_dot = 'bg-green-500' %}{% set log_txt = 'text-green-700' %}
+    {% elif entregas %}
+      {% set log_label = 'En proceso' %}
+      {% set log_bg = 'bg-amber-50' %}{% set log_border = 'border-amber-300' %}{% set log_dot = 'bg-amber-500' %}{% set log_txt = 'text-amber-700' %}
+    {% else %}
+      {% set log_label = 'Pendiente de entrega' %}
+      {% set log_bg = 'bg-blue-50' %}{% set log_border = 'border-blue-200' %}{% set log_dot = 'bg-blue-300' %}{% set log_txt = 'text-blue-700' %}
+    {% endif %}
+
+    {# Derivar estado administrativo #}
+    {% if cot.monto_pagado %}
+      {% set adm_label = 'Pagada' %}
+      {% set adm_bg = 'bg-emerald-50' %}{% set adm_border = 'border-emerald-300' %}{% set adm_dot = 'bg-emerald-500' %}{% set adm_txt = 'text-emerald-700' %}
+    {% elif cot.numero_factura %}
+      {% set adm_label = 'Facturada' %}
+      {% set adm_bg = 'bg-cyan-50' %}{% set adm_border = 'border-cyan-300' %}{% set adm_dot = 'bg-cyan-500' %}{% set adm_txt = 'text-cyan-700' %}
+    {% elif cot.orden_compra %}
+      {% set adm_label = 'OC recibida' %}
+      {% set adm_bg = 'bg-purple-50' %}{% set adm_border = 'border-purple-300' %}{% set adm_dot = 'bg-purple-500' %}{% set adm_txt = 'text-purple-700' %}
+    {% else %}
+      {% set adm_label = 'Pendiente de OC' %}
+      {% set adm_bg = 'bg-gray-50' %}{% set adm_border = 'border-gray-200' %}{% set adm_dot = 'bg-gray-300' %}{% set adm_txt = 'text-gray-500' %}
+    {% endif %}
+
+    <div class="grid grid-cols-3 gap-3 mb-4">
+
+      {# Comercial #}
+      <div class="bg-white rounded-xl border border-gray-200 px-4 py-3 shadow-sm">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">📋 Comercial</p>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full shrink-0
+            {% if cot.estado == 'Programada' %}bg-purple-500
+            {% elif cot.estado in ('Entregada','Pagada') %}bg-green-500
+            {% else %}bg-gray-300{% endif %}"></span>
+          <span class="text-sm font-semibold
+            {% if cot.estado == 'Programada' %}text-purple-700
+            {% elif cot.estado in ('Entregada','Pagada') %}text-green-700
+            {% else %}text-gray-500{% endif %}">
+            {{ cot.estado }}
+          </span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Cliente confirmó el pedido</p>
+      </div>
+
+      {# Logístico #}
+      <div class="{{ log_bg }} rounded-xl border {{ log_border }} px-4 py-3 shadow-sm">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">🚚 Logístico</p>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full shrink-0 {{ log_dot }}"></span>
+          <span class="text-sm font-semibold {{ log_txt }}">{{ log_label }}</span>
+        </div>
+        {% if entregas %}
+        <p class="text-xs text-gray-500 mt-1">{{ entregas|length }} entrega(s) registrada(s)</p>
+        {% else %}
+        <p class="text-xs text-gray-400 mt-1">Stock y entregas pendientes</p>
+        {% endif %}
+      </div>
+
+      {# Administrativo #}
+      <div class="{{ adm_bg }} rounded-xl border {{ adm_border }} px-4 py-3 shadow-sm">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">💼 Administrativo</p>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full shrink-0 {{ adm_dot }}"></span>
+          <span class="text-sm font-semibold {{ adm_txt }}">{{ adm_label }}</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">
+          {% if cot.orden_compra %}OC: {{ cot.orden_compra }}{% else %}OC, factura y pago{% endif %}
+        </p>
+      </div>
+
+    </div>
+    {% endif %}
+
     <!-- ── Tabla de productos ──────────────────────────────────────────────── -->
     <div class="bg-white rounded-xl shadow-sm overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -289,8 +385,14 @@
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     {% for p in productos %}
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">{{ p.codigo or '—' }}</td>
+                    <tr class="hover:bg-gray-50 transition-colors {% if p.pendiente_catalogo %}bg-amber-50{% endif %}">
+                        <td class="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">
+                            {% if p.pendiente_catalogo %}
+                            <span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-semibold">Sin catálogo</span>
+                            {% else %}
+                            {{ p.codigo or '—' }}
+                            {% endif %}
+                        </td>
                         <td class="px-4 py-3 text-sm text-gray-700 max-w-xs">
                             <span title="{{ p.nombre }}">
                                 {{ p.nombre[:80] }}{% if p.nombre|length > 80 %}…{% endif %}

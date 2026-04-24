@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Presupuesto de Compra — CLF Gestión{% endblock %}
+
+{% block body %}
+<nav class="bg-navy-700 border-b border-navy-500 h-10 flex items-center select-none">
+    <div class="bg-navy-900 flex items-center h-full px-5 shrink-0">
+        <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ GESTIÓN</span>
+    </div>
+    <div class="w-px bg-navy-900 h-full"></div>
+    <div class="flex items-center h-full flex-1 overflow-x-auto">
+        <a href="/dashboard" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📊 Dashboard</a>
+        <a href="/cotizaciones" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📄 Cotizaciones</a>
+        <a href="/compras" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">🛒 Compras</a>
+        <span class="px-4 h-full flex items-center text-xs font-bold bg-white text-navy-700 shrink-0">📋 Presupuesto de Compra</span>
+        <a href="/catalogos" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📚 Catálogos</a>
+        <a href="/stock" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📦 Stock</a>
+        {% if user.rol not in ('Almacenista',) %}
+        <a href="/analisis" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
+        {% endif %}
+        {% if user.rol == 'Administrador' %}
+        <a href="/estado-cuenta" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📋 Estado de Cta.</a>
+        {% endif %}
+    </div>
+    <div class="flex items-center h-full px-4 gap-4 shrink-0">
+        <div class="w-px bg-navy-500 h-5"></div>
+        <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
+        <span class="text-xs text-navy-300 hidden sm:inline">· {{ user.empresa_nombre }}</span>
+        <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
+    </div>
+</nav>
+
+<main class="p-5 max-w-5xl mx-auto">
+
+    <!-- Encabezado -->
+    <div class="mb-5">
+        <h1 class="text-lg font-bold text-gray-800">Presupuesto de Compra</h1>
+        <p class="text-xs text-gray-400 mt-0.5">
+            Selecciona los pedidos programados con faltante de stock para generar el PDF de solicitud
+            al departamento de control presupuestal.
+        </p>
+    </div>
+
+    {% if not pedidos %}
+    <!-- Sin pedidos con faltante -->
+    <div class="bg-white rounded-2xl shadow-sm p-10 text-center">
+        <div class="text-4xl mb-3">✅</div>
+        <p class="text-gray-600 font-semibold">No hay pedidos programados con faltante de stock.</p>
+        <p class="text-sm text-gray-400 mt-1">Todos los pedidos en estado "Programada" tienen stock suficiente.</p>
+        <a href="/compras" class="mt-4 inline-block px-4 py-2 bg-navy-600 hover:bg-navy-700 text-white text-sm rounded-xl transition-colors">
+            ← Volver a Compras
+        </a>
+    </div>
+
+    {% else %}
+    <!-- Formulario de selección -->
+    <form id="form-presupuesto" method="POST" action="/compras/presupuesto/generar">
+
+        <!-- Controles superiores -->
+        <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+                <button type="button" id="btn-todos"
+                        onclick="toggleTodos(true)"
+                        class="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
+                    Seleccionar todos
+                </button>
+                <button type="button"
+                        onclick="toggleTodos(false)"
+                        class="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors">
+                    Deseleccionar todos
+                </button>
+                <span class="text-xs text-gray-400" id="contador">
+                    <span id="n-sel">0</span> de {{ pedidos|length }} seleccionados
+                </span>
+            </div>
+            <button type="submit" id="btn-generar"
+                    disabled
+                    class="px-5 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-sm font-bold rounded-xl shadow-sm transition-colors
+                           disabled:opacity-40 disabled:cursor-not-allowed">
+                📄 Generar PDF
+            </button>
+        </div>
+
+        <!-- Tabla de pedidos -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100">
+                        <th class="px-4 py-3 w-10">
+                            <input type="checkbox" id="chk-master" onchange="masterCheck(this)"
+                                   class="w-4 h-4 accent-clf-green cursor-pointer">
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Folio</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha Entrega</th>
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Productos con faltante</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pedidos %}
+                    <tr class="border-b border-gray-100 hover:bg-amber-50 transition-colors cursor-pointer"
+                        onclick="toggleRow({{ p.id }})">
+                        <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
+                            <input type="checkbox" name="cotizacion_ids" value="{{ p.id }}"
+                                   id="chk-{{ p.id }}" onchange="actualizarContador()"
+                                   class="w-4 h-4 accent-clf-green cursor-pointer">
+                        </td>
+                        <td class="px-4 py-3 font-mono text-xs font-semibold text-navy-700">{{ p.folio }}</td>
+                        <td class="px-4 py-3 text-gray-700">{{ p.cliente }}</td>
+                        <td class="px-4 py-3 text-center text-gray-500 text-xs">
+                            {% if p.fecha_entrega %}
+                                {{ p.fecha_entrega | string | truncate(10, True, '') }}
+                            {% else %}
+                                <span class="text-gray-300">— sin fecha —</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
+                                         bg-red-100 text-red-700">
+                                {{ p.productos_faltantes }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Nota informativa -->
+        <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+            <strong>Nota:</strong> El PDF usará el precio mínimo histórico registrado por producto
+            para estimar el monto total de compra. Si un producto no tiene historial de precios,
+            aparecerá sin precio unitario estimado.
+        </div>
+
+    </form>
+    {% endif %}
+
+</main>
+
+<script>
+function actualizarContador() {
+    const checks = document.querySelectorAll('input[name="cotizacion_ids"]');
+    const sel = Array.from(checks).filter(c => c.checked).length;
+    document.getElementById('n-sel').textContent = sel;
+    document.getElementById('btn-generar').disabled = sel === 0;
+
+    const master = document.getElementById('chk-master');
+    if (master) {
+        master.checked = sel === checks.length;
+        master.indeterminate = sel > 0 && sel < checks.length;
+    }
+}
+
+function masterCheck(master) {
+    document.querySelectorAll('input[name="cotizacion_ids"]').forEach(c => {
+        c.checked = master.checked;
+    });
+    actualizarContador();
+}
+
+function toggleTodos(estado) {
+    document.querySelectorAll('input[name="cotizacion_ids"]').forEach(c => {
+        c.checked = estado;
+    });
+    actualizarContador();
+}
+
+function toggleRow(id) {
+    const chk = document.getElementById('chk-' + id);
+    if (chk) {
+        chk.checked = !chk.checked;
+        actualizarContador();
+    }
+}
+
+document.getElementById('form-presupuesto')?.addEventListener('submit', function(e) {
+    const sel = document.querySelectorAll('input[name="cotizacion_ids"]:checked').length;
+    if (sel === 0) {
+        e.preventDefault();
+        alert('Selecciona al menos un pedido para generar el presupuesto.');
+    }
+});
+</script>
+{% endblock %}

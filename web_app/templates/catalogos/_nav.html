@@ -18,6 +18,7 @@
         <a href="/analisis" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📈 Análisis</a>
         {% endif %}
         {% if user.rol == 'Administrador' %}
+        <a href="/estado-cuenta"  class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">📋 Estado de Cta.</a>
         <a href="/admin/usuarios" class="px-4 h-full flex items-center text-xs text-navy-400 hover:bg-navy-500 hover:text-white transition-colors shrink-0">👥 Usuarios</a>
         {% endif %}
     </div>
@@ -49,6 +50,14 @@
               {% if seccion == 'estudio_mercado' %}text-clf-green border-b-2 border-clf-green bg-white
               {% else %}text-navy-400 hover:text-navy-700{% endif %}">
         Est. Mercado
+    </a>
+    {% endif %}
+    {% if user.rol == 'Administrador' %}
+    <a href="/catalogos/pendientes-catalogo"
+       class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t
+              {% if seccion == 'pendientes' %}text-amber-600 border-b-2 border-amber-500 bg-white
+              {% else %}text-amber-500 hover:text-amber-700{% endif %}">
+        ⚠ Sin catalogar
     </a>
     {% endif %}
 </div>

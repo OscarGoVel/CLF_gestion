@@ -89,10 +89,30 @@
         </div>
     </div>
 
+    <!-- ── Leyenda de áreas ──────────────────────────────────────────────── -->
+    <div class="flex flex-wrap gap-3 mb-4 text-xs">
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+            <span class="text-gray-600 font-semibold">Comercial</span>
+            <span class="text-gray-400">— Estado general de la cotización</span>
+        </div>
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="text-emerald-700 font-semibold">Logístico</span>
+            <span class="text-gray-400">— Almacén / Compras / Entrega</span>
+        </div>
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+            <span class="text-blue-700 font-semibold">Administrativo</span>
+            <span class="text-gray-400">— OC, Factura y Pago</span>
+        </div>
+    </div>
+
     <!-- ── Tarjetas de etapas ──────────────────────────────────────────────── -->
     <div class="space-y-3">
     {% for etapa in etapas %}
     {% set etapa_slug = etapa.nombre | replace(' ', '_') | replace('á','a') | replace('é','e') | replace('ó','o') | replace('ú','u') %}
+
     <div class="bg-white rounded-xl shadow-sm overflow-hidden border-l-4
                 {% if etapa.completada %}{{ etapa.color_border }} {{ etapa.color_bg }}
                 {% else %}border-gray-200{% endif %}">
@@ -106,6 +126,12 @@
                                  {% if etapa.completada %}{{ etapa.color_txt }}{% else %}text-gray-500{% endif %}">
                         {{ etapa.nombre }}
                     </span>
+                    {# Badge de área #}
+                    {% if etapa.nombre == 'Entregada' %}
+                    <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Logístico</span>
+                    {% else %}
+                    <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Administrativo</span>
+                    {% endif %}
                     {% if etapa.completada %}
                     <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
                         ✓ Completada

@@ -22,12 +22,13 @@
     <td class="px-4 py-3 text-center">
         {% set stock = p.stock_actual or 0 %}
         {% set minimo = p.stock_minimo or 0 %}
-        <span class="text-sm font-bold
-            {% if stock == 0 %}text-red-400
-            {% elif minimo and stock <= minimo %}text-amber-500
-            {% else %}text-clf-green{% endif %}">
-            {{ stock }}
-        </span>
+        {% if stock == 0 %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-600">Sin stock</span>
+        {% elif minimo and stock <= minimo %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700" title="Stock bajo mínimo">⚠ Bajo</span>
+        {% else %}
+        <span class="text-xs text-gray-300">—</span>
+        {% endif %}
     </td>
 </tr>
 {% else %}
