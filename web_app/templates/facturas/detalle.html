@@ -68,19 +68,19 @@
                         ⬇ XML
                     </a>
                     {% endif %}
-                    {% if factura.tipo == 'E' and user.rol in ('Administrador', 'Operador') %}
+                    {% if user.rol in ('Administrador', 'Operador') %}
                         {% if compra_vinculada %}
                         <a href="/compras/{{ compra_vinculada.id }}"
                            class="px-3 py-1.5 text-xs font-semibold bg-green-50 text-green-700
                                   rounded-lg flex items-center gap-1">
                             ✓ Compra {{ compra_vinculada.folio }}
                         </a>
-                        {% else %}
-                        <a href="/compras/nueva?factura_id={{ factura.id }}"
-                           class="px-3 py-1.5 text-xs font-semibold bg-navy-600 hover:bg-navy-700
-                                  text-white rounded-lg transition-colors flex items-center gap-1">
+                        {% elif factura.tipo == 'E' %}
+                        <button onclick="abrirPanelCompra()"
+                                class="px-3 py-1.5 text-xs font-semibold bg-clf-green hover:bg-clf-green-dk
+                                       text-white rounded-lg transition-colors flex items-center gap-1">
                             + Registrar como Compra
-                        </a>
+                        </button>
                         {% endif %}
                     {% endif %}
                 </div>
@@ -123,28 +123,178 @@
     </div>
 
     {% if factura.tipo == 'E' and user.rol in ('Administrador', 'Operador') and not compra_vinculada %}
-    <!-- Panel: vincular compra existente -->
+    <!-- Panel: registrar como compra (inline) + vincular compra existente -->
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <!-- Panel inline: registrar como compra -->
+        <div id="panel-registrar-compra" class="hidden border-b border-gray-100">
+            <div class="px-5 py-4">
+                <p class="text-xs font-semibold text-gray-600 mb-3">Mapeo de conceptos a productos del catálogo</p>
+                <div id="mapeo-conceptos-lista" class="space-y-2 mb-4">
+                    <p class="text-xs text-gray-400 italic">Cargando conceptos...</p>
+                </div>
+                <div id="mapeo-error" class="hidden text-xs text-red-500 mb-2"></div>
+                <div class="flex gap-2 justify-end">
+                    <button onclick="cerrarPanelCompra()"
+                            class="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="btn-confirmar-compra" onclick="confirmarCompra()"
+                            class="px-4 py-1.5 text-xs font-semibold text-white bg-clf-green hover:bg-green-700 rounded-lg transition-colors">
+                        Confirmar Compra
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vincular compra existente (colapsable) -->
         <div>
             <button id="btn-vincular-compra"
                     data-url="/facturas/{{ factura.id }}/selector-compras"
                     onclick="toggleSelectorCompra(this)"
-                    class="w-full flex items-center gap-2 px-5 py-3 text-left
-                           hover:bg-gray-50 transition-colors">
-                <span id="btn-vincular-compra-label"
-                      class="text-xs font-semibold text-navy-600">
+                    class="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-gray-50 transition-colors">
+                <span id="btn-vincular-compra-label" class="text-xs font-semibold text-navy-600">
                     🔗 Vincular compra existente
                 </span>
                 <span class="text-xs text-gray-400 ml-1">— si ya registraste esta compra por separado</span>
             </button>
             <div id="panel-vincular-compra" class="hidden border-t border-gray-100">
-                <div id="selector-compra-panel-wrap">
-                    <!-- Se carga via HTMX al abrir -->
-                </div>
+                <div id="selector-compra-panel-wrap"></div>
             </div>
         </div>
     </div>
+
     <script>
+    const _FACTURA_ID = {{ factura.id }};
+    let _mapeoData = [];
+
+    async function abrirPanelCompra() {
+        const panel = document.getElementById('panel-registrar-compra');
+        panel.classList.remove('hidden');
+        const lista = document.getElementById('mapeo-conceptos-lista');
+        lista.innerHTML = '<p class="text-xs text-gray-400 italic">Cargando conceptos...</p>';
+        document.getElementById('mapeo-error').classList.add('hidden');
+
+        const resp = await fetch(`/facturas/${_FACTURA_ID}/mapeo-conceptos`);
+        _mapeoData = await resp.json();
+        renderizarMapeo(_mapeoData);
+    }
+
+    function cerrarPanelCompra() {
+        document.getElementById('panel-registrar-compra').classList.add('hidden');
+    }
+
+    function renderizarMapeo(conceptos) {
+        const lista = document.getElementById('mapeo-conceptos-lista');
+        lista.innerHTML = '';
+        conceptos.forEach((c, i) => {
+            const div = document.createElement('div');
+            div.className = 'py-2 border-b border-gray-50 last:border-0';
+            if (c.producto_id) {
+                div.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-green-600 text-xs shrink-0">✓</span>
+                        <span class="text-xs text-gray-600 truncate flex-1">${c.descripcion}</span>
+                        <span class="text-xs font-semibold text-green-700 shrink-0">${c.producto_nombre}</span>
+                        <span class="text-xs text-gray-400 shrink-0">× ${c.cantidad}</span>
+                        <input type="hidden" class="prod-id" data-idx="${i}" value="${c.producto_id}">
+                    </div>`;
+            } else {
+                div.innerHTML = `
+                    <div class="flex items-start gap-2">
+                        <span class="text-amber-500 text-xs shrink-0 mt-1">⚠</span>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs text-gray-600 truncate mb-1">${c.descripcion}
+                                <span class="text-gray-400">× ${c.cantidad}</span>
+                            </p>
+                            <div class="relative">
+                                <input type="text" placeholder="Buscar producto por nombre o código…"
+                                       class="prod-search w-full text-xs border border-amber-200 rounded px-2 py-1
+                                              focus:outline-none focus:ring-1 focus:ring-clf-green bg-amber-50"
+                                       data-idx="${i}" autocomplete="off">
+                                <input type="hidden" class="prod-id" data-idx="${i}" value="">
+                                <div class="prod-dropdown hidden absolute z-10 bg-white border border-gray-200
+                                            rounded shadow-lg mt-0.5 w-full text-xs max-h-40 overflow-y-auto"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                // Activar búsqueda en tiempo real
+                const input = div.querySelector('.prod-search');
+                const hidden = div.querySelector('.prod-id');
+                const dropdown = div.querySelector('.prod-dropdown');
+                let timer;
+                input.addEventListener('input', () => {
+                    clearTimeout(timer);
+                    hidden.value = '';
+                    if (input.value.length < 2) { dropdown.classList.add('hidden'); return; }
+                    timer = setTimeout(async () => {
+                        const res = await fetch(`/facturas/buscar-producto?q=${encodeURIComponent(input.value)}`);
+                        const items = await res.json();
+                        dropdown.innerHTML = items.length
+                            ? items.map(p => `<div class="px-3 py-1.5 hover:bg-gray-50 cursor-pointer"
+                                                   data-id="${p.id}" data-nombre="${p.nombre} (${p.codigo})">
+                                               ${p.nombre} <span class="text-gray-400">${p.codigo}</span>
+                                             </div>`).join('')
+                            : '<div class="px-3 py-2 text-gray-400 italic">Sin resultados</div>';
+                        dropdown.classList.remove('hidden');
+                        dropdown.querySelectorAll('[data-id]').forEach(opt => {
+                            opt.addEventListener('click', () => {
+                                hidden.value = opt.dataset.id;
+                                input.value  = opt.dataset.nombre;
+                                input.classList.remove('border-amber-200', 'bg-amber-50');
+                                input.classList.add('border-green-300', 'bg-green-50');
+                                dropdown.classList.add('hidden');
+                            });
+                        });
+                    }, 250);
+                });
+                input.addEventListener('blur', () => setTimeout(() => dropdown.classList.add('hidden'), 200));
+            }
+            lista.appendChild(div);
+        });
+    }
+
+    async function confirmarCompra() {
+        const btn = document.getElementById('btn-confirmar-compra');
+        const errEl = document.getElementById('mapeo-error');
+        errEl.classList.add('hidden');
+
+        const mapeo = [];
+        let ok = true;
+        document.querySelectorAll('.prod-id').forEach(el => {
+            const idx = parseInt(el.dataset.idx);
+            const pid = parseInt(el.value);
+            if (!pid) { ok = false; return; }
+            mapeo.push({ concepto_idx: idx, producto_id: pid });
+        });
+
+        if (!ok || mapeo.length !== _mapeoData.length) {
+            errEl.textContent = 'Asigna un producto a cada concepto antes de confirmar.';
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Guardando...';
+        const resp = await fetch(`/facturas/${_FACTURA_ID}/crear-compra`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mapeo }),
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.alerta_proveedor) {
+                alert('Compra ' + data.folio + ' registrada.\n\n⚠ ' + data.alerta_proveedor);
+            }
+            location.reload();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            errEl.textContent = err.detail || 'Error al registrar la compra.';
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = 'Confirmar Compra';
+        }
+    }
+
     function toggleSelectorCompra(btn) {
         var panel = document.getElementById('panel-vincular-compra');
         var wrap  = document.getElementById('selector-compra-panel-wrap');
@@ -235,8 +385,8 @@
 
         {% include "facturas/_vinculadas.html" %}
 
-        <!-- Panel selector: se abre al hacer clic en el botón -->
-        {% if user.rol in ('Administrador', 'Operador') %}
+        <!-- Panel selector: solo para facturas de cliente (Ingreso) -->
+        {% if user.rol in ('Administrador', 'Operador') and factura.tipo != 'E' %}
         <div class="border-t border-gray-100">
             <button id="btn-vincular-cot"
                     data-url="/facturas/{{ factura.id }}/selector-cotizaciones"

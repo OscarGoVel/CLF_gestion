@@ -352,6 +352,8 @@ function renderLinea(cont, ln, i) {
                 </div>
             </div>
 
+            <div id="sugerencias-cot-${i}" class="mb-2"></div>
+
             ${(ln.asignaciones || []).length > 0 ? `
             <table class="w-full text-xs">
                 <thead>
@@ -369,6 +371,30 @@ function renderLinea(cont, ln, i) {
         </div>
     `;
     cont.appendChild(div);
+
+    // Cargar sugerencias de cotizaciones para este producto
+    if (ln.producto_id) {
+        fetch('/compras/cotizaciones-por-producto?producto_id=' + ln.producto_id)
+            .then(r => r.text())
+            .then(html => {
+                const el = document.getElementById('sugerencias-cot-' + i);
+                if (el) el.innerHTML = html;
+                // Click en sugerencia → asignar automáticamente
+                el && el.querySelectorAll('.sugerencia-cot').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const cotId   = parseInt(this.dataset.cotId);
+                        const cantSug = parseFloat(this.dataset.cantidad) || 0;
+                        if (!lineas[i].asignaciones) lineas[i].asignaciones = [];
+                        const yaExiste = lineas[i].asignaciones.findIndex(a => a.cotizacion_id === cotId);
+                        if (yaExiste < 0) {
+                            lineas[i].asignaciones.push({ cotizacion_id: cotId, cantidad: cantSug });
+                        }
+                        renderLineas();
+                    });
+                });
+            })
+            .catch(() => {});
+    }
 }
 
 // ── Acciones de líneas ─────────────────────────────────────────────────────
@@ -556,40 +582,58 @@ document.getElementById('form-compra').addEventListener('submit', function (e) {
     if (pf.fecha)        document.getElementById('fecha_compra').value  = pf.fecha;
     if (pf.folio)        document.getElementById('ticket_referencia').value = pf.folio;
 
-    // Si hay cotizaciones ya vinculadas a la factura, sobrescribir seleccionarProducto
-    // para que cada producto agregado quede asignado a ellas automáticamente.
-    // - 1 cotización: asigna el 100% de la cantidad.
-    // - Varias: agrega un renglón por cotización con cantidad 0 para que el usuario reparta.
-    if (pf.cots_vinculadas && pf.cots_vinculadas.length > 0) {
-        seleccionarProducto = function (id, nombre, costoBase, codigo, unidad, aplicaIva) {
-            const existente = lineas.findIndex(l => l.producto_id === id);
-            const buildAsig = (cantidad) => pf.cots_vinculadas.map((c, i) => ({
-                cotizacion_id: c.id,
-                cantidad: pf.cots_vinculadas.length === 1
-                    ? cantidad
-                    : 0,   // con múltiples cotizaciones el usuario decide el reparto
-            }));
+    // Función auxiliar: construir asignaciones iniciales para una línea
+    function buildAsig(cantidad) {
+        if (!pf.cots_vinculadas || pf.cots_vinculadas.length === 0) return [];
+        return pf.cots_vinculadas.map(cv => ({
+            cotizacion_id: cv.id,
+            cantidad: pf.cots_vinculadas.length === 1 ? cantidad : 0,
+        }));
+    }
 
-            if (existente >= 0) {
-                lineas[existente].cantidad += 1;
-                if (pf.cots_vinculadas.length === 1) {
-                    lineas[existente].asignaciones = buildAsig(lineas[existente].cantidad);
-                }
-            } else {
-                lineas.push({
-                    producto_id:    id,
-                    nombre:         nombre,
-                    codigo:         codigo || '',
-                    unidad_medida:  unidad || '',
-                    cantidad:       1,
-                    costo_unitario: costoBase || 0,
-                    aplica_iva:     !!aplicaIva,
-                    asignaciones:   buildAsig(1),
-                });
+    // Auto-agregar líneas desde los conceptos de la factura
+    let sinVincular = 0;
+    for (const c of (pf.conceptos || [])) {
+        if (!c.producto_id) { sinVincular++; continue; }
+        const existente = lineas.findIndex(l => l.producto_id === c.producto_id);
+        if (existente >= 0) {
+            lineas[existente].cantidad      += c.cantidad;
+            lineas[existente].costo_unitario = c.valor_unitario;
+            if (pf.cots_vinculadas && pf.cots_vinculadas.length === 1) {
+                lineas[existente].asignaciones = buildAsig(lineas[existente].cantidad);
             }
-            renderLineas();
-            document.getElementById('buscar-prod').value = '';
-            document.getElementById('sugerencias-prod').innerHTML = '';
+        } else {
+            lineas.push({
+                producto_id:    c.producto_id,
+                nombre:         c.producto_nombre,
+                codigo:         c.codigo || '',
+                unidad_medida:  c.producto_unidad || '',
+                cantidad:       c.cantidad,
+                costo_unitario: c.valor_unitario,
+                aplica_iva:     c.aplica_iva !== false,
+                asignaciones:   buildAsig(c.cantidad),
+            });
+        }
+    }
+
+    // Advertencia si hay conceptos sin producto vinculado
+    if (sinVincular > 0) {
+        const banner = document.createElement('div');
+        banner.className = 'mb-4 px-4 py-2.5 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700';
+        banner.innerHTML = `⚠ ${sinVincular} concepto(s) de la factura no encontrados en el catálogo — agrégalos manualmente si aplica.`;
+        document.getElementById('lineas-container').before(banner);
+    }
+
+    // Al agregar productos manualmente también asignar a las cotizaciones vinculadas
+    if (pf.cots_vinculadas && pf.cots_vinculadas.length > 0) {
+        const _orig = seleccionarProducto;
+        seleccionarProducto = function (id, nombre, costoBase, codigo, unidad, aplicaIva) {
+            _orig(id, nombre, costoBase, codigo, unidad, aplicaIva);
+            const idx = lineas.findIndex(l => l.producto_id === id);
+            if (idx >= 0 && (!lineas[idx].asignaciones || lineas[idx].asignaciones.length === 0)) {
+                lineas[idx].asignaciones = buildAsig(lineas[idx].cantidad);
+                renderLineas();
+            }
         };
     }
 })();

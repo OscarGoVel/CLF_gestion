@@ -86,11 +86,13 @@ async def vista_stock(
     _calcular_abc(productos)
 
     # Stats resumen
-    total_valor   = sum(p["valor_inv"] for p in productos)
-    bajo_min_cnt  = sum(1 for p in productos
-                        if (p["stock_minimo"] or 0) > 0
-                        and (p["stock_actual"] or 0) < (p["stock_minimo"] or 0))
-    sin_stock_cnt = sum(1 for p in productos if not (p["stock_actual"] or 0))
+    total_valor    = sum(p["valor_inv"] for p in productos)
+    negativo_cnt   = sum(1 for p in productos if (p["stock_actual"] or 0) < 0)
+    bajo_min_cnt   = sum(1 for p in productos
+                         if (p["stock_minimo"] or 0) > 0
+                         and (p["stock_actual"] or 0) < (p["stock_minimo"] or 0)
+                         and (p["stock_actual"] or 0) >= 0)
+    sin_stock_cnt  = sum(1 for p in productos if (p["stock_actual"] or 0) == 0)
     abc_counts    = {"A": 0, "B": 0, "C": 0}
     abc_valores   = {"A": 0.0, "B": 0.0, "C": 0.0}
     for p in productos:
@@ -105,7 +107,8 @@ async def vista_stock(
         "categoria_sel": categoria,
         "bajo_minimo": bajo_minimo,
         "total_valor": total_valor,
-        "bajo_min_cnt": bajo_min_cnt,
+        "negativo_cnt":  negativo_cnt,
+        "bajo_min_cnt":  bajo_min_cnt,
         "sin_stock_cnt": sin_stock_cnt,
         "abc_counts": abc_counts,
         "abc_valores": abc_valores,

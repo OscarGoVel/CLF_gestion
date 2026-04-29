@@ -7,6 +7,33 @@
 
 <main class="p-5 max-w-5xl mx-auto">
 
+    <!-- ── Banner: productos sin costo real vinculado ───────────────────────── -->
+    {% if user.rol == 'Administrador' and productos_sin_costo_real > 0 %}
+    <div class="mb-4 flex items-start gap-3 bg-orange-50 border border-orange-200 text-orange-800
+                rounded-xl px-4 py-3 text-sm">
+        <span class="text-xl shrink-0">📊</span>
+        <div>
+            <p class="font-semibold">
+                {{ productos_sin_costo_real }} producto{{ 's' if productos_sin_costo_real != 1 else '' }}
+                sin compra vinculada
+            </p>
+            <p class="text-xs mt-0.5">
+                El margen de esta cotización es estimado. Para ver el costo real,
+                registra la factura del proveedor en
+                <a href="/compras/nueva" class="underline font-medium">Compras</a>
+                y asigna las unidades a esta cotización.
+            </p>
+        </div>
+        {% if user.rol == 'Administrador' %}
+        <a href="/cotizaciones/{{ cot.id }}/costos"
+           class="ml-auto shrink-0 text-xs font-semibold bg-orange-100 hover:bg-orange-200
+                  text-orange-700 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
+            Ver costos
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- ── Banner de aviso (sin stock al entregar) ──────────────────────────── -->
     {% set aviso = request.query_params.get('aviso', '') %}
     {% if aviso == 'sin_stock' %}
@@ -136,8 +163,9 @@
                 const _ORDEN_COMPRA   = '{{ cot.orden_compra or "" }}';
                 const _HOY            = '{{ hoy }}';
                 function _inp(name, label, type, val, placeholder) {
+                    const stepAttr = type === 'number' ? ' step="any"' : '';
                     return `<div><label class="block text-[10px] text-gray-400 mb-0.5">${label}</label>
-                    <input type="${type}" name="${name}" value="${val}" placeholder="${placeholder}"
+                    <input type="${type}" name="${name}" value="${val}" placeholder="${placeholder}"${stepAttr}
                            class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50
                                   focus:outline-none focus:ring-1 focus:ring-clf-green w-36"></div>`;
                 }

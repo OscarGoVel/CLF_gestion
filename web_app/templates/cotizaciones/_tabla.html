@@ -42,6 +42,12 @@
         {% if c.numero_factura %}
         <span class="text-green-600 font-medium ml-1">FAC</span>
         {% endif %}
+        {% if user.rol == 'Administrador' and c.estado in ('Entregada','Facturada','Pagada') %}
+        <span class="ml-1 font-medium {{ 'text-emerald-600' if c.tiene_costo_real else 'text-orange-400' }}"
+              title="{{ 'Costo real vinculado' if c.tiene_costo_real else 'Sin compra vinculada — costo estimado' }}">
+            {{ '₱' if c.tiene_costo_real else '~' }}
+        </span>
+        {% endif %}
     </td>
     <td class="px-4 py-3 text-xs text-gray-400 text-center hidden md:table-cell">
         {{ c.num_productos }}

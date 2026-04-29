@@ -34,25 +34,37 @@ async def dashboard_analisis(request: Request):
         # ── KPIs generales ────────────────────────────────────────────────
         cur.execute("""
             SELECT
-                COUNT(*)                                          AS total_cots,
-                COALESCE(SUM(total), 0)                          AS monto_total,
-                COALESCE(SUM(total) FILTER (WHERE estado='Pagada'), 0)    AS cobrado,
-                COALESCE(SUM(total) FILTER (WHERE estado='Pendiente'), 0) AS pendiente,
-                COALESCE(SUM(total) FILTER (WHERE estado='Entregada'), 0) AS por_cobrar,
-                COUNT(*) FILTER (WHERE estado='Pagada')           AS num_pagadas,
-                COUNT(*) FILTER (WHERE estado='Cancelada')        AS num_canceladas
+                COUNT(*) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                ))                                                          AS total_cots,
+                COALESCE(SUM(total) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                )), 0)                                                      AS monto_total,
+                COALESCE(SUM(COALESCE(monto_pagado, 0)) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                )), 0)                                                      AS cobrado,
+                COALESCE(SUM(total - COALESCE(monto_pagado, 0)) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada'
+                ) AND (total - COALESCE(monto_pagado, 0)) > 0.01), 0)     AS pendiente_cobro,
+                COUNT(*) FILTER (WHERE estado='Pagada')                    AS num_pagadas,
+                COUNT(*) FILTER (WHERE estado='Cancelada')                 AS num_canceladas
             FROM cotizaciones
         """)
         r = cur.fetchone()
+        monto_total = _f(r[1])
+        cobrado     = _f(r[2])
         kpis = {
-            "total_cots":    r[0],
-            "monto_total":   _f(r[1]),
-            "cobrado":       _f(r[2]),
-            "pendiente":     _f(r[3]),
-            "por_cobrar":    _f(r[4]),
-            "num_pagadas":   r[5],
-            "num_canceladas":r[6],
-            "tasa_cobro":    round(_f(r[2]) / _f(r[1]) * 100, 1) if r[1] else 0,
+            "total_cots":      r[0],
+            "monto_total":     monto_total,
+            "cobrado":         cobrado,
+            "pendiente_cobro": _f(r[3]),
+            "num_pagadas":     r[4],
+            "num_canceladas":  r[5],
+            "tasa_cobro":      round(cobrado / monto_total * 100, 1) if monto_total else 0,
         }
 
         # ── Tendencia mensual (últimos 12 meses) ─────────────────────────
@@ -60,10 +72,19 @@ async def dashboard_analisis(request: Request):
             SELECT
                 TO_CHAR(DATE_TRUNC('month', fecha), 'Mon YY') AS mes_label,
                 DATE_TRUNC('month', fecha)                    AS mes_ord,
-                COUNT(*)                                      AS total,
-                COALESCE(SUM(total), 0)                       AS monto,
+                COUNT(*) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                ))                                            AS total,
+                COALESCE(SUM(total) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                )), 0)                                        AS monto,
                 COUNT(*) FILTER (WHERE estado='Pagada')       AS pagadas,
-                COALESCE(SUM(total) FILTER (WHERE estado='Pagada'), 0) AS monto_pagado
+                COALESCE(SUM(COALESCE(monto_pagado,0)) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'
+                )), 0)                                        AS monto_pagado
             FROM cotizaciones
             WHERE fecha >= NOW() - INTERVAL '12 months'
             GROUP BY mes_ord, mes_label
@@ -96,11 +117,20 @@ async def dashboard_analisis(request: Request):
         cur.execute("""
             SELECT c.nombre_comercial, c.tipo,
                    COUNT(cot.id)          AS num_cots,
-                   COALESCE(SUM(cot.total), 0) AS monto_total,
-                   COALESCE(SUM(cot.total) FILTER (WHERE cot.estado='Pagada'), 0) AS cobrado
+                   COALESCE(SUM(cot.total) FILTER (WHERE cot.estado IN (
+                       'Programada','Parcialmente Entregada',
+                       'Entregada','Facturada','Pagada'
+                   )), 0) AS monto_total,
+                   COALESCE(SUM(COALESCE(cot.monto_pagado, 0)) FILTER (WHERE cot.estado IN (
+                       'Programada','Parcialmente Entregada',
+                       'Entregada','Facturada','Pagada'
+                   )), 0) AS cobrado
             FROM clientes c
             JOIN cotizaciones cot ON cot.cliente_id = c.id
-            WHERE cot.estado != 'Cancelada'
+            WHERE cot.estado IN (
+                'Programada','Parcialmente Entregada',
+                'Entregada','Facturada','Pagada'
+            )
             GROUP BY c.id
             ORDER BY monto_total DESC
             LIMIT 10
@@ -178,6 +208,8 @@ async def analisis_costos(request: Request):
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
 
         # ── KPIs globales de costo ────────────────────────────────────────
+        # Solo estados que representan ventas confirmadas o cerradas
+        _ESTADOS_COSTO = ('Programada', 'Entregada', 'Facturada', 'Pagada')
         cur.execute("""
             SELECT
                 COUNT(DISTINCT c.id)                                     AS total_cots,
@@ -185,30 +217,79 @@ async def analisis_costos(request: Request):
                 COALESCE(SUM(cd.precio_unitario * cd.cantidad), 0)       AS venta_total
             FROM cotizaciones c
             JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
-            WHERE c.estado != 'Cancelada'
-        """)
+            WHERE c.estado IN %s
+        """, (_ESTADOS_COSTO,))
         r = cur.fetchone()
         total_cots    = r[0] or 0
         costo_snap_total = _f(r[1])
         venta_total      = _f(r[2])
 
         cur.execute("""
-            SELECT COUNT(DISTINCT cotizacion_id) FROM compra_detalle_cotizacion
-        """)
+            SELECT COUNT(DISTINCT cdc.cotizacion_id)
+            FROM compra_detalle_cotizacion cdc
+            JOIN cotizaciones c ON c.id = cdc.cotizacion_id
+            WHERE c.estado IN %s
+        """, (_ESTADOS_COSTO,))
         con_costo_real = cur.fetchone()[0] or 0
         sin_costo_real = total_cots - con_costo_real
 
         margen_snap_global = round(
             (venta_total - costo_snap_total) / venta_total * 100, 1
         ) if venta_total else 0
+        utilidad_snap = round(venta_total - costo_snap_total, 2)
+
+        # ── Margen real cerrado: solo Entregadas/Pagadas con compras vinculadas ──
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(cd.precio_unitario * cd.cantidad), 0) AS venta_cerrada
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            WHERE c.estado IN ('Entregada','Facturada','Pagada')
+              AND EXISTS (
+                  SELECT 1 FROM compra_detalle_cotizacion cdc2
+                  WHERE cdc2.cotizacion_id = c.id
+              )
+        """)
+        venta_cerrada = _f(cur.fetchone()[0])
+
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(
+                    costo_real.costo_prom * cd.cantidad
+                ), 0) AS costo_real_cerrado
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            JOIN (
+                SELECT cdc.cotizacion_id, comp.producto_id,
+                       SUM(comp.costo_unitario * cdc.cantidad) / NULLIF(SUM(cdc.cantidad), 0)
+                           AS costo_prom
+                FROM compra_detalle_cotizacion cdc
+                JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
+                GROUP BY cdc.cotizacion_id, comp.producto_id
+            ) costo_real ON costo_real.cotizacion_id = c.id
+                         AND costo_real.producto_id  = cd.producto_id
+            WHERE c.estado IN ('Entregada','Facturada','Pagada')
+        """)
+        costo_real_cerrado = _f(cur.fetchone()[0])
+
+        margen_real_cerrado = round(
+            (venta_cerrada - costo_real_cerrado) / venta_cerrada * 100, 1
+        ) if venta_cerrada else None
+        utilidad_real_cerrada = round(venta_cerrada - costo_real_cerrado, 2)
 
         kpis_costos = {
-            "venta_total":       venta_total,
-            "costo_snap_total":  costo_snap_total,
-            "margen_snap":       margen_snap_global,
-            "sin_costo_real":    sin_costo_real,
-            "con_costo_real":    con_costo_real,
-            "total_cots":        total_cots,
+            "venta_total":          venta_total,
+            "costo_snap_total":     costo_snap_total,
+            "utilidad_snap":        utilidad_snap,
+            "margen_snap":          margen_snap_global,
+            "sin_costo_real":       sin_costo_real,
+            "con_costo_real":       con_costo_real,
+            "total_cots":           total_cots,
+            # Métricas de costo real confirmado (solo entregadas con compras)
+            "venta_cerrada":        venta_cerrada,
+            "costo_real_cerrado":   costo_real_cerrado,
+            "utilidad_real":        utilidad_real_cerrada,
+            "margen_real":          margen_real_cerrado,
         }
 
         # ── Tendencia mensual venta vs costo (12 meses) ──────────────────
@@ -221,10 +302,10 @@ async def analisis_costos(request: Request):
             FROM cotizaciones c
             JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
             WHERE c.fecha >= NOW() - INTERVAL '12 months'
-              AND c.estado != 'Cancelada'
+              AND c.estado IN %s
             GROUP BY mes_ord, mes_label
             ORDER BY mes_ord
-        """)
+        """, (_ESTADOS_COSTO,))
         tendencia = [
             {"label": r[0], "venta": _f(r[2]), "costo_snap": _f(r[3])}
             for r in cur.fetchall()
@@ -247,11 +328,11 @@ async def analisis_costos(request: Request):
             FROM cotizaciones c
             LEFT JOIN clientes cl ON cl.id = c.cliente_id
             JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
-            WHERE c.estado != 'Cancelada'
+            WHERE c.estado IN %s
             GROUP BY c.id, c.folio, c.fecha, c.estado, cl.nombre_comercial
             ORDER BY c.fecha DESC
             LIMIT 60
-        """)
+        """, (_ESTADOS_COSTO,))
         cols = [d[0] for d in cur.description]
         lista_cots = []
         for row in cur.fetchall():

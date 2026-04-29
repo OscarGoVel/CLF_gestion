@@ -39,10 +39,25 @@
         <span class="text-xs text-gray-300">—</span>
         {% endif %}
     </td>
+    {% if user.rol in ('Administrador', 'Operador') %}
+    <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
+        {% if f.compra_id %}
+        <a href="/compras/{{ f.compra_id }}"
+           class="text-xs text-emerald-600 font-semibold whitespace-nowrap hover:underline">
+            ✓ Compra
+        </a>
+        {% else %}
+        <a href="/facturas/{{ f.id }}"
+           class="text-xs text-clf-green font-semibold whitespace-nowrap hover:text-clf-green-dk transition-colors">
+            + Como Compra
+        </a>
+        {% endif %}
+    </td>
+    {% endif %}
 </tr>
 {% else %}
 <tr>
-    <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-400">
+    <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400">
         No se encontraron facturas.
     </td>
 </tr>

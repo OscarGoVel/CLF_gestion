@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Herramientas de Mantenimiento — CLF Gestión{% endblock %}
+
+{% block body %}
+{% set seccion = 'herramientas' %}
+{% include "analisis/_nav.html" %}
+
+<main class="p-5 max-w-4xl mx-auto space-y-5">
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-navy-700">Mantenimiento de datos</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Herramientas para corregir y sincronizar datos históricos. Solo Administrador.</p>
+        </div>
+    </div>
+
+    <!-- ── Herramienta 1: Historial de precios ─────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="h-1 bg-amber-400"></div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800">Backfill de historial de precios</h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Registra en el historial de precios de cada producto el costo al que fue comprado,
+                        tomando como fuente los registros de compras existentes.
+                        Es una operación segura — solo inserta entradas que faltan, no modifica ni borra nada.
+                    </p>
+                </div>
+                <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">Seguro</span>
+            </div>
+
+            <div id="preview-precios" class="hidden mb-3 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800"></div>
+            <div id="resultado-precios" class="hidden mb-3 p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-800"></div>
+
+            <div class="flex gap-2">
+                <button onclick="previewPrecios()"
+                        id="btn-preview-precios"
+                        class="px-4 py-2 text-xs font-semibold border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-lg transition-colors">
+                    🔍 Ver qué falta
+                </button>
+                <button onclick="ejecutarPrecios()"
+                        id="btn-exec-precios"
+                        class="hidden px-4 py-2 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors">
+                    ▶ Ejecutar backfill
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Herramienta 2: Verificar stock ─────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="h-1 bg-blue-400"></div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800">Verificación de stock</h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Compara el stock registrado en cada producto contra la suma de sus movimientos
+                        (entradas − salidas). Si hay diferencia, aparece aquí. Esta operación es solo lectura.
+                    </p>
+                </div>
+                <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">Solo lectura</span>
+            </div>
+
+            <div id="resultado-stock" class="hidden mb-3"></div>
+
+            <button onclick="verificarStock()"
+                    id="btn-stock"
+                    class="px-4 py-2 text-xs font-semibold border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
+                🔍 Verificar ahora
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Herramienta 3: Costo promedio ───────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="h-1 bg-purple-400"></div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-800">Recalcular costo promedio ponderado</h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Recalcula el costo promedio de cada producto sumando el total pagado en todas las
+                        compras dividido entre la cantidad total comprada. Úsalo si el costo promedio
+                        no refleja el historial real de compras. Solo afecta productos con diferencia mayor a $0.01.
+                    </p>
+                </div>
+                <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700">Modifica datos</span>
+            </div>
+
+            <div id="preview-prom" class="hidden mb-3"></div>
+            <div id="resultado-prom" class="hidden mb-3 p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-800"></div>
+
+            <div class="flex gap-2">
+                <button onclick="previewProm()"
+                        id="btn-preview-prom"
+                        class="px-4 py-2 text-xs font-semibold border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg transition-colors">
+                    🔍 Ver diferencias
+                </button>
+                <button onclick="ejecutarProm()"
+                        id="btn-exec-prom"
+                        class="hidden px-4 py-2 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                    ▶ Recalcular
+                </button>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script>
+// ── Herramienta 1 ────────────────────────────────────────────────────────────
+async function previewPrecios() {
+    const btn = document.getElementById('btn-preview-precios');
+    btn.textContent = 'Consultando...'; btn.disabled = true;
+    const r = await fetch('/herramientas/preview-backfill-precios');
+    const d = await r.json();
+    btn.textContent = '🔍 Ver qué falta'; btn.disabled = false;
+
+    const el = document.getElementById('preview-precios');
+    el.classList.remove('hidden');
+    if (d.faltantes === 0) {
+        el.innerHTML = '✓ El historial de precios está completo. No hay entradas faltantes.';
+        el.className = 'mb-3 p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-800';
+        document.getElementById('btn-exec-precios').classList.add('hidden');
+    } else {
+        el.innerHTML = `Faltan <strong>${d.faltantes}</strong> entradas en el historial,
+            correspondientes a <strong>${d.productos}</strong> producto(s).
+            Al ejecutar se insertarán sin modificar datos existentes.`;
+        el.className = 'mb-3 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800';
+        document.getElementById('btn-exec-precios').classList.remove('hidden');
+    }
+}
+
+async function ejecutarPrecios() {
+    if (!confirm('¿Ejecutar el backfill de historial de precios?')) return;
+    const btn = document.getElementById('btn-exec-precios');
+    btn.textContent = 'Ejecutando...'; btn.disabled = true;
+    const r = await fetch('/herramientas/backfill-precios', { method: 'POST' });
+    const d = await r.json();
+    btn.classList.add('hidden');
+    document.getElementById('preview-precios').classList.add('hidden');
+    const res = document.getElementById('resultado-precios');
+    res.classList.remove('hidden');
+    res.innerHTML = `✓ Se insertaron <strong>${d.insertados}</strong> entradas en el historial de precios.`;
+}
+
+// ── Herramienta 2 ────────────────────────────────────────────────────────────
+async function verificarStock() {
+    const btn = document.getElementById('btn-stock');
+    btn.textContent = 'Verificando...'; btn.disabled = true;
+    const r = await fetch('/herramientas/verificar-stock');
+    const d = await r.json();
+    btn.textContent = '🔍 Verificar ahora'; btn.disabled = false;
+
+    const el = document.getElementById('resultado-stock');
+    el.classList.remove('hidden');
+    if (d.discrepancias.length === 0) {
+        el.innerHTML = '<p class="p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-800">✓ El stock de todos los productos coincide con sus movimientos. No hay discrepancias.</p>';
+    } else {
+        let rows = d.discrepancias.map(x => `
+            <tr class="border-b border-gray-50 hover:bg-gray-50">
+                <td class="px-3 py-2 text-xs font-mono text-gray-500">${x.codigo || '—'}</td>
+                <td class="px-3 py-2 text-xs text-gray-800">${x.nombre}</td>
+                <td class="px-3 py-2 text-xs text-right font-semibold text-gray-700">${x.registrado}</td>
+                <td class="px-3 py-2 text-xs text-right font-semibold text-blue-700">${x.calculado}</td>
+                <td class="px-3 py-2 text-xs text-right font-bold ${x.diferencia > 0 ? 'text-orange-600' : 'text-red-600'}">${x.diferencia > 0 ? '+' : ''}${x.diferencia}</td>
+            </tr>`).join('');
+        el.innerHTML = `
+            <p class="text-xs text-orange-700 font-semibold mb-2">
+                ⚠ Se encontraron ${d.discrepancias.length} producto(s) con discrepancia de stock.
+                Esto puede ocurrir si hay ajustes manuales sin movimiento registrado.
+            </p>
+            <div class="overflow-x-auto rounded-xl border border-gray-100">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-gray-500 font-semibold">Código</th>
+                            <th class="px-3 py-2 text-left text-gray-500 font-semibold">Producto</th>
+                            <th class="px-3 py-2 text-right text-gray-500 font-semibold">Registrado</th>
+                            <th class="px-3 py-2 text-right text-blue-600 font-semibold">Por movimientos</th>
+                            <th class="px-3 py-2 text-right text-orange-600 font-semibold">Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+    }
+}
+
+// ── Herramienta 3 ────────────────────────────────────────────────────────────
+async function previewProm() {
+    const btn = document.getElementById('btn-preview-prom');
+    btn.textContent = 'Consultando...'; btn.disabled = true;
+    const r = await fetch('/herramientas/preview-costo-promedio');
+    const d = await r.json();
+    btn.textContent = '🔍 Ver diferencias'; btn.disabled = false;
+
+    const el = document.getElementById('preview-prom');
+    el.classList.remove('hidden');
+    if (d.diferencias.length === 0) {
+        el.innerHTML = '<p class="p-3 bg-green-50 border border-green-100 rounded-xl text-xs text-green-800">✓ El costo promedio de todos los productos ya está actualizado.</p>';
+        document.getElementById('btn-exec-prom').classList.add('hidden');
+    } else {
+        let rows = d.diferencias.map(x => `
+            <tr class="border-b border-gray-50 hover:bg-gray-50">
+                <td class="px-3 py-2 text-xs font-mono text-gray-500">${x.codigo || '—'}</td>
+                <td class="px-3 py-2 text-xs text-gray-800">${x.nombre}</td>
+                <td class="px-3 py-2 text-xs text-center text-gray-400">${x.num_compras}</td>
+                <td class="px-3 py-2 text-xs text-right text-gray-500">$${x.actual.toFixed(4)}</td>
+                <td class="px-3 py-2 text-xs text-right font-semibold text-purple-700">$${x.calculado.toFixed(4)}</td>
+            </tr>`).join('');
+        el.innerHTML = `
+            <p class="text-xs text-purple-700 font-semibold mb-2">
+                ${d.diferencias.length} producto(s) tienen costo promedio diferente al calculado desde compras:
+            </p>
+            <div class="overflow-x-auto rounded-xl border border-gray-100 mb-3">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-gray-500 font-semibold">Código</th>
+                            <th class="px-3 py-2 text-left text-gray-500 font-semibold">Producto</th>
+                            <th class="px-3 py-2 text-center text-gray-500 font-semibold">Compras</th>
+                            <th class="px-3 py-2 text-right text-gray-500 font-semibold">Actual</th>
+                            <th class="px-3 py-2 text-right text-purple-600 font-semibold">Calculado</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+        document.getElementById('btn-exec-prom').classList.remove('hidden');
+    }
+}
+
+async function ejecutarProm() {
+    if (!confirm('¿Recalcular el costo promedio de los productos mostrados?')) return;
+    const btn = document.getElementById('btn-exec-prom');
+    btn.textContent = 'Recalculando...'; btn.disabled = true;
+    const r = await fetch('/herramientas/recalcular-costo-promedio', { method: 'POST' });
+    const d = await r.json();
+    btn.classList.add('hidden');
+    document.getElementById('preview-prom').classList.add('hidden');
+    const res = document.getElementById('resultado-prom');
+    res.classList.remove('hidden');
+    res.innerHTML = `✓ Se actualizó el costo promedio de <strong>${d.actualizados}</strong> producto(s).`;
+}
+</script>
+
+{% endblock %}

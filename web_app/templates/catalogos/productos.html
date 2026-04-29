@@ -9,8 +9,13 @@
             <h2 class="text-xl font-bold text-white">Productos</h2>
             <p class="text-xs text-navy-400 mt-0.5">{{ total }} registros</p>
         </div>
-        {% if user.rol in ('Administrador', 'Operador') %}
         <div class="flex gap-2">
+            <a id="btn-export-productos" href="/catalogos/productos/csv"
+               class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                      rounded-lg transition-colors shadow-sm shrink-0">
+                ↓ Exportar CSV
+            </a>
+            {% if user.rol in ('Administrador', 'Operador') %}
             <a href="/catalogos/productos/importar"
                class="px-4 py-2 bg-navy-600 hover:bg-navy-700 text-white text-xs font-bold
                       rounded-lg transition-colors shadow-sm shrink-0">
@@ -21,8 +26,8 @@
                       rounded-lg transition-colors shadow-sm shrink-0">
                 + Nuevo Producto
             </a>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 
     <!-- Filtros -->
@@ -91,4 +96,23 @@
     </div>
     {% endif %}
 </main>
+<script>
+(function () {
+    function actualizarExport() {
+        const params = new URLSearchParams();
+        const buscar   = document.querySelector('[name="buscar"]')?.value  || '';
+        const cat      = document.querySelector('[name="categoria"]')?.value || '';
+        const conStock = document.querySelector('[name="con_stock"]')?.value  || '';
+        if (buscar)   params.set('buscar', buscar);
+        if (cat)      params.set('categoria', cat);
+        if (conStock) params.set('con_stock', conStock);
+        const btn = document.getElementById('btn-export-productos');
+        if (btn) btn.href = '/catalogos/productos/csv' + (params.size ? '?' + params : '');
+    }
+    document.querySelectorAll('[name="buscar"],[name="categoria"],[name="con_stock"]')
+        .forEach(el => el.addEventListener('change', actualizarExport));
+    document.querySelector('[name="buscar"]')?.addEventListener('input', actualizarExport);
+    actualizarExport();
+})();
+</script>
 {% endblock %}

@@ -8,19 +8,19 @@
     <!-- KPIs principales -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl shadow-sm p-4">
-            <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Total cotizado</p>
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Ventas confirmadas</p>
             <p class="text-2xl font-bold text-navy-700">${{ '{:,.0f}'.format(kpis.monto_total) }}</p>
-            <p class="text-xs text-gray-400 mt-1">{{ kpis.total_cots }} cotizaciones</p>
+            <p class="text-xs text-gray-400 mt-1">{{ kpis.total_cots }} pedidos confirmados</p>
         </div>
         <div class="bg-blue-50 rounded-xl shadow-sm p-4 border border-blue-100">
             <p class="text-xs text-blue-500 uppercase tracking-wide mb-1 font-semibold">Cobrado</p>
             <p class="text-2xl font-bold text-blue-700">${{ '{:,.0f}'.format(kpis.cobrado) }}</p>
-            <p class="text-xs text-blue-400 mt-1">{{ kpis.num_pagadas }} facturas pagadas · {{ kpis.tasa_cobro }}% conversión</p>
+            <p class="text-xs text-blue-400 mt-1">{{ kpis.num_pagadas }} pagadas · {{ kpis.tasa_cobro }}% cobrado</p>
         </div>
         <div class="bg-amber-50 rounded-xl shadow-sm p-4 border border-amber-100">
-            <p class="text-xs text-amber-500 uppercase tracking-wide mb-1 font-semibold">Pendiente de cobro</p>
-            <p class="text-2xl font-bold text-amber-700">${{ '{:,.0f}'.format(kpis.pendiente + kpis.por_cobrar) }}</p>
-            <p class="text-xs text-amber-400 mt-1">Pendiente + Entregada</p>
+            <p class="text-xs text-amber-500 uppercase tracking-wide mb-1 font-semibold">Pendiente por cobrar</p>
+            <p class="text-2xl font-bold text-amber-700">${{ '{:,.0f}'.format(kpis.pendiente_cobro) }}</p>
+            <p class="text-xs text-amber-400 mt-1">Pedidos confirmados con saldo</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
             <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Canceladas</p>

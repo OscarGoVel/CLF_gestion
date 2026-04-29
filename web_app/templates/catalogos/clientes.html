@@ -9,13 +9,21 @@
             <h2 class="text-xl font-bold text-white">Clientes</h2>
             <p class="text-xs text-navy-400 mt-0.5">{{ clientes|length }} registros</p>
         </div>
-        {% if user.rol in ('Administrador', 'Operador') %}
-        <a href="/catalogos/clientes/nuevo"
-           class="px-4 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-xs font-bold
-                  rounded-lg transition-colors shadow-sm shrink-0">
-            + Nuevo Cliente
-        </a>
-        {% endif %}
+        <div class="flex gap-2">
+            <a id="btn-export-clientes"
+               href="/catalogos/clientes/csv{% if tipo %}?tipo={{ tipo }}{% endif %}{% if buscar %}&buscar={{ buscar }}{% endif %}"
+               class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold
+                      rounded-lg transition-colors shadow-sm shrink-0">
+                ↓ Exportar CSV
+            </a>
+            {% if user.rol in ('Administrador', 'Operador') %}
+            <a href="/catalogos/clientes/nuevo"
+               class="px-4 py-2 bg-clf-green hover:bg-clf-green-dk text-white text-xs font-bold
+                      rounded-lg transition-colors shadow-sm shrink-0">
+                + Nuevo Cliente
+            </a>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Filtros -->

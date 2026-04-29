@@ -25,6 +25,33 @@ POR_PAGINA = 25
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _resolver_costo_entrega(cur, cot_id: int, prod_id: int) -> tuple:
+    """Retorna (costo, tipo) para un producto al momento de marcar Entregada.
+    Prioridad: compra asignada → costo promedio del producto → snapshot catálogo."""
+    cur.execute("""
+        SELECT SUM(comp.costo_unitario * cdc.cantidad) / NULLIF(SUM(cdc.cantidad), 0)
+        FROM compra_detalle_cotizacion cdc
+        JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
+        WHERE cdc.cotizacion_id = %s AND comp.producto_id = %s
+    """, (cot_id, prod_id))
+    r = cur.fetchone()[0]
+    if r:
+        return float(r), 'compra_directa'
+
+    cur.execute("SELECT COALESCE(costo_promedio, 0) FROM productos WHERE id = %s", (prod_id,))
+    prom = float(cur.fetchone()[0] or 0)
+    if prom > 0:
+        return prom, 'promedio'
+
+    cur.execute(
+        "SELECT costo_snapshot FROM cotizacion_detalle WHERE cotizacion_id = %s AND producto_id = %s",
+        (cot_id, prod_id),
+    )
+    snap_row = cur.fetchone()
+    snap = float(snap_row[0] or 0) if snap_row else 0
+    return snap, 'catalogo'
+
+
 def _generar_folio_en_tx(cur, año: int) -> str:
     """
     Genera el siguiente folio dentro de una transacción ya abierta.
@@ -79,7 +106,11 @@ def _cargar_lista(empresa_db: str, estado: str, buscar: str, pagina: int) -> dic
                cl.tipo                             AS tipo_cliente,
                c.total, c.estado,
                c.orden_compra, c.numero_factura,
-               COUNT(cd.id)                        AS num_productos
+               COUNT(cd.id)                        AS num_productos,
+               EXISTS(
+                   SELECT 1 FROM compra_detalle_cotizacion cdc
+                   WHERE cdc.cotizacion_id = c.id
+               )                                   AS tiene_costo_real
         FROM cotizaciones c
         LEFT JOIN clientes          cl ON cl.id = c.cliente_id
         LEFT JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
@@ -126,21 +157,35 @@ async def lista(
     total_pags = max(1, (data["total"] + POR_PAGINA - 1) // POR_PAGINA)
 
     # Totales por estado para los chips del encabezado
+    pendientes_costo = 0
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT estado, COUNT(*) FROM cotizaciones GROUP BY estado")
         conteo_estado = dict(cur.fetchall())
 
+        if user.get("rol") == "Administrador":
+            cur.execute("""
+                SELECT COUNT(DISTINCT c.id)
+                FROM cotizaciones c
+                WHERE c.estado IN ('Entregada','Facturada','Pagada')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM compra_detalle_cotizacion cdc
+                      WHERE cdc.cotizacion_id = c.id
+                  )
+            """)
+            pendientes_costo = cur.fetchone()[0] or 0
+
     ctx = {
-        "user":          user,
-        "cotizaciones":  data["rows"],
-        "total":         data["total"],
-        "estados":       ESTADOS,
-        "estado_sel":    estado,
-        "buscar":        buscar,
-        "pagina":        pagina,
-        "total_pags":    total_pags,
-        "estado_color":  ESTADO_COLOR,
-        "conteo_estado": conteo_estado,
+        "user":             user,
+        "cotizaciones":     data["rows"],
+        "total":            data["total"],
+        "estados":          ESTADOS,
+        "estado_sel":       estado,
+        "buscar":           buscar,
+        "pagina":           pagina,
+        "total_pags":       total_pags,
+        "estado_color":     ESTADO_COLOR,
+        "conteo_estado":    conteo_estado,
+        "pendientes_costo": pendientes_costo,
     }
 
     # HTMX: devuelve solo el fragmento de la tabla
@@ -452,18 +497,46 @@ async def detalle(request: Request, cot_id: int):
         pcols      = [d[0] for d in cur.description]
         presupuesto = [_dec_to_float(dict(zip(pcols, r))) for r in cur.fetchall()]
 
-        # Costo real: promedio ponderado de compras vinculadas por producto
+        # Costo real: promedio ponderado por cantidad de compras vinculadas por producto
         cur.execute("""
-            SELECT cd.producto_id,
-                   AVG(comp.costo_unitario) AS costo_real_avg
+            SELECT comp.producto_id,
+                   SUM(comp.costo_unitario * cdc.cantidad) / NULLIF(SUM(cdc.cantidad), 0)
+                       AS costo_real_avg
             FROM compra_detalle_cotizacion cdc
             JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
-            JOIN cotizacion_detalle cd ON cd.cotizacion_id = cdc.cotizacion_id
-                                       AND comp.producto_id = cd.producto_id
             WHERE cdc.cotizacion_id = %s
-            GROUP BY cd.producto_id
+            GROUP BY comp.producto_id
         """, (cot_id,))
         costos_reales = {r[0]: float(r[1]) for r in cur.fetchall() if r[1] is not None}
+        costos_tipos  = {pid: 'compra_directa' for pid in costos_reales}
+
+        # Fallback: costo_entrega (snapshot al momento de entregar) para líneas sin compra asignada
+        cur.execute("""
+            SELECT producto_id, costo_entrega, costo_entrega_tipo
+            FROM cotizacion_detalle
+            WHERE cotizacion_id = %s AND costo_entrega IS NOT NULL AND producto_id IS NOT NULL
+        """, (cot_id,))
+        for pid, ce, ce_tipo in cur.fetchall():
+            if pid not in costos_reales and ce:
+                costos_reales[pid] = float(ce)
+                costos_tipos[pid]  = ce_tipo or 'catalogo'
+
+        # Productos de catálogo sin costo real de ningún origen
+        productos_sin_costo_real = 0
+        if cot.get("estado") in ("Entregada", "Facturada", "Pagada"):
+            cur.execute("""
+                SELECT COUNT(*) FROM cotizacion_detalle
+                WHERE cotizacion_id = %s
+                  AND producto_id IS NOT NULL
+                  AND producto_id NOT IN (
+                      SELECT DISTINCT comp.producto_id
+                      FROM compra_detalle_cotizacion cdc
+                      JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
+                      WHERE cdc.cotizacion_id = %s
+                  )
+                  AND costo_entrega IS NULL
+            """, (cot_id, cot_id))
+            productos_sin_costo_real = cur.fetchone()[0] or 0
 
     # Calcular cantidad ya entregada por producto
     entregado_por_prod = {}
@@ -481,11 +554,12 @@ async def detalle(request: Request, cot_id: int):
             "entregas":           entregas,
             "entregado_por_prod": entregado_por_prod,
             "presupuesto":        presupuesto,
-            "costos_reales":      costos_reales,
-            "estados":            ESTADOS,
-            "estado_color":       ESTADO_COLOR,
-            "hoy":                date.today().isoformat(),
-            "request":            request,
+            "costos_reales":            costos_reales,
+            "productos_sin_costo_real": productos_sin_costo_real,
+            "estados":                  ESTADOS,
+            "estado_color":             ESTADO_COLOR,
+            "hoy":                      date.today().isoformat(),
+            "request":                  request,
         },
     )
 
@@ -734,6 +808,22 @@ async def cambiar_estado(
         try: return float(s.strip()) if s.strip() else None
         except ValueError: return None
 
+    if nuevo_estado == "Pagada":
+        monto_nuevo = _float(monto_pagado)
+        if not monto_nuevo or monto_nuevo <= 0:
+            with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur_chk):
+                cur_chk.execute(
+                    "SELECT COALESCE(monto_pagado, 0) FROM cotizaciones WHERE id = %s",
+                    (cot_id,),
+                )
+                row_chk = cur_chk.fetchone()
+                monto_existente = float(row_chk[0]) if row_chk else 0
+            if monto_existente <= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Registra el monto pagado antes de marcar la cotización como Pagada.",
+                )
+
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
             UPDATE cotizaciones SET
@@ -751,6 +841,53 @@ async def cambiar_estado(
             numero_factura.strip(), orden_compra.strip(),
             cot_id,
         ))
+
+        # Descontar stock al marcar Entregada (permite negativo — se autoequilibra con la compra)
+        if nuevo_estado == "Entregada":
+            cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+            folio_cot = cur.fetchone()[0]
+
+            cur.execute("""
+                SELECT cd.producto_id, cd.cantidad,
+                       COALESCE(SUM(ep.cantidad_entregada), 0) AS ya_entregado
+                FROM cotizacion_detalle cd
+                LEFT JOIN entregas_parciales ep
+                       ON ep.cotizacion_id = cd.cotizacion_id
+                      AND ep.producto_id   = cd.producto_id
+                WHERE cd.cotizacion_id = %s AND cd.producto_id IS NOT NULL
+                GROUP BY cd.producto_id, cd.cantidad
+            """, (cot_id,))
+
+            for prod_id, cant_total, ya_entregado in cur.fetchall():
+                pendiente = float(cant_total) - float(ya_entregado)
+                if pendiente <= 0:
+                    continue
+
+                cur.execute(
+                    "SELECT COALESCE(stock_actual,0) FROM productos WHERE id=%s", (prod_id,)
+                )
+                stock_antes = float(cur.fetchone()[0])
+                stock_despues = stock_antes - pendiente
+
+                cur.execute(
+                    "UPDATE productos SET stock_actual=%s WHERE id=%s",
+                    (stock_despues, prod_id),
+                )
+                # Snapshot del costo al momento de la entrega
+                costo_e, tipo_e = _resolver_costo_entrega(cur, cot_id, prod_id)
+                cur.execute("""
+                    UPDATE cotizacion_detalle
+                       SET costo_entrega = %s, costo_entrega_tipo = %s
+                     WHERE cotizacion_id = %s AND producto_id = %s
+                """, (costo_e, tipo_e, cot_id, prod_id))
+                cur.execute("""
+                    INSERT INTO movimientos_stock
+                        (producto_id, tipo, motivo, cantidad,
+                         stock_antes, stock_despues, referencia, notas, fecha)
+                    VALUES (%s,'salida','Entrega directa cotización',
+                            %s,%s,%s,%s,%s,CURRENT_DATE)
+                """, (prod_id, pendiente, stock_antes, stock_despues,
+                      folio_cot, f"Cambio estado→Entregada {folio_cot}"))
 
     # Sincronizar seguimiento_etapas con el nuevo estado
     _etapa_map = {"Entregada": "Entregada", "Pagada": "Pagada"}
@@ -799,8 +936,6 @@ async def registrar_entrega(
     except ValueError:
         raise HTTPException(status_code=400, detail="Cantidad inválida")
 
-    aviso = None
-
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
         row = cur.fetchone()
@@ -819,44 +954,35 @@ async def registrar_entrega(
         ))
 
         # ── Movimiento de stock ───────────────────────────────────────────────
-        # Solo descontar del stock general si NO hay compra vinculada específicamente
+        # Siempre descontar (permite negativo — se autoequilibra cuando llega la compra)
+        cur.execute(
+            "SELECT COALESCE(stock_actual, 0) FROM productos WHERE id = %s",
+            (producto_id,),
+        )
+        stock_antes = float(cur.fetchone()[0])
+        stock_nuevo = stock_antes - cantidad
+
+        cur.execute(
+            "UPDATE productos SET stock_actual = %s WHERE id = %s",
+            (stock_nuevo, producto_id),
+        )
+        # Snapshot del costo al momento de la entrega parcial
+        costo_e, tipo_e = _resolver_costo_entrega(cur, cot_id, producto_id)
         cur.execute("""
-            SELECT 1 FROM compra_detalle_cotizacion cdc
-            JOIN compra_detalle cd ON cd.id = cdc.compra_detalle_id
-            WHERE cdc.cotizacion_id = %s AND cd.producto_id = %s
-            LIMIT 1
-        """, (cot_id, producto_id))
-        tiene_compra = cur.fetchone() is not None
-
-        if not tiene_compra:
-            cur.execute(
-                "SELECT COALESCE(stock_actual, 0) FROM productos WHERE id = %s",
-                (producto_id,),
-            )
-            stock_row = cur.fetchone()
-            stock_actual = float(stock_row[0]) if stock_row else 0.0
-
-            if stock_actual <= 0:
-                aviso = "sin_stock"
-            else:
-                a_descontar = min(cantidad, stock_actual)
-                stock_nuevo = stock_actual - a_descontar
-                cur.execute(
-                    "UPDATE productos SET stock_actual = %s WHERE id = %s",
-                    (stock_nuevo, producto_id),
-                )
-                cur.execute("""
-                    INSERT INTO movimientos_stock
-                        (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues,
-                         referencia, notas, fecha)
-                    VALUES (%s, 'salida', 'Entrega cotización', %s, %s, %s, %s, %s, %s::date)
-                """, (
-                    producto_id, a_descontar, stock_actual, stock_nuevo,
-                    folio, f"Entrega parcial cotización {folio}",
-                    fecha_entrega,
-                ))
-                if a_descontar < cantidad:
-                    aviso = "stock_parcial"
+            UPDATE cotizacion_detalle
+               SET costo_entrega = %s, costo_entrega_tipo = %s
+             WHERE cotizacion_id = %s AND producto_id = %s
+        """, (costo_e, tipo_e, cot_id, producto_id))
+        cur.execute("""
+            INSERT INTO movimientos_stock
+                (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues,
+                 referencia, notas, fecha)
+            VALUES (%s, 'salida', 'Entrega cotización', %s, %s, %s, %s, %s, %s::date)
+        """, (
+            producto_id, cantidad, stock_antes, stock_nuevo,
+            folio, f"Entrega parcial cotización {folio}",
+            fecha_entrega,
+        ))
 
     from web_app import audit as _audit
     _audit.registrar(
@@ -867,11 +993,8 @@ async def registrar_entrega(
     )
 
     from fastapi.responses import Response as _Resp
-    redirect_url = f"/cotizaciones/{cot_id}"
-    if aviso:
-        redirect_url += f"?aviso={aviso}"
     r = _Resp(status_code=200, content="")
-    r.headers["HX-Redirect"] = redirect_url
+    r.headers["HX-Redirect"] = f"/cotizaciones/{cot_id}"
     return r
 
 
@@ -894,8 +1017,6 @@ async def registrar_entregas_lote(request: Request, cot_id: int):
         raise HTTPException(status_code=400, detail="Fecha de entrega requerida")
     if not producto_ids:
         raise HTTPException(status_code=400, detail="Selecciona al menos un producto")
-
-    aviso = None
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
@@ -923,36 +1044,29 @@ async def registrar_entregas_lote(request: Request, cot_id: int):
                 VALUES (%s, %s, %s, %s::date, %s, %s)
             """, (cot_id, pid, cantidad, fecha_entrega, notas_global, user.get("username")))
 
+            # Siempre descontar (permite negativo — se autoequilibra cuando llega la compra)
+            cur.execute("SELECT COALESCE(stock_actual,0) FROM productos WHERE id = %s", (pid,))
+            srow = cur.fetchone()
+            stock_antes = float(srow[0]) if srow else 0.0
+            stock_nuevo = stock_antes - cantidad
+            cur.execute(
+                "UPDATE productos SET stock_actual = %s WHERE id = %s",
+                (stock_nuevo, pid),
+            )
+            # Snapshot del costo al momento de la entrega en lote
+            costo_e, tipo_e = _resolver_costo_entrega(cur, cot_id, pid)
             cur.execute("""
-                SELECT 1 FROM compra_detalle_cotizacion cdc
-                JOIN compra_detalle cd ON cd.id = cdc.compra_detalle_id
-                WHERE cdc.cotizacion_id = %s AND cd.producto_id = %s
-                LIMIT 1
-            """, (cot_id, pid))
-            tiene_compra = cur.fetchone() is not None
-
-            if not tiene_compra:
-                cur.execute("SELECT COALESCE(stock_actual,0) FROM productos WHERE id = %s", (pid,))
-                srow = cur.fetchone()
-                stock_actual = float(srow[0]) if srow else 0.0
-                if stock_actual <= 0:
-                    aviso = "sin_stock"
-                else:
-                    a_descontar = min(cantidad, stock_actual)
-                    stock_nuevo = stock_actual - a_descontar
-                    cur.execute(
-                        "UPDATE productos SET stock_actual = %s WHERE id = %s",
-                        (stock_nuevo, pid),
-                    )
-                    cur.execute("""
-                        INSERT INTO movimientos_stock
-                            (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues,
-                             referencia, notas, fecha)
-                        VALUES (%s,'salida','Entrega cotización',%s,%s,%s,%s,%s,%s::date)
-                    """, (pid, a_descontar, stock_actual, stock_nuevo,
-                          folio, f"Entrega parcial cotización {folio}", fecha_entrega))
-                    if a_descontar < cantidad and aviso != "sin_stock":
-                        aviso = "stock_parcial"
+                UPDATE cotizacion_detalle
+                   SET costo_entrega = %s, costo_entrega_tipo = %s
+                 WHERE cotizacion_id = %s AND producto_id = %s
+            """, (costo_e, tipo_e, cot_id, pid))
+            cur.execute("""
+                INSERT INTO movimientos_stock
+                    (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues,
+                     referencia, notas, fecha)
+                VALUES (%s,'salida','Entrega cotización',%s,%s,%s,%s,%s,%s::date)
+            """, (pid, cantidad, stock_antes, stock_nuevo,
+                  folio, f"Entrega parcial cotización {folio}", fecha_entrega))
 
         # Calcular estado basado en entregas totales vs pedido
         cur.execute("""
@@ -1001,11 +1115,8 @@ async def registrar_entregas_lote(request: Request, cot_id: int):
     )
 
     from fastapi.responses import Response as _Resp
-    redirect_url = f"/cotizaciones/{cot_id}"
-    if aviso:
-        redirect_url += f"?aviso={aviso}"
     r = _Resp(status_code=200, content="")
-    r.headers["HX-Redirect"] = redirect_url
+    r.headers["HX-Redirect"] = f"/cotizaciones/{cot_id}"
     return r
 
 
@@ -1379,18 +1490,32 @@ async def ver_costos_cotizacion(request: Request, cot_id: int):
         lineas = [_dec_to_float(dict(zip(dcols, r))) for r in cur.fetchall()]
 
         cur.execute("""
-            SELECT comp.producto_id, AVG(comp.costo_unitario) AS costo_real_avg
+            SELECT comp.producto_id,
+                   SUM(comp.costo_unitario * cdc.cantidad) / NULLIF(SUM(cdc.cantidad), 0)
+                       AS costo_real_avg
             FROM compra_detalle_cotizacion cdc
             JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
             WHERE cdc.cotizacion_id = %s
             GROUP BY comp.producto_id
         """, (cot_id,))
         costos_reales = {r[0]: float(r[1]) for r in cur.fetchall() if r[1] is not None}
+        costos_tipos  = {pid: 'compra_directa' for pid in costos_reales}
+
+        # Fallback: costo_entrega snapshot (promedio o catálogo al momento de entregar)
+        cur.execute("""
+            SELECT producto_id, costo_entrega, costo_entrega_tipo
+            FROM cotizacion_detalle
+            WHERE cotizacion_id = %s AND costo_entrega IS NOT NULL AND producto_id IS NOT NULL
+        """, (cot_id,))
+        for pid, ce, ce_tipo in cur.fetchall():
+            if pid not in costos_reales and ce:
+                costos_reales[pid] = float(ce)
+                costos_tipos[pid]  = ce_tipo or 'catalogo'
 
         cur.execute("""
             SELECT DISTINCT comp.id, f.folio_factura, f.serie, comp.total,
                             COALESCE(f.nombre_emisor, '—') AS proveedor,
-                            comp.fecha_compra
+                            comp.fecha_compra, comp.folio AS compra_folio
             FROM compra_detalle_cotizacion cdc
             JOIN compra_detalle cd ON cd.id = cdc.compra_detalle_id
             JOIN compras comp ON comp.id = cd.compra_id
@@ -1420,9 +1545,11 @@ async def ver_costos_cotizacion(request: Request, cot_id: int):
     margen_real = round((venta_sub - costo_real_total) / venta_sub * 100, 1) if (costo_real_total and venta_sub) else None
 
     for l in lineas:
-        cr = costos_reales.get(l["producto_id"])
+        cr      = costos_reales.get(l["producto_id"])
+        cr_tipo = costos_tipos.get(l["producto_id"])
         l["costo_real_u"]     = cr
         l["costo_real_total"] = round(cr * l["cantidad"], 2) if cr else None
+        l["costo_real_tipo"]  = cr_tipo
         snap    = l["costo_snapshot"] or 0
         venta_u = l["precio_unitario"]
         l["margen_linea_snap"] = round((venta_u - snap) / venta_u * 100, 1) if venta_u else None

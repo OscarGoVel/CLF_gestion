@@ -28,4 +28,12 @@
         Estudio de Mercado
     </a>
     {% endif %}
+    {% if user.rol == 'Administrador' %}
+    <a href="/herramientas"
+       class="px-4 h-full flex items-center text-xs font-semibold transition-colors rounded-t
+              {% if seccion == 'herramientas' %}text-clf-green border-b-2 border-clf-green bg-white
+              {% else %}text-navy-400 hover:text-navy-700{% endif %}">
+        Mantenimiento
+    </a>
+    {% endif %}
 </div>

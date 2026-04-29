@@ -60,7 +60,7 @@
         </div>
 
         {% for ln in lineas %}
-        <div class="border-b border-gray-100 last:border-0">
+        <div class="border-b border-gray-100 last:border-0" id="linea-{{ ln.id }}">
             <!-- Producto -->
             <div class="grid grid-cols-12 gap-3 px-5 py-4 items-start">
                 <div class="col-span-5">
@@ -76,20 +76,28 @@
                 </div>
                 <div class="col-span-2 text-right">
                     <p class="text-xs text-gray-400 mb-0.5">Costo unit.</p>
-                    <p class="text-sm font-semibold text-gray-700">${{ '{:,.4f}'.format(ln.costo_unitario or 0).rstrip('0').rstrip('.') }}</p>
+                    <p class="text-sm font-semibold text-gray-700" id="costo-u-{{ ln.id }}">${{ '{:,.4f}'.format(ln.costo_unitario or 0).rstrip('0').rstrip('.') }}</p>
                 </div>
-                <div class="col-span-3 text-right">
+                <div class="col-span-2 text-right">
                     <p class="text-xs text-gray-400 mb-0.5">Total línea</p>
-                    <p class="text-sm font-bold text-gray-800">${{ '{:,.2f}'.format(ln.costo_total or 0) }}</p>
+                    <p class="text-sm font-bold text-gray-800" id="costo-t-{{ ln.id }}">${{ '{:,.2f}'.format(ln.costo_total or 0) }}</p>
+                </div>
+                <div class="col-span-1 flex justify-end items-start pt-1">
+                    <button onclick="abrirEditor({{ ln.id }}, {{ ln.costo_unitario }}, {{ ln.cantidad }},
+                                {{ ln.asignaciones | tojson | e }})"
+                            title="Editar costo y asignaciones"
+                            class="text-gray-300 hover:text-clf-green transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H7v-3a2 2 0 01.586-1.414z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
             <!-- Asignaciones -->
-            {% if ln.asignaciones %}
-            <div class="px-5 pb-4 bg-gray-50 border-t border-gray-100">
-                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2 mb-2">
-                    Asignación de costos
-                </p>
+            <div id="asigs-{{ ln.id }}" class="px-5 pb-4 bg-gray-50 border-t border-gray-100">
+                {% if ln.asignaciones %}
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2 mb-2">Asignación de costos</p>
                 <div class="flex flex-wrap gap-2">
                     {% for a in ln.asignaciones %}
                     <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs
@@ -101,21 +109,16 @@
                         {% else %}
                         <span>📦 Stock general</span>
                         {% endif %}
-                        <span class="font-bold
-                              {% if a.cotizacion_id %}text-navy-600{% else %}text-gray-600{% endif %}">
+                        <span class="font-bold {% if a.cotizacion_id %}text-navy-600{% else %}text-gray-600{% endif %}">
                             × {{ '{:,.2f}'.format(a.cantidad or 0).rstrip('0').rstrip('.') }}
                         </span>
                     </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <p class="text-xs text-gray-400 italic pt-2">📦 Todo el lote asignado a stock general</p>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="px-5 pb-3 bg-gray-50 border-t border-gray-100">
-                <p class="text-xs text-gray-400 italic pt-2">
-                    📦 Todo el lote asignado a stock general
-                </p>
-            </div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -148,4 +151,133 @@
     {% endif %}
 
 </main>
+
+<!-- ── Modal edición de línea ─────────────────────────────────────────────── -->
+<div id="modal-editor" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-gray-800">Editar línea</h3>
+            <button onclick="cerrarEditor()" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+
+        <!-- Costo unitario -->
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Costo unitario</label>
+            <input id="ed-costo" type="number" step="any" min="0.01"
+                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-clf-green">
+        </div>
+
+        <!-- Asignaciones -->
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-medium text-gray-500">Asignaciones a cotizaciones</label>
+                <button type="button" onclick="agregarFilaAsig()"
+                        class="text-xs text-clf-green hover:underline">+ Agregar fila</button>
+            </div>
+            <div id="ed-asigs" class="space-y-2"></div>
+            <p id="ed-aviso" class="text-xs text-red-500 mt-1 hidden"></p>
+            <p class="text-xs text-gray-400 mt-1">El sobrante sin asignar irá automáticamente a stock general.</p>
+        </div>
+
+        <div class="flex justify-end gap-2">
+            <button onclick="cerrarEditor()"
+                    class="px-4 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                Cancelar
+            </button>
+            <button onclick="guardarDetalle()"
+                    class="px-4 py-2 text-xs text-white bg-clf-green hover:bg-green-700 rounded-lg transition-colors">
+                Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let _detalleId = null;
+    let _cantidad  = 0;
+
+    function abrirEditor(detalleId, costoU, cantidad, asignaciones) {
+        _detalleId = detalleId;
+        _cantidad  = parseFloat(cantidad);
+        document.getElementById('ed-costo').value = costoU;
+        const cont = document.getElementById('ed-asigs');
+        cont.innerHTML = '';
+        // Solo las asignaciones con cotizacion_id (las de stock general se recalculan)
+        const asigsCot = asignaciones.filter(a => a.cotizacion_id);
+        asigsCot.forEach(a => agregarFilaAsig(a.cotizacion_id, a.folio, a.cliente, a.cantidad));
+        if (asigsCot.length === 0) agregarFilaAsig();
+        document.getElementById('ed-aviso').classList.add('hidden');
+        document.getElementById('modal-editor').classList.remove('hidden');
+    }
+
+    function cerrarEditor() {
+        document.getElementById('modal-editor').classList.add('hidden');
+        _detalleId = null;
+    }
+
+    function agregarFilaAsig(cotId, folio, cliente, cant) {
+        const cont = document.getElementById('ed-asigs');
+        const div = document.createElement('div');
+        div.className = 'flex gap-2 items-center';
+        div.innerHTML = `
+            <input type="number" placeholder="ID cotización" value="${cotId || ''}"
+                   class="w-28 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-clf-green asig-cot-id"
+                   title="${folio ? folio + ' — ' + cliente : ''}">
+            <input type="number" step="any" min="0" placeholder="Cantidad" value="${cant || ''}"
+                   class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-clf-green asig-cantidad">
+            <button type="button" onclick="this.parentElement.remove()"
+                    class="text-gray-300 hover:text-red-400 transition-colors text-sm">✕</button>
+        `;
+        cont.appendChild(div);
+    }
+
+    async function guardarDetalle() {
+        const costoU = parseFloat(document.getElementById('ed-costo').value);
+        if (!costoU || costoU <= 0) {
+            mostrarAviso('El costo unitario debe ser mayor a cero.');
+            return;
+        }
+
+        const asignaciones = [];
+        let totalAsig = 0;
+        document.querySelectorAll('#ed-asigs > div').forEach(div => {
+            const cotId  = parseInt(div.querySelector('.asig-cot-id').value) || null;
+            const cant   = parseFloat(div.querySelector('.asig-cantidad').value) || 0;
+            if (cant > 0) {
+                asignaciones.push({ cotizacion_id: cotId, cantidad: cant });
+                totalAsig += cant;
+            }
+        });
+
+        if (totalAsig > _cantidad + 0.0001) {
+            mostrarAviso(`Las cantidades asignadas (${totalAsig}) superan la cantidad comprada (${_cantidad}).`);
+            return;
+        }
+
+        const resp = await fetch(`/compras/{{ compra.id }}/detalle/${_detalleId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ costo_unitario: costoU, asignaciones }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            mostrarAviso(err.detail || 'Error al guardar');
+            return;
+        }
+
+        cerrarEditor();
+        location.reload();
+    }
+
+    function mostrarAviso(msg) {
+        const el = document.getElementById('ed-aviso');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    }
+
+    document.getElementById('modal-editor').addEventListener('click', function(e) {
+        if (e.target === this) cerrarEditor();
+    });
+</script>
 {% endblock %}

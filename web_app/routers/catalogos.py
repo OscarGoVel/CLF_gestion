@@ -50,6 +50,49 @@ async def raiz(request: Request):
 # CLIENTES
 # ─────────────────────────────────────────────────────────────────────────────
 
+@router.get("/clientes/csv")
+async def exportar_clientes_csv(request: Request, tipo: str = "", buscar: str = ""):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    where, params = ["(c.activo IS NULL OR c.activo = TRUE)"], []
+    if tipo:
+        where.append("c.tipo = %s"); params.append(tipo)
+    if buscar:
+        where.append("(c.nombre_comercial ILIKE %s OR c.rfc ILIKE %s OR c.contacto ILIKE %s)")
+        params += [f"%{buscar}%"] * 3
+    w = "WHERE " + " AND ".join(where)
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT c.nombre_comercial, c.razon_social, c.tipo,
+                   c.rfc, c.contacto, c.telefono, c.email,
+                   COUNT(cot.id) AS num_cotizaciones,
+                   MAX(cot.fecha) AS ultima_cotizacion
+            FROM clientes c
+            LEFT JOIN cotizaciones cot ON cot.cliente_id = c.id
+            {w}
+            GROUP BY c.id
+            ORDER BY c.nombre_comercial
+        """, params or None)
+        filas = cur.fetchall()
+
+    buf = io.StringIO()
+    w_csv = csv.writer(buf)
+    w_csv.writerow(["Nombre Comercial", "Razón Social", "Tipo", "RFC",
+                    "Contacto", "Teléfono", "Email", "# Cotizaciones", "Última Cotización"])
+    for f in filas:
+        w_csv.writerow([v if v is not None else "" for v in f])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=clientes.csv"},
+    )
+
+
 @router.get("/clientes", response_class=HTMLResponse)
 async def lista_clientes(request: Request, tipo: str = "", buscar: str = ""):
     user = get_usuario_actual(request)
@@ -614,6 +657,57 @@ async def importar_csv_post(
                 "proveedor": prov_nombre,
             },
         },
+    )
+
+
+@router.get("/productos/csv")
+async def exportar_productos_csv(
+    request: Request,
+    buscar: str = "",
+    categoria: str = "",
+    con_stock: str = "",
+):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    where, params = [], []
+    if buscar:
+        where.append("(p.nombre ILIKE %s OR p.codigo ILIKE %s OR p.descripcion ILIKE %s)")
+        params += [f"%{buscar}%"] * 3
+    if categoria:
+        where.append("cat.nombre = %s"); params.append(categoria)
+    if con_stock == "1":
+        where.append("p.stock_actual > 0")
+    elif con_stock == "0":
+        where.append("(p.stock_actual IS NULL OR p.stock_actual = 0)")
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT p.codigo, p.nombre, p.unidad_medida,
+                   p.precio_base, p.aplica_iva, p.stock_actual, p.stock_minimo,
+                   cat.nombre AS categoria, sub.nombre AS subcategoria
+            FROM productos p
+            LEFT JOIN categorias    cat ON cat.id = p.categoria_id
+            LEFT JOIN subcategorias sub ON sub.id = p.subcategoria_id
+            {w}
+            ORDER BY cat.nombre, p.nombre
+        """, params or None)
+        filas = cur.fetchall()
+
+    buf = io.StringIO()
+    w_csv = csv.writer(buf)
+    w_csv.writerow(["Código", "Nombre", "Unidad", "Precio Base",
+                    "Aplica IVA", "Stock Actual", "Stock Mínimo", "Categoría", "Subcategoría"])
+    for f in filas:
+        w_csv.writerow([v if v is not None else "" for v in f])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=productos.csv"},
     )
 
 
@@ -1278,6 +1372,44 @@ async def guardar_producto(
 # ─────────────────────────────────────────────────────────────────────────────
 # PROVEEDORES
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/proveedores/csv")
+async def exportar_proveedores_csv(request: Request, buscar: str = ""):
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    where, params = [], []
+    if buscar:
+        where.append("(p.nombre ILIKE %s OR p.rfc ILIKE %s OR p.contacto ILIKE %s)")
+        params += [f"%{buscar}%"] * 3
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT p.nombre, p.rfc, p.contacto, p.telefono, p.email,
+                   COUNT(pp.producto_id) AS num_productos
+            FROM proveedores p
+            LEFT JOIN producto_proveedor pp ON pp.proveedor_id = p.id
+            {w}
+            GROUP BY p.id, p.nombre, p.rfc, p.contacto, p.telefono, p.email
+            ORDER BY p.nombre
+        """, params or None)
+        filas = cur.fetchall()
+
+    buf = io.StringIO()
+    w_csv = csv.writer(buf)
+    w_csv.writerow(["Nombre", "RFC", "Contacto", "Teléfono", "Email", "# Productos"])
+    for f in filas:
+        w_csv.writerow([v if v is not None else "" for v in f])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=proveedores.csv"},
+    )
+
 
 @router.get("/proveedores", response_class=HTMLResponse)
 async def lista_proveedores(request: Request, buscar: str = ""):

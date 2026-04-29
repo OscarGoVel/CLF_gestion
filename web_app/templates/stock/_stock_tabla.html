@@ -2,8 +2,9 @@
 {% for p in productos %}
 {% set stock = p.stock_actual or 0 %}
 {% set minimo = p.stock_minimo or 0 %}
-{% set bajo = minimo > 0 and stock < minimo %}
-{% set sin = stock == 0 %}
+{% set negativo = stock < 0 %}
+{% set sin = (not negativo) and stock == 0 %}
+{% set bajo = (not negativo) and minimo > 0 and stock < minimo %}
 <tr class="hover:bg-slate-50 transition-colors cursor-pointer"
     onclick="window.location='/catalogos/productos/{{ p.id }}'">
     <td class="px-4 py-2.5">
@@ -23,7 +24,8 @@
     </td>
     <td class="px-4 py-2.5 text-center">
         <span class="text-sm font-bold
-            {% if sin %}text-red-500
+            {% if negativo %}text-purple-600
+            {% elif sin %}text-red-500
             {% elif bajo %}text-amber-500
             {% else %}text-clf-green{% endif %}">
             {{ stock }}
@@ -34,7 +36,10 @@
         {{ minimo if minimo else '—' }}
     </td>
     <td class="px-4 py-2.5 text-center whitespace-nowrap">
-        {% if sin %}
+        {% if negativo %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700"
+              title="Entregado sin compra registrada">Pendiente compra</span>
+        {% elif sin %}
         <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-600">Sin stock</span>
         {% elif bajo %}
         <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-600">Bajo mínimo</span>

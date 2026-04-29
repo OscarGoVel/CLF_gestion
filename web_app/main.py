@@ -39,6 +39,7 @@ from web_app.routers import preinventario as preinventario_router
 from web_app.routers import estudio_mercado as estudio_mercado_router
 from web_app.routers import compras as compras_router
 from web_app.routers import estado_cuenta as estado_cuenta_router
+from web_app.routers import herramientas as herramientas_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -97,6 +98,11 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS descripcion_libre TEXT",
         "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS pendiente_catalogo BOOLEAN DEFAULT FALSE",
         "ALTER TABLE cotizacion_detalle ALTER COLUMN producto_id DROP NOT NULL",
+        # Costo promedio ponderado por producto (se actualiza en cada compra)
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS costo_promedio NUMERIC(14,4) DEFAULT 0",
+        # Snapshot del costo al momento de entregar la cotización
+        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega NUMERIC(14,4)",
+        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega_tipo TEXT",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -197,6 +203,7 @@ app.include_router(preinventario_router.router)
 app.include_router(estudio_mercado_router.router)
 app.include_router(compras_router.router)
 app.include_router(estado_cuenta_router.router)
+app.include_router(herramientas_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -355,11 +362,17 @@ async def dashboard(request: Request):
                 cur.execute("""
                     SELECT
                         COALESCE(SUM(total) FILTER (
-                            WHERE estado IN ('Programada','Entregada','Pagada')
+                            WHERE estado IN (
+                                'Programada','Parcialmente Entregada',
+                                'Entregada','Facturada','Pagada'
+                            )
                         ), 0) AS monto_vendido,
                         COALESCE(SUM(total - COALESCE(monto_pagado, 0)) FILTER (
-                            WHERE estado IN ('Programada','Entregada')
-                              AND (monto_pagado IS NULL OR monto_pagado < total)
+                            WHERE estado IN (
+                                'Programada','Parcialmente Entregada',
+                                'Entregada','Facturada'
+                            )
+                              AND (total - COALESCE(monto_pagado, 0)) > 0.01
                         ), 0) AS pendiente_cobrar
                     FROM cotizaciones
                 """)

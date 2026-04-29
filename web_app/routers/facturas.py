@@ -4,11 +4,12 @@ web_app/routers/facturas.py
 Módulo de Facturas: lista, detalle, importar XML, vincular cotización.
 """
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
 from web_app.database import get_pool_empresa, get_empresas
@@ -65,7 +66,8 @@ async def lista_facturas(
                    f.rfc_receptor, f.nombre_receptor,
                    f.subtotal, f.descuento, f.iva, f.total,
                    f.tipo, f.metodo_pago, f.forma_pago, f.moneda, f.uuid,
-                   COUNT(fc.cotizacion_id) AS num_cotizaciones
+                   COUNT(fc.cotizacion_id) AS num_cotizaciones,
+                   (SELECT id FROM compras WHERE factura_xml_id = f.id LIMIT 1) AS compra_id
             FROM facturas f
             LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
             {w}
@@ -95,6 +97,26 @@ async def lista_facturas(
     return templates.TemplateResponse(
         request=request, name="facturas/lista.html", context=ctx
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BÚSQUEDA DE PRODUCTOS JSON (debe ir ANTES de /{factura_id})
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/buscar-producto", response_class=JSONResponse)
+async def buscar_producto_json(request: Request, q: str = ""):
+    user = get_usuario_actual(request)
+    if not user or len(q) < 2:
+        return JSONResponse([])
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, codigo, nombre, unidad_medida
+            FROM productos
+            WHERE nombre ILIKE %s OR codigo ILIKE %s
+            ORDER BY nombre LIMIT 10
+        """, (f"%{q}%", f"%{q}%"))
+        rows = cur.fetchall()
+    return JSONResponse([{"id": r[0], "codigo": r[1], "nombre": r[2], "unidad": r[3]} for r in rows])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -490,6 +512,215 @@ async def selector_compras(
             "q":          q,
         },
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAPEO DE CONCEPTOS A PRODUCTOS DEL CATÁLOGO
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{factura_id}/mapeo-conceptos", response_class=JSONResponse)
+async def mapeo_conceptos(request: Request, factura_id: int):
+    """Retorna los conceptos del XML con el producto detectado por no_identificacion."""
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, clave_prod_serv, no_identificacion, cantidad,
+                   clave_unidad, unidad, descripcion, valor_unitario, importe
+            FROM factura_conceptos
+            WHERE factura_id = %s
+            ORDER BY id
+        """, (factura_id,))
+        cols      = [d[0] for d in cur.description]
+        conceptos = [_floats(dict(zip(cols, r))) for r in cur.fetchall()]
+
+        resultado = []
+        for idx, c in enumerate(conceptos):
+            producto_id, producto_nombre, producto_codigo = None, None, None
+            if c.get("no_identificacion"):
+                cur.execute("""
+                    SELECT id, nombre, codigo
+                    FROM productos
+                    WHERE codigo = %s
+                    LIMIT 1
+                """, (c["no_identificacion"],))
+                p = cur.fetchone()
+                if p:
+                    producto_id, producto_nombre, producto_codigo = p[0], p[1], p[2]
+            resultado.append({
+                "idx":             idx,
+                "concepto_id":     c["id"],
+                "descripcion":     c["descripcion"],
+                "cantidad":        c["cantidad"],
+                "valor_unitario":  c["valor_unitario"],
+                "importe":         c["importe"],
+                "unidad":          c["unidad"] or c.get("clave_unidad", ""),
+                "producto_id":     producto_id,
+                "producto_nombre": producto_nombre,
+                "producto_codigo": producto_codigo,
+            })
+
+    return JSONResponse(resultado)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CREAR COMPRA DESDE FACTURA (inline, sin salir de la pantalla)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/{factura_id}/crear-compra", response_class=JSONResponse)
+async def crear_compra_desde_factura(request: Request, factura_id: int):
+    """Crea un registro de compra a partir de los conceptos de la factura."""
+    user = get_usuario_actual(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    body = await request.json()
+    mapeo = body.get("mapeo", [])  # [{concepto_idx, producto_id}, ...]
+
+    if not mapeo:
+        raise HTTPException(status_code=400, detail="Mapeo de productos vacío")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        # Verificar factura
+        cur.execute("SELECT tipo, rfc_emisor, fecha, subtotal, iva, total FROM facturas WHERE id = %s", (factura_id,))
+        f = cur.fetchone()
+        if not f:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        tipo, rfc_emisor, fecha_fac, subtotal_fac, iva_fac, total_fac = f
+        if tipo != "E":
+            raise HTTPException(status_code=400, detail="Solo facturas de Egreso pueden convertirse en compra")
+
+        # Verificar que no exista ya una compra vinculada
+        cur.execute("SELECT id FROM compras WHERE factura_xml_id = %s LIMIT 1", (factura_id,))
+        if cur.fetchone():
+            raise HTTPException(status_code=400, detail="Esta factura ya tiene una compra registrada")
+
+        # Cargar conceptos indexados
+        cur.execute("""
+            SELECT id, descripcion, cantidad, valor_unitario, importe, no_identificacion
+            FROM factura_conceptos
+            WHERE factura_id = %s
+            ORDER BY id
+        """, (factura_id,))
+        conceptos = cur.fetchall()
+        conceptos_map = {idx: row for idx, row in enumerate(conceptos)}
+
+        # Validar que todos los productos existan
+        for item in mapeo:
+            pid = item.get("producto_id")
+            if not pid:
+                raise HTTPException(status_code=400, detail="Todos los conceptos deben tener producto asignado")
+            cur.execute("SELECT id FROM productos WHERE id = %s", (pid,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=400, detail=f"Producto {pid} no encontrado")
+
+        # Buscar proveedor por RFC
+        proveedor_id = None
+        if rfc_emisor:
+            cur.execute("SELECT id FROM proveedores WHERE rfc = %s LIMIT 1", (rfc_emisor,))
+            p = cur.fetchone()
+            if p:
+                proveedor_id = p[0]
+
+        # Generar folio CMP
+        año = date.today().year
+        cur.execute("SELECT COUNT(*) FROM compras WHERE folio LIKE %s", (f"CMP-{año}-%",))
+        n = cur.fetchone()[0] + 1
+        folio = f"CMP-{año}-{n:04d}"
+
+        # Crear cabecera de la compra
+        subtotal_g = Decimal(str(subtotal_fac or 0))
+        iva_g      = Decimal(str(iva_fac or 0))
+        total_g    = Decimal(str(total_fac or 0))
+
+        cur.execute("""
+            INSERT INTO compras (folio, proveedor_id, fecha_compra, subtotal, iva, total,
+                                  ticket_referencia, factura_xml_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            folio, proveedor_id,
+            fecha_fac or date.today().isoformat(),
+            float(subtotal_g), float(iva_g), float(total_g),
+            None, factura_id,
+        ))
+        compra_id = cur.fetchone()[0]
+
+        # Crear detalle por cada concepto mapeado
+        for item in mapeo:
+            idx        = item["concepto_idx"]
+            producto_id = item["producto_id"]
+            concepto   = conceptos_map.get(idx)
+            if not concepto:
+                continue
+            _, desc, cantidad, costo_u, costo_total, _ = concepto
+            cantidad   = float(cantidad or 0)
+            costo_u    = float(costo_u or 0)
+            costo_total = float(costo_total or 0)
+
+            cur.execute("""
+                INSERT INTO compra_detalle (compra_id, producto_id, cantidad, costo_unitario, costo_total)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+            """, (compra_id, producto_id, cantidad, costo_u, costo_total))
+            detalle_id = cur.fetchone()[0]
+
+            # Todo va a stock general (el usuario asigna a cotizaciones desde el detalle de compra)
+            cur.execute("""
+                INSERT INTO compra_detalle_cotizacion (compra_detalle_id, cotizacion_id, cantidad)
+                VALUES (%s, NULL, %s)
+            """, (detalle_id, cantidad))
+
+            # Actualizar stock y costo promedio ponderado
+            cur.execute("SELECT COALESCE(stock_actual, 0), COALESCE(costo_promedio, 0) FROM productos WHERE id = %s", (producto_id,))
+            stock_antes, costo_prom_ant = cur.fetchone()
+            stock_antes      = float(stock_antes)
+            costo_prom_ant   = float(costo_prom_ant)
+            stock_despues    = stock_antes + cantidad
+            denominador      = stock_antes + cantidad
+            if denominador > 0:
+                nuevo_prom = (stock_antes * costo_prom_ant + cantidad * costo_u) / denominador
+            else:
+                nuevo_prom = costo_u
+
+            cur.execute(
+                "UPDATE productos SET stock_actual = %s, costo_promedio = %s WHERE id = %s",
+                (stock_despues, round(nuevo_prom, 4), producto_id),
+            )
+
+            # Registrar precio en historial del producto
+            cur.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente, proveedor_id)
+                VALUES (%s, %s, %s, %s, 'compra', %s)
+            """, (
+                producto_id,
+                costo_u,
+                fecha_fac or date.today().isoformat(),
+                f"Compra {folio}",
+                proveedor_id,
+            ))
+
+            cur.execute("""
+                INSERT INTO movimientos_stock
+                    (producto_id, tipo, motivo, cantidad, stock_antes, stock_despues, referencia, usuario)
+                VALUES (%s, 'entrada', 'compra', %s, %s, %s, %s, %s)
+            """, (producto_id, cantidad, stock_antes, stock_despues, folio, user.get("username", "")))
+
+    alerta_proveedor = None
+    if not proveedor_id and rfc_emisor:
+        alerta_proveedor = f"RFC {rfc_emisor} no encontrado en el catálogo de proveedores. Vincula el proveedor manualmente desde la compra."
+
+    return JSONResponse({
+        "ok": True,
+        "compra_id": compra_id,
+        "folio": folio,
+        "alerta_proveedor": alerta_proveedor,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
