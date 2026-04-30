@@ -34,6 +34,9 @@ logs/*.log.*
 output/
 facturas_xml/
 
+# Claude Code
+.claude/settings.local.json
+
 # IDE
 .vscode/
 .idea/
