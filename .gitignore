@@ -1,5 +1,6 @@
 # Credenciales y configuración sensible
 .env
+config.json
 
 # Bases de datos locales
 *.db

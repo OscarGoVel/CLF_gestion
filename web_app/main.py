@@ -22,6 +22,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -40,6 +41,12 @@ from web_app.routers import estudio_mercado as estudio_mercado_router
 from web_app.routers import compras as compras_router
 from web_app.routers import estado_cuenta as estado_cuenta_router
 from web_app.routers import herramientas as herramientas_router
+from web_app.routers import api_dashboard as api_dashboard_router
+from web_app.routers import api_cotizaciones as api_cotizaciones_router
+from web_app.routers import api_catalogos as api_catalogos_router
+from web_app.routers import api_compras as api_compras_router
+from web_app.routers import api_stock as api_stock_router
+from web_app.routers import api_facturas as api_facturas_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -190,6 +197,21 @@ class MonitorMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(MonitorMiddleware)
 
+# CORS — permite peticiones desde Firebase Hosting y desarrollo local
+_CORS_ORIGINS = settings.cors_origins if hasattr(settings, "cors_origins") else [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:4173",   # Vite preview
+    "https://clf-gestion.web.app",
+    "https://clf-gestion.firebaseapp.com",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router.router)
@@ -204,6 +226,12 @@ app.include_router(estudio_mercado_router.router)
 app.include_router(compras_router.router)
 app.include_router(estado_cuenta_router.router)
 app.include_router(herramientas_router.router)
+app.include_router(api_dashboard_router.router)
+app.include_router(api_cotizaciones_router.router)
+app.include_router(api_catalogos_router.router)
+app.include_router(api_compras_router.router)
+app.include_router(api_stock_router.router)
+app.include_router(api_facturas_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -257,6 +285,11 @@ async def handler_500(request: Request, exc: Exception):
 
 
 # ── PWA ───────────────────────────────────────────────────────────────────────
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "app": "CLF Gestión"}
+
 
 @app.get("/manifest.json")
 async def manifest():

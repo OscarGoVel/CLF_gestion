@@ -1,0 +1,261 @@
+# -*- coding: utf-8 -*-
+"""
+web_app/routers/api_compras.py
+/api/compras — endpoints JSON para el SPA React.
+"""
+
+from datetime import date
+from decimal import Decimal
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from web_app.database import get_pool_empresa
+from web_app.dependencies import get_usuario_api
+
+router = APIRouter(prefix="/api/compras", tags=["api"])
+
+POR_PAGINA = 25
+
+
+class LineaIn(BaseModel):
+    producto_id: int
+    cantidad: float
+    costo_unitario: float
+    aplica_iva: bool = False
+    cotizacion_id: Optional[int] = None
+
+
+class CompraIn(BaseModel):
+    proveedor_id: Optional[int] = None
+    fecha_compra: str
+    ticket_referencia: Optional[str] = None
+    notas: Optional[str] = None
+    lineas: List[LineaIn]
+
+
+def _generar_folio(cur, año: int) -> str:
+    cur.execute("SELECT COUNT(*) FROM compras WHERE folio LIKE %s", (f"CMP-{año}-%",))
+    n = cur.fetchone()[0] + 1
+    return f"CMP-{año}-{n:04d}"
+
+
+def _serial(v):
+    if isinstance(v, Decimal): return float(v)
+    if hasattr(v, "isoformat"): return v.isoformat()
+    return v
+
+def _rows(cur):
+    cols = [d[0] for d in cur.description]
+    return [{k: _serial(v) for k, v in zip(cols, r)} for r in cur.fetchall()]
+
+
+@router.get("")
+async def listar(
+    q: str = Query(""),
+    pagina: int = Query(1, ge=1),
+    user: dict = Depends(get_usuario_api),
+):
+    from fastapi import HTTPException
+    if user.get("rol") == "Almacenista":
+        raise HTTPException(status_code=403, detail="Sin acceso")
+
+    empresa_db = user["empresa_db"]
+    where, params = [], []
+    if q:
+        where.append("(c.folio ILIKE %s OR p.nombre ILIKE %s OR c.ticket_referencia ILIKE %s)")
+        like = f"%{q}%"
+        params += [like, like, like]
+
+    filtro = ("WHERE " + " AND ".join(where)) if where else ""
+    offset = (pagina - 1) * POR_PAGINA
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT COUNT(DISTINCT c.id)
+            FROM compras c
+            LEFT JOIN proveedores p ON p.id = c.proveedor_id
+            {filtro}
+        """, params or None)
+        total = cur.fetchone()[0]
+
+        cur.execute(f"""
+            SELECT c.id, c.folio, c.fecha_compra, c.total,
+                   c.ticket_referencia,
+                   COALESCE(p.nombre, '— sin proveedor —') AS proveedor,
+                   COUNT(DISTINCT cd.id)  AS num_lineas,
+                   COUNT(DISTINCT cdc.cotizacion_id) AS num_cotizaciones
+            FROM compras c
+            LEFT JOIN proveedores p ON p.id = c.proveedor_id
+            LEFT JOIN compra_detalle cd ON cd.compra_id = c.id
+            LEFT JOIN compra_detalle_cotizacion cdc ON cdc.compra_detalle_id = cd.id
+            {filtro}
+            GROUP BY c.id, p.nombre
+            ORDER BY c.id DESC
+            LIMIT {POR_PAGINA} OFFSET {offset}
+        """, params or None)
+        compras = _rows(cur)
+
+    total_pags = max(1, (total + POR_PAGINA - 1) // POR_PAGINA)
+    return JSONResponse({"compras": compras, "total": total,
+                         "pagina": pagina, "total_pags": total_pags})
+
+
+@router.get("/{compra_id}")
+async def detalle(compra_id: int, user: dict = Depends(get_usuario_api)):
+    from fastapi import HTTPException
+    empresa_db = user["empresa_db"]
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT c.id, c.folio, c.fecha_compra, c.total, c.ticket_referencia,
+                   c.notas,
+                   COALESCE(p.nombre, '—') AS proveedor,
+                   p.rfc AS proveedor_rfc,
+                   f.serie, f.folio_factura, f.uuid, f.fecha AS fecha_factura
+            FROM compras c
+            LEFT JOIN proveedores p ON p.id = c.proveedor_id
+            LEFT JOIN facturas f ON f.id = c.factura_xml_id
+            WHERE c.id = %s
+        """, (compra_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404)
+        cols = [d[0] for d in cur.description]
+        compra = {k: _serial(v) for k, v in zip(cols, row)}
+
+        # Líneas de la compra con cotizaciones vinculadas
+        cur.execute("""
+            SELECT cd.id, p.codigo, p.nombre, p.unidad_medida,
+                   cd.cantidad, cd.costo_unitario,
+                   cd.cantidad * cd.costo_unitario AS importe,
+                   COALESCE(
+                       STRING_AGG(DISTINCT cot.folio, ', '),
+                       '—'
+                   ) AS cotizaciones
+            FROM compra_detalle cd
+            LEFT JOIN productos p ON p.id = cd.producto_id
+            LEFT JOIN compra_detalle_cotizacion cdc ON cdc.compra_detalle_id = cd.id
+            LEFT JOIN cotizaciones cot ON cot.id = cdc.cotizacion_id
+            WHERE cd.compra_id = %s
+            GROUP BY cd.id, p.codigo, p.nombre, p.unidad_medida,
+                     cd.cantidad, cd.costo_unitario
+            ORDER BY cd.id
+        """, (compra_id,))
+        lineas = _rows(cur)
+
+    return JSONResponse({"compra": compra, "lineas": lineas})
+
+
+# ── POST /api/compras ─────────────────────────────────────────────────────────
+
+@router.post("", status_code=201)
+async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    if not body.lineas:
+        raise HTTPException(status_code=400, detail="Debe incluir al menos una línea")
+
+    empresa_db = user["empresa_db"]
+    año = date.today().year
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        folio = _generar_folio(cur, año)
+
+        subtotal_g = Decimal("0")
+        iva_g = Decimal("0")
+        detalle_rows = []
+
+        for ln in body.lineas:
+            cant = Decimal(str(ln.cantidad))
+            costo_u = Decimal(str(ln.costo_unitario))
+            sub = (cant * costo_u).quantize(Decimal("0.01"))
+            iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if ln.aplica_iva else Decimal("0")
+            subtotal_g += sub
+            iva_g += iva
+            detalle_rows.append({
+                "producto_id": ln.producto_id,
+                "cantidad": cant,
+                "costo_u": costo_u,
+                "total": sub + iva,
+                "cotizacion_id": ln.cotizacion_id,
+            })
+
+        total_g = subtotal_g + iva_g
+
+        cur.execute("""
+            INSERT INTO compras
+              (folio, proveedor_id, fecha_compra, subtotal, iva, total,
+               ticket_referencia, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            folio, body.proveedor_id, body.fecha_compra,
+            float(subtotal_g), float(iva_g), float(total_g),
+            body.ticket_referencia or None, body.notas or None,
+        ))
+        compra_id = cur.lastrowid
+
+        for row in detalle_rows:
+            cur.execute("""
+                INSERT INTO compra_detalle
+                  (compra_id, producto_id, cantidad, costo_unitario, costo_total)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                compra_id, row["producto_id"],
+                float(row["cantidad"]), float(row["costo_u"]), float(row["total"]),
+            ))
+            detalle_id = cur.lastrowid
+
+            # Vincular a cotización si se proporcionó, si no va a stock general
+            cur.execute("""
+                INSERT INTO compra_detalle_cotizacion
+                  (compra_detalle_id, cotizacion_id, cantidad)
+                VALUES (%s, %s, %s)
+            """, (detalle_id, row["cotizacion_id"], float(row["cantidad"])))
+
+            # Stock y costo promedio ponderado
+            cur.execute(
+                "SELECT COALESCE(stock_actual, 0), COALESCE(costo_promedio, 0) FROM productos WHERE id = %s",
+                (row["producto_id"],),
+            )
+            stock_antes, costo_prom_ant = cur.fetchone()
+            stock_antes = float(stock_antes)
+            costo_prom_ant = Decimal(str(costo_prom_ant))
+            stock_despues = stock_antes + float(row["cantidad"])
+
+            denom = Decimal(str(stock_antes)) + row["cantidad"]
+            nuevo_prom = (
+                (Decimal(str(stock_antes)) * costo_prom_ant + row["cantidad"] * row["costo_u"]) / denom
+            ) if denom > 0 else row["costo_u"]
+
+            cur.execute(
+                "UPDATE productos SET stock_actual = %s, costo_promedio = %s WHERE id = %s",
+                (stock_despues, float(nuevo_prom.quantize(Decimal("0.0001"))), row["producto_id"]),
+            )
+
+            # Historial de precios
+            cur.execute("""
+                INSERT INTO producto_precio_historial
+                    (producto_id, precio, fecha, motivo, fuente, proveedor_id)
+                VALUES (%s, %s, %s, %s, 'compra', %s)
+            """, (
+                row["producto_id"], float(row["costo_u"]),
+                body.fecha_compra, f"Compra {folio}", body.proveedor_id,
+            ))
+
+            # Movimiento de stock
+            cur.execute("""
+                INSERT INTO movimientos_stock
+                  (producto_id, tipo, motivo, cantidad,
+                   stock_antes, stock_despues, referencia, usuario)
+                VALUES (%s, 'entrada', 'compra', %s, %s, %s, %s, %s)
+            """, (
+                row["producto_id"], float(row["cantidad"]),
+                stock_antes, stock_despues,
+                folio, user.get("username", ""),
+            ))
+
+    return JSONResponse({"id": compra_id, "folio": folio}, status_code=201)

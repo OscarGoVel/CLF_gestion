@@ -46,6 +46,33 @@ def _cfg() -> dict:
         return {}
 
 
+def _pg_kwargs(dbname: str) -> dict:
+    """
+    Construye los kwargs de conexion PostgreSQL priorizando variables de entorno.
+    En local usa config.json como respaldo.
+    En Cloud Run define CLF_CLOUD_SQL_INSTANCE para usar Unix socket.
+    """
+    cfg = _cfg()
+    pg  = cfg.get("postgresql", {})
+
+    password = os.environ.get("CLF_PG_PASSWORD") or pg.get("password", "")
+    user     = os.environ.get("CLF_PG_USER")     or pg.get("user", "postgres")
+
+    cloud_sql = os.environ.get("CLF_CLOUD_SQL_INSTANCE", "").strip()
+    if cloud_sql:
+        # Cloud Run: conexion por Unix socket a Cloud SQL
+        return dict(
+            host=f"/cloudsql/{cloud_sql}",
+            dbname=dbname,
+            user=user,
+            password=password,
+        )
+
+    host = os.environ.get("CLF_PG_HOST") or pg.get("host", "localhost")
+    port = int(os.environ.get("CLF_PG_PORT") or pg.get("port", 5432))
+    return dict(host=host, port=port, dbname=dbname, user=user, password=password)
+
+
 _TABLAS_SIN_ID = {'preferencias_usuario', 'producto_proveedor', 'seguimiento_etapas',
                   'factura_cotizaciones', 'oc_cotizaciones', 'compra_detalle_cotizacion'}
 
@@ -182,18 +209,11 @@ class PgPool:
             if self._pool is not None:
                 return
             import psycopg2.pool
-            cfg = _cfg()
-            pg  = cfg.get("postgresql", {})
-            password = os.environ.get("CLF_PG_PASSWORD") or pg.get("password", "")
             os.environ["PGPASSFILE"] = os.devnull
             self._pool = psycopg2.pool.ThreadedConnectionPool(
                 self._minconn,
                 self._maxconn,
-                host=pg.get("host", "localhost"),
-                port=pg.get("port", 5432),
-                dbname=self._dbname,
-                user=pg.get("user", "postgres"),
-                password=password,
+                **_pg_kwargs(self._dbname),
             )
 
     @contextmanager
@@ -248,12 +268,23 @@ class PgPool:
 
 
 def _get_db_usuarios() -> str:
-    cfg = _cfg()
-    return cfg.get("postgresql", {}).get("database_usuarios", "clf_usuarios")
+    env_val = os.environ.get("CLF_PG_DB_USUARIOS", "").strip()
+    if env_val:
+        return env_val
+    return _cfg().get("postgresql", {}).get("database_usuarios", "clf_usuarios")
 
 
 def get_empresas() -> list[dict]:
-    """Retorna la lista de empresas definidas en config.json."""
+    """
+    Retorna la lista de empresas.
+    En produccion (Cloud Run) lee CLF_EMPRESAS_JSON; en local usa config.json.
+    """
+    env_json = os.environ.get("CLF_EMPRESAS_JSON", "").strip()
+    if env_json:
+        try:
+            return json.loads(env_json)
+        except json.JSONDecodeError as e:
+            _log_db.error(f"CLF_EMPRESAS_JSON invalido: {e}")
     return _cfg().get("empresas", [])
 
 
