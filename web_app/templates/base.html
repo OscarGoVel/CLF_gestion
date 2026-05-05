@@ -120,9 +120,12 @@
 
     <!-- Contenido principal -->
     <div style="overflow-y:auto;overflow-x:hidden;">
-        {% block body %}{% endblock %}
-    </div>
+{% endif %}{# fin apertura del shell #}
 
+{% block body %}{% endblock %}
+
+{% if user is defined and user %}
+    </div><!-- /.scroll -->
 </div><!-- /.shell -->
 
 <!-- Activa la pestaña de nav correcta -->
@@ -153,10 +156,6 @@
     }
 })();
 </script>
-
-{% else %}
-<!-- Sin sesión: solo el bloque de contenido (login, etc.) -->
-{% block body %}{% endblock %}
 {% endif %}
 
 <!-- ── Toast ──────────────────────────────────────────────────────────────── -->
