@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="height:100%;">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,306 +7,238 @@
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0f7b5e">
+    <meta name="theme-color" content="#2d5a45">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CLF Gestión">
     <link rel="apple-touch-icon" href="/static/logo_clf.jpg">
 
-    <!-- TailwindCSS Play CDN (desarrollo) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        navy: {
-                            50:  '#f0f4fa',
-                            100: '#d9e2f0',
-                            400: '#6b7e99',
-                            500: '#2b3a55',
-                            700: '#1e2d45',
-                            900: '#141f30',
-                        },
-                        clf: {
-                            green:      '#0f7b5e',
-                            'green-dk': '#065f46',
-                            teal:       '#1aab82',
-                            blue:       '#1a4b8c',
-                        },
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
+    <!-- Tipografía -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+
+    <!-- Design system nuevo -->
+    <link rel="stylesheet" href="/static/css/styles.css">
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-navy-700 min-h-screen font-sans antialiased pb-16 sm:pb-0">
+<body class="wf" style="height:100%;margin:0;overflow:hidden;">
 
-    {# ── Barra de navegación principal (desktop, siempre idéntica) ──────────── #}
-    {% if user is defined and user %}
-    <nav id="top-nav"
-         class="hidden sm:flex bg-navy-900 border-b border-navy-700 h-10 items-center select-none sticky top-0 z-40">
+{% if user is defined and user %}
+<!-- ── App shell ──────────────────────────────────────────────────────────── -->
+<div class="shell" style="height:100vh;">
 
-        {# Logo #}
-        <div class="flex items-center h-full px-4 shrink-0">
-            <span class="text-clf-teal font-bold text-sm tracking-wide">⚙ CLF</span>
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="brand">
+            CLF<span style="color:var(--ink-400);font-weight:400;margin-left:6px;">Gestión</span>
         </div>
-        <div class="w-px bg-navy-700 h-6 shrink-0"></div>
 
-        {# Secciones principales #}
-        <div class="flex items-center h-full flex-1 overflow-x-auto">
-            <a id="nav-dashboard"   href="/dashboard"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                📊 Dashboard
-            </a>
-            {% if user.rol not in ('Almacenista',) %}
-            <a id="nav-cotizaciones" href="/cotizaciones"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                📄 Cotizaciones
-            </a>
-            {% endif %}
-            <a id="nav-stock"       href="/stock"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                📦 Stock
-            </a>
-            <a id="nav-catalogos"   href="/catalogos"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                📚 Catálogos
-            </a>
-            {% if user.rol not in ('Almacenista', 'Solo lectura') %}
-            <a id="nav-herramientas" href="/analisis"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                🔧 Herramientas
-            </a>
-            {% endif %}
+        <nav>
             {% if user.rol in ('Administrador', 'Operador') %}
-            <a id="nav-configuracion" href="/facturas"
-               class="top-nav-tab px-4 h-full flex items-center text-xs text-navy-400 hover:text-white hover:bg-navy-700 transition-colors shrink-0">
-                ⚙ Configuración
+            <a href="/dashboard" id="nav-inicio"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Inicio</span>
+            </a>
+            <a href="/cotizaciones" id="nav-comercial"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Comercial</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Cotizar · Vender</span>
+            </a>
+            <a href="/compras" id="nav-operacion"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Operación</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Comprar · Almacén</span>
+            </a>
+            <a href="/facturas" id="nav-cobranza"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Cobranza</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Facturar · Cobrar</span>
+            </a>
+            <a href="/analisis" id="nav-analisis"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Análisis</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Reportes · Costos</span>
+            </a>
+            <a href="/catalogos" id="nav-config"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Configuración</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Maestros · Sistema</span>
+            </a>
+
+            {% elif user.rol == 'Almacenista' %}
+            <a href="/dashboard" id="nav-inicio"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Inicio</span>
+            </a>
+            <a href="/stock" id="nav-operacion"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Operación</span>
+                <span style="font-size:10px;color:var(--ink-500);margin-top:1px;">Stock · Pre-inv · Recep.</span>
+            </a>
+            <a href="/catalogos" id="nav-catalogos"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Productos</span>
+            </a>
+
+            {% else %}{# Solo lectura #}
+            <a href="/dashboard" id="nav-inicio"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Inicio</span>
+            </a>
+            <a href="/cotizaciones" id="nav-comercial"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Comercial</span>
+            </a>
+            <a href="/catalogos" id="nav-catalogos"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Catálogos</span>
+            </a>
+            <a href="/analisis" id="nav-analisis"
+               style="flex-direction:column;align-items:flex-start;justify-content:center;padding:4px 16px;">
+                <span style="font-size:12.5px;">Reportes</span>
             </a>
             {% endif %}
+        </nav>
+
+        <div class="right">
+            <span class="kbd" id="cmd-k-btn" title="Búsqueda rápida (Ctrl+K)" style="cursor:pointer;">⌘ K</span>
+            <span class="user">{{ user.nombre }}</span>
+            <span class="role-tag">{{ user.rol }}</span>
+            <span style="color:var(--ink-300);">·</span>
+            <span style="font-size:11.5px;color:var(--ink-600);">{{ user.empresa_nombre }}</span>
+            <a href="/auth/logout"
+               style="font-size:11.5px;color:var(--ink-400);text-decoration:none;"
+               onmouseover="this.style.color='var(--danger)'"
+               onmouseout="this.style.color='var(--ink-400)'">Salir</a>
         </div>
-
-        {# Usuario + logout #}
-        <div class="flex items-center h-full px-4 gap-3 shrink-0 border-l border-navy-700">
-            <span class="text-xs text-navy-400">👤 {{ user.nombre }}</span>
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold
-                {% if user.rol == 'Administrador' %}bg-clf-blue text-white
-                {% elif user.rol == 'Operador' %}bg-clf-green text-white
-                {% else %}bg-navy-500 text-white{% endif %}">
-                {{ user.rol }}
-            </span>
-            <span class="text-xs text-navy-300 hidden md:inline">· {{ user.empresa_nombre }}</span>
-            <a href="/auth/logout" class="text-xs text-navy-400 hover:text-red-400 transition-colors">🔒 Salir</a>
-        </div>
-    </nav>
-    <script>
-    (function () {
-        var path = window.location.pathname;
-        var map = [
-            ['/dashboard',        'nav-dashboard'],
-            ['/cotizaciones',     'nav-cotizaciones'],
-            ['/stock',            'nav-stock'],
-            ['/preinventario',    'nav-stock'],
-            ['/compras',          'nav-stock'],
-            ['/catalogos',        'nav-catalogos'],
-            ['/estudio-mercado',  'nav-herramientas'],
-            ['/analisis',         'nav-herramientas'],
-            ['/estado-cuenta',    'nav-herramientas'],
-            ['/herramientas',     'nav-herramientas'],
-            ['/facturas',         'nav-configuracion'],
-            ['/admin',            'nav-configuracion'],
-            ['/configuracion',    'nav-configuracion'],
-        ];
-        for (var i = 0; i < map.length; i++) {
-            if (path === map[i][0] || path.startsWith(map[i][0] + '/')) {
-                var el = document.getElementById(map[i][1]);
-                if (el) {
-                    el.classList.remove('text-navy-400');
-                    el.classList.add('text-white', 'bg-navy-700', 'font-semibold', 'border-b-2', 'border-clf-teal');
-                }
-                break;
-            }
-        }
-    })();
-    </script>
-    {% endif %}
-
-    {% block body %}{% endblock %}
-
-    <!-- Barra de navegación inferior (solo móvil) -->
-    <nav id="bottom-nav"
-         class="sm:hidden fixed bottom-0 inset-x-0 bg-navy-900 border-t border-navy-500
-                flex items-stretch h-16 z-50 select-none">
-        {% if user is defined and user and user.rol == 'Almacenista' %}
-            {% set nav_links = [
-                ('📊','Dashboard','/dashboard'),
-                ('📦','Stock','/stock'),
-                ('📚','Catálogos','/catalogos'),
-                ('🔢','Pre-Inv','/preinventario'),
-            ] %}
-        {% elif user is defined and user and user.rol == 'Solo lectura' %}
-            {% set nav_links = [
-                ('📊','Dashboard','/dashboard'),
-                ('📄','Cotizaciones','/cotizaciones'),
-                ('📚','Catálogos','/catalogos'),
-                ('📦','Stock','/stock'),
-            ] %}
-        {% else %}
-            {% set nav_links = [
-                ('📊','Dashboard','/dashboard'),
-                ('📄','Cotizaciones','/cotizaciones'),
-                ('📚','Catálogos','/catalogos'),
-                ('🔢','Pre-Inv','/preinventario'),
-                ('📦','Stock','/stock'),
-            ] %}
-        {% endif %}
-        {% for icon, label, href in nav_links %}
-        <a href="{{ href }}" data-path="{{ href }}"
-           class="flex-1 flex flex-col items-center justify-center gap-0.5 text-navy-400
-                  hover:text-white hover:bg-navy-700 transition-colors text-center nav-tab">
-            <span class="text-xl leading-none">{{ icon }}</span>
-            <span class="text-[9px] font-semibold uppercase tracking-wide leading-none">{{ label }}</span>
-        </a>
-        {% endfor %}
-    </nav>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function() {});
-        }
-        // Resaltar pestaña activa en bottom nav; ocultar en login
-        (function() {
-            var path = window.location.pathname;
-            var nav = document.getElementById('bottom-nav');
-            if (!nav) return;
-            if (path === '/' || path === '/auth/login') { nav.style.display = 'none'; return; }
-            document.querySelectorAll('#bottom-nav .nav-tab').forEach(function(a) {
-                var p = a.getAttribute('data-path');
-                if (path === p || (p !== '/dashboard' && path.startsWith(p))) {
-                    a.classList.remove('text-navy-400');
-                    a.classList.add('text-clf-teal', 'bg-navy-700');
-                }
-            });
-        })();
-    </script>
-
-    <!-- ── Toast de notificaciones ─────────────────────────────────────────── -->
-    <div id="toast-container"
-         class="fixed bottom-20 sm:bottom-6 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
     </div>
-    <script>
-    function showToast(msg, type) {
-        var colors = {
-            success: 'bg-green-600 text-white',
-            error:   'bg-red-600 text-white',
-            info:    'bg-navy-700 text-white',
-            warn:    'bg-amber-500 text-white',
-        };
-        var icons = { success: '✓', error: '✕', info: 'ℹ', warn: '⚠' };
-        var cls   = colors[type] || colors.info;
-        var icon  = icons[type]  || icons.info;
-        var t = document.createElement('div');
-        t.className = cls + ' pointer-events-auto flex items-center gap-2 px-4 py-2.5 ' +
-                      'rounded-xl shadow-lg text-sm font-semibold transition-all duration-300 ' +
-                      'translate-y-2 opacity-0';
-        t.innerHTML = '<span>' + icon + '</span><span>' + msg + '</span>';
-        document.getElementById('toast-container').appendChild(t);
-        requestAnimationFrame(function() {
-            requestAnimationFrame(function() {
-                t.classList.remove('translate-y-2', 'opacity-0');
+
+    <!-- Contenido principal -->
+    <div style="overflow-y:auto;overflow-x:hidden;">
+        {% block body %}{% endblock %}
+    </div>
+
+</div><!-- /.shell -->
+
+<!-- Activa la pestaña de nav correcta -->
+<script>
+(function() {
+    var path = window.location.pathname;
+    var map = [
+        ['/dashboard',       'nav-inicio'],
+        ['/cotizaciones',    'nav-comercial'],
+        ['/compras',         'nav-operacion'],
+        ['/stock',           'nav-operacion'],
+        ['/preinventario',   'nav-operacion'],
+        ['/facturas',        'nav-cobranza'],
+        ['/estado-cuenta',   'nav-cobranza'],
+        ['/analisis',        'nav-analisis'],
+        ['/estudio-mercado', 'nav-analisis'],
+        ['/herramientas',    'nav-analisis'],
+        ['/catalogos',       'nav-config'],
+        ['/admin',           'nav-config'],
+        ['/configuracion',   'nav-config'],
+    ];
+    for (var i = 0; i < map.length; i++) {
+        if (path === map[i][0] || path.startsWith(map[i][0] + '/')) {
+            var el = document.getElementById(map[i][1]);
+            if (el) el.classList.add('active');
+            break;
+        }
+    }
+})();
+</script>
+
+{% else %}
+<!-- Sin sesión: solo el bloque de contenido (login, etc.) -->
+{% block body %}{% endblock %}
+{% endif %}
+
+<!-- ── Toast ──────────────────────────────────────────────────────────────── -->
+<div id="toast-container"
+     style="position:fixed;bottom:24px;right:16px;z-index:9999;
+            display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
+<script>
+function showToast(msg, type) {
+    var bg = { success:'var(--accent)', error:'var(--danger)', info:'var(--ink-800)', warn:'var(--warn)' };
+    var t = document.createElement('div');
+    t.style.cssText =
+        'background:' + (bg[type] || bg.info) + ';color:#fff;' +
+        'pointer-events:auto;display:flex;align-items:center;gap:8px;' +
+        'padding:10px 16px;border-radius:4px;font-size:12.5px;' +
+        'font-family:var(--sans);font-weight:500;' +
+        'transition:opacity 0.2s;box-shadow:0 4px 16px rgba(0,0,0,0.18);';
+    t.textContent = msg;
+    document.getElementById('toast-container').appendChild(t);
+    setTimeout(function() {
+        t.style.opacity = '0';
+        setTimeout(function() { t.remove(); }, 200);
+    }, 3500);
+}
+document.addEventListener('htmx:responseError', function(e) {
+    var msg = (e.detail.xhr && e.detail.xhr.responseText) || 'Error al procesar la solicitud';
+    try { msg = JSON.parse(msg).detail || msg; } catch(_) {}
+    showToast(msg, 'error');
+});
+</script>
+
+<!-- ── Tablas ordenables ──────────────────────────────────────────────────── -->
+<style>
+    th[data-col] { cursor:pointer; user-select:none; white-space:nowrap; }
+    th[data-col]:hover { opacity:.75; }
+    th[data-col] .si { margin-left:.3rem; opacity:.35; font-style:normal; }
+    th[data-col][data-dir] .si { opacity:1; }
+</style>
+<script>
+(function() {
+    function parseVal(cell) {
+        var raw = (cell.dataset.sortValue !== undefined ? cell.dataset.sortValue : cell.textContent).trim();
+        var num = parseFloat(raw.replace(/[$,%]/g,'').replace(/\./g,'').replace(',','.'));
+        return isNaN(num) ? raw.toLowerCase() : num;
+    }
+    function attachSort(table) {
+        table.querySelectorAll('thead th[data-col]').forEach(function(th) {
+            if (!th.querySelector('.si')) {
+                var si = document.createElement('i'); si.className='si'; si.textContent='↕'; th.appendChild(si);
+            }
+            th.addEventListener('click', function() {
+                var col = parseInt(th.dataset.col, 10);
+                var asc = th.dataset.dir !== 'asc';
+                table.querySelectorAll('thead th[data-col]').forEach(function(h) {
+                    delete h.dataset.dir;
+                    var s = h.querySelector('.si'); if (s) s.textContent = '↕';
+                });
+                th.dataset.dir = asc ? 'asc' : 'desc';
+                th.querySelector('.si').textContent = asc ? ' ↑' : ' ↓';
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(r) { return r.cells.length > 1; });
+                rows.sort(function(a, b) {
+                    var av = parseVal(a.cells[col]||a.cells[0]), bv = parseVal(b.cells[col]||b.cells[0]);
+                    if (typeof av==='number' && typeof bv==='number') return asc ? av-bv : bv-av;
+                    return asc ? String(av).localeCompare(String(bv),'es') : String(bv).localeCompare(String(av),'es');
+                });
+                rows.forEach(function(r) { tbody.appendChild(r); });
             });
         });
-        setTimeout(function() {
-            t.classList.add('opacity-0', 'translate-y-2');
-            setTimeout(function() { t.remove(); }, 300);
-        }, 3500);
     }
+    function initAll() { document.querySelectorAll('table[data-sortable]').forEach(attachSort); }
+    document.addEventListener('DOMContentLoaded', initAll);
+    document.addEventListener('htmx:afterSettle', initAll);
+})();
+</script>
 
-    // Escuchar eventos personalizados de HTMX para mostrar toasts
-    document.addEventListener('htmx:responseError', function(e) {
-        var msg = (e.detail.xhr && e.detail.xhr.responseText) || 'Error al procesar la solicitud';
-        try { msg = JSON.parse(msg).detail || msg; } catch(_) {}
-        showToast(msg, 'error');
-    });
-    </script>
+<!-- PWA service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function() {});
+}
+</script>
 
-    <!-- ── Tablas ordenables ─────────────────────────────────────────────── -->
-    <style>
-        th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }
-        th[data-col]:hover { opacity: .75; }
-        th[data-col] .si { margin-left: .25rem; opacity: .35; font-style: normal; }
-        th[data-col][data-dir] .si { opacity: 1; }
-    </style>
-    <script>
-    (function () {
-        function parseVal(cell) {
-            /* data-sort-value permite valor personalizado (ej. fechas ISO) */
-            var raw = (cell.dataset.sortValue !== undefined
-                ? cell.dataset.sortValue
-                : cell.textContent).trim();
-            /* Quitar símbolos monetarios/porcentaje y separadores de miles */
-            var num = parseFloat(raw.replace(/[$,%]/g, '').replace(/\./g, '').replace(',', '.'));
-            return isNaN(num) ? raw.toLowerCase() : num;
-        }
-
-        function attachSort(table) {
-            var ths = table.querySelectorAll('thead th[data-col]');
-            ths.forEach(function (th) {
-                /* Agregar indicador si aún no tiene */
-                if (!th.querySelector('.si')) {
-                    var si = document.createElement('i');
-                    si.className = 'si';
-                    si.textContent = '↕';
-                    th.appendChild(si);
-                }
-                th.addEventListener('click', function () {
-                    var col   = parseInt(th.dataset.col, 10);
-                    var asc   = th.dataset.dir !== 'asc';
-                    /* Resetear todos los encabezados de esta tabla */
-                    table.querySelectorAll('thead th[data-col]').forEach(function (h) {
-                        delete h.dataset.dir;
-                        var s = h.querySelector('.si');
-                        if (s) s.textContent = '↕';
-                    });
-                    th.dataset.dir = asc ? 'asc' : 'desc';
-                    th.querySelector('.si').textContent = asc ? ' ↑' : ' ↓';
-
-                    var tbody = table.querySelector('tbody');
-                    if (!tbody) return;
-                    var rows = Array.from(tbody.querySelectorAll('tr')).filter(function (r) {
-                        return r.cells.length > 1; /* omitir filas de "sin resultados" */
-                    });
-                    rows.sort(function (a, b) {
-                        var av = parseVal(a.cells[col] || a.cells[0]);
-                        var bv = parseVal(b.cells[col] || b.cells[0]);
-                        if (typeof av === 'number' && typeof bv === 'number')
-                            return asc ? av - bv : bv - av;
-                        return asc
-                            ? String(av).localeCompare(String(bv), 'es')
-                            : String(bv).localeCompare(String(av), 'es');
-                    });
-                    rows.forEach(function (r) { tbody.appendChild(r); });
-                });
-            });
-        }
-
-        function initAll() {
-            document.querySelectorAll('table[data-sortable]').forEach(attachSort);
-        }
-
-        document.addEventListener('DOMContentLoaded', initAll);
-        /* Re-adjuntar tras cada swap de HTMX (el thead permanece, solo tbody cambia) */
-        document.addEventListener('htmx:afterSettle', initAll);
-    })();
-    </script>
 </body>
 </html>

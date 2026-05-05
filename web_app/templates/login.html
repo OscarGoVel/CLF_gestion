@@ -2,107 +2,73 @@
 {% block title %}Iniciar sesión — CLF Gestión{% endblock %}
 
 {% block body %}
-<div class="min-h-screen flex items-center justify-center bg-navy-700">
-    <div class="w-full max-w-sm">
+<div style="min-height:100vh;display:flex;flex-direction:column;
+            align-items:center;justify-content:center;background:var(--canvas);">
 
-        <!-- Card -->
-        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div class="login-card">
 
-            <!-- Header de color -->
-            <div class="bg-navy-900 px-8 py-7 text-center">
-                <div class="text-4xl mb-2">⚙</div>
-                <h1 class="text-base font-bold text-clf-teal tracking-widest uppercase">
-                    CLF Gestión
-                </h1>
-                <p class="text-xs text-navy-400 mt-1">Sistema de Gestión Comercial</p>
+        <!-- Encabezado -->
+        <div style="text-align:center;margin-bottom:28px;">
+            <div style="font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;
+                        color:var(--ink-500);margin-bottom:10px;font-family:var(--sans);">
+                CLF Gestión
             </div>
-
-            <!-- Formulario -->
-            <div class="px-8 py-7">
-
-                {% if error %}
-                <div class="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">
-                    <span class="text-red-400 mt-0.5">⚠</span>
-                    <p class="text-sm text-red-700">{{ error }}</p>
-                </div>
-                {% endif %}
-
-                <form method="post" action="/auth/login" class="space-y-4">
-
-                    {% if empresas and empresas|length > 1 %}
-                    <div>
-                        <label class="block text-xs font-semibold text-navy-700 uppercase tracking-wide mb-1.5">
-                            Empresa
-                        </label>
-                        <select
-                            name="empresa_id"
-                            required
-                            class="w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm
-                                   text-gray-800 bg-gray-50
-                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:border-transparent
-                                   transition"
-                        >
-                            {% for emp in empresas %}
-                            <option value="{{ emp.id }}">{{ emp.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% else %}
-                    <input type="hidden" name="empresa_id"
-                           value="{{ empresas[0].id if empresas else '' }}">
-                    {% endif %}
-
-                    <div>
-                        <label class="block text-xs font-semibold text-navy-700 uppercase tracking-wide mb-1.5">
-                            Usuario
-                        </label>
-                        <input
-                            type="text"
-                            name="username"
-                            autofocus
-                            required
-                            autocomplete="username"
-                            class="w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm
-                                   text-gray-800 placeholder-gray-400 bg-gray-50
-                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:border-transparent
-                                   transition"
-                            placeholder="nombre_usuario"
-                        >
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-navy-700 uppercase tracking-wide mb-1.5">
-                            Contraseña
-                        </label>
-                        <input
-                            type="password"
-                            name="password"
-                            required
-                            autocomplete="current-password"
-                            class="w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm
-                                   text-gray-800 placeholder-gray-400 bg-gray-50
-                                   focus:outline-none focus:ring-2 focus:ring-clf-green focus:border-transparent
-                                   transition"
-                            placeholder="••••••••"
-                        >
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="w-full bg-clf-green hover:bg-clf-green-dk text-white font-bold
-                               py-2.5 rounded-lg transition-colors duration-150 text-sm mt-1
-                               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-clf-green"
-                    >
-                        Ingresar
-                    </button>
-
-                </form>
+            <div style="font-family:var(--serif);font-size:20px;color:var(--ink-900);
+                        font-weight:400;line-height:1.25;">
+                Sistema de Gestión<br>Comercial
             </div>
         </div>
 
-        <p class="text-center text-xs text-navy-400 mt-5">
-            CLF · Sistema de Gestión · Web v1.0
-        </p>
+        <!-- Error -->
+        {% if error %}
+        <div class="alert-warn" style="margin-bottom:20px;">
+            <span>⚠</span>
+            <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Formulario -->
+        <form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:14px;">
+
+            {% if empresas and empresas|length > 1 %}
+            <div>
+                <label class="label">Empresa</label>
+                <select name="empresa_id" required class="select">
+                    {% for emp in empresas %}
+                    <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="empresa_id"
+                   value="{{ empresas[0].id if empresas else '' }}">
+            {% endif %}
+
+            <div>
+                <label class="label">Usuario</label>
+                <input type="text" name="username" autofocus required
+                       autocomplete="username" class="input"
+                       placeholder="nombre_usuario">
+            </div>
+
+            <div>
+                <label class="label">Contraseña</label>
+                <input type="password" name="password" required
+                       autocomplete="current-password" class="input"
+                       placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn btn-primary"
+                    style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;">
+                Ingresar
+            </button>
+
+        </form>
     </div>
+
+    <p style="margin-top:20px;font-size:11px;color:var(--ink-400);font-family:var(--mono);">
+        CLF · Sistema de Gestión · Web v1.0
+    </p>
+
 </div>
 {% endblock %}
