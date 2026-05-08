@@ -114,6 +114,9 @@ export default function CotNueva() {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [importModal, setImportModal] = useState(null); // { matched, unmatched, mappings }
+  const [importError, setImportError] = useState('');
+  const fileRef = useRef(null);
 
   const { data: clientesData } = useFetch('/api/catalogos/clientes');
   const clientes = clientesData?.clientes ?? [];
@@ -179,6 +182,71 @@ export default function CotNueva() {
   }
 
   const noCatalogadas = lineas.filter((l) => l.no_catalogado).length;
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const data = await api.upload('/api/cotizaciones/importar-plantilla', formData);
+      const mappings = {};
+      (data.unmatched ?? []).forEach((_, idx) => { mappings[idx] = null; });
+      setImportModal({ matched: data.matched ?? [], unmatched: data.unmatched ?? [], mappings });
+    } catch (err) {
+      setImportError(err.message ?? 'Error al procesar el archivo.');
+    }
+  };
+
+  const setMapping = (idx, value) => {
+    setImportModal((m) => ({ ...m, mappings: { ...m.mappings, [idx]: value } }));
+  };
+
+  const handleConfirmImport = () => {
+    const { matched, unmatched, mappings } = importModal;
+    const nuevas = [];
+    for (const m of matched) {
+      nuevas.push({
+        _id: _nextId++,
+        producto_id: m.producto_id,
+        descripcion: m.nombre_catalogo,
+        cantidad: m.cantidad,
+        precio_unitario: m.precio ?? '',
+        aplica_iva: m.aplica_iva ?? true,
+        no_catalogado: false,
+      });
+    }
+    for (let idx = 0; idx < unmatched.length; idx++) {
+      const u = unmatched[idx];
+      const mp = mappings[idx];
+      if (!mp) continue; // saltamos los no mapeados
+      if (mp.tipo === 'catalogo') {
+        nuevas.push({
+          _id: _nextId++,
+          producto_id: mp.producto_id,
+          descripcion: mp.nombre,
+          cantidad: u.cantidad,
+          precio_unitario: mp.precio ?? '',
+          aplica_iva: mp.aplica_iva ?? true,
+          no_catalogado: false,
+        });
+      } else {
+        nuevas.push({
+          _id: _nextId++,
+          producto_id: null,
+          descripcion: u.descripcion_csv,
+          cantidad: u.cantidad,
+          precio_unitario: '',
+          aplica_iva: true,
+          no_catalogado: true,
+        });
+      }
+    }
+    setLineas((ls) => [...ls, ...nuevas]);
+    setImportModal(null);
+  };
 
   return (
     <div className="page">
@@ -324,14 +392,39 @@ export default function CotNueva() {
               </div>
             )}
 
-            <div style={{ padding: '10px 12px', display: 'flex', gap: 6, borderTop: '1px solid var(--ink-100)' }}>
+            <div style={{ padding: '10px 12px', display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '1px solid var(--ink-100)' }}>
               <button className="btn btn-sm" onClick={() => setLineas((ls) => [...ls, newLine()])}>
                 + Del catálogo
               </button>
               <button className="btn btn-sm" onClick={() => setLineas((ls) => [...ls, { ...newLine(), no_catalogado: true }])}>
                 + Línea libre
               </button>
+              <a href="/api/cotizaciones/plantilla-import"
+                 onClick={(e) => {
+                   e.preventDefault();
+                   const token = sessionStorage.getItem('clf_token');
+                   fetch('/api/cotizaciones/plantilla-import', { headers: { Authorization: `Bearer ${token}` } })
+                     .then(r => r.blob()).then(blob => {
+                       const a = document.createElement('a');
+                       a.href = URL.createObjectURL(blob);
+                       a.download = 'plantilla_cotizacion.csv';
+                       a.click();
+                     });
+                 }}
+                 className="btn btn-sm" style={{ marginLeft: 'auto' }}>
+                ⬇ Plantilla
+              </a>
+              <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }}
+                     onChange={handleImportFile} />
+              <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+                ⬆ Importar CSV
+              </button>
             </div>
+            {importError && (
+              <div style={{ padding: '8px 12px', background: '#fff5f5', borderTop: '1px solid #fecaca', fontSize: 11.5, color: 'var(--danger)' }}>
+                {importError}
+              </div>
+            )}
           </div>
 
           {/* 3 · Condiciones */}
@@ -407,6 +500,130 @@ export default function CotNueva() {
           </div>
         </div>
       </div>
+
+      {/* Modal de revisión de importación CSV */}
+      {importModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 8, width: 660, maxHeight: '82vh',
+            display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--ink-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0 }}>Revisar importación</h3>
+              <span style={{ cursor: 'pointer', fontSize: 20, color: 'var(--ink-400)', lineHeight: 1 }}
+                    onClick={() => setImportModal(null)}>×</span>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
+              {importModal.matched.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    Encontrados ({importModal.matched.length})
+                  </div>
+                  {importModal.matched.map((m, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '7px 10px', borderBottom: '1px solid var(--ink-100)', fontSize: 12.5,
+                    }}>
+                      <span style={{ color: 'var(--accent)' }}>✓</span>
+                      <span style={{ flex: 1, fontWeight: 500 }}>{m.nombre_catalogo}</span>
+                      <span style={{ color: 'var(--ink-500)' }}>Cant: {m.cantidad}</span>
+                      {m.precio > 0 && (
+                        <span style={{ color: 'var(--ink-500)', fontFamily: 'var(--mono)' }}>{fmt(m.precio)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {importModal.unmatched.length > 0 && (
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>
+                    Sin coincidencia ({importModal.unmatched.length}) — mapear manualmente
+                  </div>
+                  {importModal.unmatched.map((u, idx) => {
+                    const mp = importModal.mappings[idx];
+                    return (
+                      <div key={idx} style={{
+                        padding: '10px 12px', borderBottom: '1px solid var(--ink-100)',
+                        background: mp ? '#f7fdf7' : '#fffbf2',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: 'var(--ink-500)', fontFamily: 'var(--mono)', background: 'var(--ink-100)', padding: '1px 6px', borderRadius: 3 }}>CSV</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 500 }}>{u.descripcion_csv}</span>
+                          <span style={{ fontSize: 11, color: 'var(--ink-500)', marginLeft: 'auto' }}>Cant: {u.cantidad}</span>
+                        </div>
+                        {mp?.tipo === 'libre' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, flex: 1, fontStyle: 'italic', color: 'var(--ink-600)' }}>
+                              Línea libre: "{u.descripcion_csv}"
+                            </span>
+                            <button className="btn btn-sm" onClick={() => setMapping(idx, null)}>Cambiar</button>
+                          </div>
+                        ) : mp?.tipo === 'catalogo' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ color: 'var(--accent)' }}>✓</span>
+                            <span style={{ fontSize: 12, flex: 1, fontWeight: 500 }}>{mp.nombre}</span>
+                            {mp.precio > 0 && (
+                              <span style={{ fontSize: 11, color: 'var(--ink-500)', fontFamily: 'var(--mono)' }}>{fmt(mp.precio)}</span>
+                            )}
+                            <button className="btn btn-sm" onClick={() => setMapping(idx, null)}>Cambiar</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ flex: 1 }}>
+                              <ProductoSearch
+                                linea={{ _id: `import-${idx}`, no_catalogado: false, descripcion: u.descripcion_csv }}
+                                onSelect={(p) => setMapping(idx, {
+                                  tipo: 'catalogo',
+                                  producto_id: p.id,
+                                  nombre: p.nombre,
+                                  precio: p.precio,
+                                  aplica_iva: p.aplica_iva ?? true,
+                                })}
+                                onChange={() => {}}
+                              />
+                            </div>
+                            <button className="btn btn-sm"
+                                    onClick={() => setMapping(idx, { tipo: 'libre' })}>
+                              Dejar como texto
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {importModal.matched.length === 0 && importModal.unmatched.length === 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--ink-400)', padding: 24 }}>
+                  El archivo CSV no contiene datos.
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              padding: '12px 20px', borderTop: '1px solid var(--ink-100)',
+              display: 'flex', justifyContent: 'flex-end', gap: 8,
+            }}>
+              <button className="btn" onClick={() => setImportModal(null)}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleConfirmImport}
+                disabled={importModal.unmatched.some((_, idx) => importModal.mappings[idx] === null)}
+              >
+                Confirmar y agregar (
+                  {importModal.matched.length + Object.values(importModal.mappings).filter(Boolean).length}
+                )
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,5 @@
+CLF_CLOUD_SQL_INSTANCE: "clf-gestion:us-central1:clf-db-instance"
+CLF_PG_USER: "postgres"
+CLF_PG_PASSWORD: "clf2024"
+CLF_PG_DB_USUARIOS: "clf_usuarios"
+CLF_EMPRESAS_JSON: '[{"id":"emp_CLF240418U94_default","nombre":"COMERCIALIZADORA, LOGISTICA Y FUERZA YUCATECA","rfc":"CLF240418U94","razon_social":"Comercializadora, Logistica y Fuerza Yucateca S.A. de C.V.","email":"clfyucateca@gmail.com","telefono":"9993633880","direccion":"Calle 17 No. 56 Depto. 74, Kanasin, Yucatan","pg_database":"clf_empresa","fecha_registro":"2024-01-01"}]'

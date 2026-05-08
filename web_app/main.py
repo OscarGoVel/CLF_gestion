@@ -47,6 +47,8 @@ from web_app.routers import api_catalogos as api_catalogos_router
 from web_app.routers import api_compras as api_compras_router
 from web_app.routers import api_stock as api_stock_router
 from web_app.routers import api_facturas as api_facturas_router
+from web_app.routers import api_ajustes as api_ajustes_router
+from web_app.routers import api_analisis as api_analisis_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -110,6 +112,23 @@ async def lifespan(app: FastAPI):
         # Snapshot del costo al momento de entregar la cotización
         "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega NUMERIC(14,4)",
         "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega_tipo TEXT",
+        # Estudio de mercado: margen configurable y vínculo a cotización de origen
+        "ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS margen_pct NUMERIC(5,4) DEFAULT 0.35",
+        "ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS cotizacion_id INTEGER REFERENCES cotizaciones(id)",
+        # Precio de venta sugerido en catálogo (calculado desde estudio de mercado)
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(14,4)",
+        # Log de aplicaciones de precios del estudio a cotizaciones
+        """
+        CREATE TABLE IF NOT EXISTS estudio_aplicaciones (
+            id             SERIAL PRIMARY KEY,
+            estudio_id     INTEGER NOT NULL REFERENCES estudios_mercado(id) ON DELETE CASCADE,
+            cotizacion_id  INTEGER NOT NULL REFERENCES cotizaciones(id),
+            aplicado_por   INTEGER REFERENCES usuarios(id),
+            forzado        BOOLEAN DEFAULT FALSE,
+            estado_cot     TEXT,
+            fecha          TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -232,6 +251,8 @@ app.include_router(api_catalogos_router.router)
 app.include_router(api_compras_router.router)
 app.include_router(api_stock_router.router)
 app.include_router(api_facturas_router.router)
+app.include_router(api_ajustes_router.router)
+app.include_router(api_analisis_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────

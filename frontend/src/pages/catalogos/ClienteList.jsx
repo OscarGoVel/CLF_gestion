@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
+import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -11,27 +12,72 @@ const TIPO_COLOR = {
   Persona:  { bg: '#f0fdf4', color: '#166534' },
 };
 
+const FORM_EMPTY = {
+  nombre_comercial: '', razon_social: '', tipo: '',
+  rfc: '', contacto: '', telefono: '', email: '', direccion: '',
+};
+
 export default function ClienteList() {
   const navigate = useNavigate();
-  const [q, setQ]       = useState('');
-  const [tipo, setTipo] = useState('');
-  const [sel, setSel]   = useState(null);
+  const [q, setQ]           = useState('');
+  const [tipo, setTipo]     = useState('');
+  const [sel, setSel]       = useState(null);
+  const [refetch, setRefetch] = useState(0);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState(FORM_EMPTY);
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState('');
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (tipo) params.set('tipo', tipo);
+  if (refetch) params.set('_r', refetch);
 
   const { data, loading } = useFetch(`/api/catalogos/clientes?${params}`);
+
+  const handleCrear = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setFormErr('');
+    try {
+      await api.post('/api/catalogos/clientes', formData);
+      setShowForm(false);
+      setFormData(FORM_EMPTY);
+      setRefetch((n) => n + 1);
+    } catch (err) {
+      setFormErr(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
   const clientes = data?.clientes ?? [];
   const tipos    = data?.tipos    ?? [];
   const selected = sel != null ? clientes.find((c) => c.id === sel) : null;
 
   return (
+    <>
     <div className="page">
       <div className="crumbs">
         <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
         <span className="sep">/</span>
+        <span>Catálogos</span>
+        <span className="sep">/</span>
         <span>Clientes</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--ink-200)', marginBottom: 20 }}>
+        {[
+          { label: 'Clientes',    path: '/catalogos/clientes' },
+          { label: 'Productos',   path: '/catalogos/productos' },
+        ].map((t) => (
+          <button key={t.path} onClick={() => navigate(t.path)} style={{
+            padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
+            fontWeight: t.path === '/catalogos/clientes' ? 500 : 400,
+            color: t.path === '/catalogos/clientes' ? 'var(--ink-900)' : 'var(--ink-500)',
+            borderBottom: t.path === '/catalogos/clientes' ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: -1,
+          }}>{t.label}</button>
+        ))}
       </div>
 
       <div className="page-header">
@@ -39,7 +85,7 @@ export default function ClienteList() {
           <div className="page-title">Clientes</div>
           <div className="page-sub">{clientes.length} registros</div>
         </div>
-        <button className="btn btn-primary">Nuevo cliente</button>
+        <button className="btn btn-primary" onClick={() => setShowForm(true)}>Nuevo cliente</button>
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
@@ -159,5 +205,91 @@ export default function ClienteList() {
         )}
       </div>
     </div>
+
+      {showForm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }} onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
+          <div className="card" style={{ width: 480, padding: 28, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Nuevo cliente</div>
+            <form onSubmit={handleCrear}>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <div className="note" style={{ marginBottom: 4 }}>NOMBRE COMERCIAL *</div>
+                  <input className="input" style={{ width: '100%' }}
+                    value={formData.nombre_comercial}
+                    onChange={(e) => setFormData((d) => ({ ...d, nombre_comercial: e.target.value }))}
+                    required autoFocus />
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 4 }}>RAZÓN SOCIAL</div>
+                  <input className="input" style={{ width: '100%' }}
+                    value={formData.razon_social}
+                    onChange={(e) => setFormData((d) => ({ ...d, razon_social: e.target.value }))} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div className="note" style={{ marginBottom: 4 }}>TIPO</div>
+                    <select className="input" style={{ width: '100%' }}
+                      value={formData.tipo}
+                      onChange={(e) => setFormData((d) => ({ ...d, tipo: e.target.value }))}>
+                      <option value="">— Sin tipo —</option>
+                      <option>Empresa</option>
+                      <option>Gobierno</option>
+                      <option>Persona</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div className="note" style={{ marginBottom: 4 }}>RFC</div>
+                    <input className="input" style={{ width: '100%' }}
+                      value={formData.rfc}
+                      onChange={(e) => setFormData((d) => ({ ...d, rfc: e.target.value.toUpperCase() }))} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div className="note" style={{ marginBottom: 4 }}>CONTACTO</div>
+                    <input className="input" style={{ width: '100%' }}
+                      value={formData.contacto}
+                      onChange={(e) => setFormData((d) => ({ ...d, contacto: e.target.value }))} />
+                  </div>
+                  <div>
+                    <div className="note" style={{ marginBottom: 4 }}>TELÉFONO</div>
+                    <input className="input" style={{ width: '100%' }}
+                      value={formData.telefono}
+                      onChange={(e) => setFormData((d) => ({ ...d, telefono: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 4 }}>EMAIL</div>
+                  <input className="input" type="email" style={{ width: '100%' }}
+                    value={formData.email}
+                    onChange={(e) => setFormData((d) => ({ ...d, email: e.target.value }))} />
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 4 }}>DIRECCIÓN</div>
+                  <input className="input" style={{ width: '100%' }}
+                    value={formData.direccion}
+                    onChange={(e) => setFormData((d) => ({ ...d, direccion: e.target.value }))} />
+                </div>
+              </div>
+              {formErr && (
+                <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{formErr}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+                <button type="button" className="btn"
+                  onClick={() => { setShowForm(false); setFormData(FORM_EMPTY); setFormErr(''); }}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Guardando…' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

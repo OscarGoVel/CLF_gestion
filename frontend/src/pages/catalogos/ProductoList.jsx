@@ -35,7 +35,24 @@ export default function ProductoList() {
       <div className="crumbs">
         <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
         <span className="sep">/</span>
+        <span>Catálogos</span>
+        <span className="sep">/</span>
         <span>Productos</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--ink-200)', marginBottom: 20 }}>
+        {[
+          { label: 'Clientes',    path: '/catalogos/clientes' },
+          { label: 'Productos',   path: '/catalogos/productos' },
+        ].map((t) => (
+          <button key={t.path} onClick={() => navigate(t.path)} style={{
+            padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
+            fontWeight: t.path === '/catalogos/productos' ? 500 : 400,
+            color: t.path === '/catalogos/productos' ? 'var(--ink-900)' : 'var(--ink-500)',
+            borderBottom: t.path === '/catalogos/productos' ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: -1,
+          }}>{t.label}</button>
+        ))}
       </div>
 
       <div className="page-header">

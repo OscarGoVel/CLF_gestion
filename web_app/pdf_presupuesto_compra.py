@@ -2,8 +2,9 @@
 """
 web_app/pdf_presupuesto_compra.py
 Genera el PDF de Presupuesto de Compra para el departamento de control presupuestal.
-Identifica faltantes de stock en pedidos programados y calcula el monto requerido
-usando el precio mínimo histórico de cada producto.
+
+Sección A — Compras para ventas: productos con faltante por cotización.
+Sección B — Consumo interno: insumos sin cotización de origen (opcional).
 """
 
 import io
@@ -24,13 +25,13 @@ from reportlab.platypus import (
 import app_config
 from web_app.database import get_pool_empresa
 
-# ── Colores corporativos (iguales al PDF de cotización) ───────────────────────
 _ORO       = colors.HexColor('#D4AF37')
 _NEGRO     = colors.HexColor('#1a1a1a')
 _GRIS      = colors.HexColor('#4a4a4a')
 _GRIS_GRID = colors.HexColor('#cccccc')
 _FOOTER_BG = colors.HexColor('#3d3d3d')
 _AZUL_HDR  = colors.HexColor('#1e3a5f')
+_VERDE_HDR = colors.HexColor('#1a5f3a')
 
 _M = 0.5 * inch
 
@@ -55,6 +56,7 @@ def _f(v) -> float:
 def generar_pdf_presupuesto_compra(
     empresa_db: str,
     cotizacion_ids: list[int],
+    insumos: list[dict] | None = None,
 ) -> bytes:
     """
     Genera el PDF de presupuesto de compra y devuelve los bytes del archivo.
@@ -62,15 +64,15 @@ def generar_pdf_presupuesto_compra(
     Parámetros:
         empresa_db      -- pg_database de la empresa (del JWT)
         cotizacion_ids  -- lista de IDs de cotizaciones seleccionadas
-
-    Retorna:
-        bytes del PDF.
+        insumos         -- lista de dicts {nombre, unidad, cantidad, costo} para Sección B
     """
     if not cotizacion_ids:
         raise ValueError("Debe seleccionar al menos un pedido")
 
+    if insumos is None:
+        insumos = []
+
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
-        # ── Datos de cotizaciones seleccionadas ──────────────────────────────
         cur.execute(
             """
             SELECT c.id, c.folio,
@@ -88,35 +90,27 @@ def generar_pdf_presupuesto_compra(
             for r in cur.fetchall()
         ]
 
-        # ── Productos con faltante (agrupados por producto) ──────────────────
+        # Per-cotización rows — one row per (cotización, product) with faltante
         cur.execute(
             """
-            SELECT
-                p.id,
-                p.nombre,
-                p.unidad_medida,
-                SUM(cd.cantidad)                              AS cantidad_pedida,
-                COALESCE(MAX(p.stock_actual), 0)              AS stock_actual,
-                GREATEST(
-                    SUM(cd.cantidad) - COALESCE(MAX(p.stock_actual), 0),
-                    0
-                )                                             AS cantidad_faltante,
-                COALESCE(min_h.precio, MAX(p.precio_base))    AS precio_min,
-                COALESCE(prov.nombre, '— sin historial —')   AS proveedor_nombre
+            SELECT c.folio,
+                   p.nombre,
+                   p.unidad_medida,
+                   GREATEST(cd.cantidad - COALESCE(p.stock_actual, 0), 0) AS cantidad_faltante,
+                   COALESCE(min_h.precio, p.precio_base)                  AS precio_min
             FROM cotizacion_detalle cd
-            JOIN productos p ON p.id = cd.producto_id
+            JOIN cotizaciones c  ON c.id  = cd.cotizacion_id
+            JOIN productos    p  ON p.id  = cd.producto_id
             LEFT JOIN LATERAL (
-                SELECT h.precio, h.proveedor_id
+                SELECT h.precio
                 FROM producto_precio_historial h
                 WHERE h.producto_id = p.id
                 ORDER BY h.precio ASC
                 LIMIT 1
             ) min_h ON TRUE
-            LEFT JOIN proveedores prov ON prov.id = min_h.proveedor_id
             WHERE cd.cotizacion_id = ANY(%s)
-            GROUP BY p.id, p.nombre, p.unidad_medida, min_h.precio, prov.nombre
-            HAVING SUM(cd.cantidad) > COALESCE(MAX(p.stock_actual), 0)
-            ORDER BY p.nombre
+              AND GREATEST(cd.cantidad - COALESCE(p.stock_actual, 0), 0) > 0
+            ORDER BY c.folio, p.nombre
             """,
             (cotizacion_ids,),
         )
@@ -127,45 +121,57 @@ def generar_pdf_presupuesto_compra(
             for r in cur.fetchall()
         ]
 
-    if not productos:
-        raise ValueError("No hay productos con faltante de stock en los pedidos seleccionados")
+    if not productos and not insumos:
+        raise ValueError(
+            "No hay productos con faltante de stock ni insumos para generar el presupuesto"
+        )
 
-    # ── Calcular subtotales y total general ───────────────────────────────────
+    # Calcular subtotales
     for p in productos:
-        precio = p["precio_min"] or 0.0
-        p["subtotal"] = round(p["cantidad_faltante"] * precio, 2)
+        p["subtotal"] = round(p["cantidad_faltante"] * (p["precio_min"] or 0.0), 2)
 
-    total_general = round(sum(p["subtotal"] for p in productos), 2)
+    subtotal_a = round(sum(p["subtotal"] for p in productos), 2)
 
-    # ── Folio y fecha ─────────────────────────────────────────────────────────
-    ahora    = datetime.now()
-    folio    = f"PC-{ahora.year}-{ahora.strftime('%m%d%H%M')}"
+    insumos_norm = []
+    for ins in insumos:
+        cant  = float(ins.get("cantidad", 0) or 0)
+        costo = float(ins.get("costo", 0) or 0)
+        insumos_norm.append({
+            "nombre":   str(ins.get("nombre", "")),
+            "unidad":   str(ins.get("unidad", "pza") or "pza"),
+            "cantidad": cant,
+            "costo":    costo,
+            "subtotal": round(cant * costo, 2),
+        })
+
+    subtotal_b    = round(sum(i["subtotal"] for i in insumos_norm), 2)
+    total_general = round(subtotal_a + subtotal_b, 2)
+
+    ahora     = datetime.now()
+    folio     = f"PC-{ahora.year}-{ahora.strftime('%m%d%H%M')}"
     fecha_fmt = ahora.strftime('%d/%m/%Y %H:%M')
 
     logo_header = _resolver_logo('assets/logo_clf_header')
     logo_footer = _resolver_logo('assets/logo_clf_footer')
 
     buf = io.BytesIO()
-    ancho_pagina, _ = letter
 
-    # ── Footer ────────────────────────────────────────────────────────────────
     def _footer(canvas, doc):
         canvas.saveState()
         W = doc.pagesize[0]
-
         box_h = 0.85 * inch
         box_y = _M - 4
         canvas.setFillColor(_FOOTER_BG)
         canvas.rect(_M, box_y, W - 2 * _M, box_h, fill=1, stroke=0)
-
         canvas.setFillColor(colors.white)
         canvas.setFont('Helvetica-Bold', 7)
-        canvas.drawString(_M + 8, box_y + box_h - 14, 'GENERADO PARA: DEPARTAMENTO DE CONTROL PRESUPUESTAL')
+        canvas.drawString(_M + 8, box_y + box_h - 14,
+                          'GENERADO PARA: DEPARTAMENTO DE CONTROL PRESUPUESTAL')
         canvas.setFont('Helvetica', 6.5)
         canvas.drawString(_M + 8, box_y + box_h - 28,
                           'Documento de solicitud de presupuesto — uso interno. No es una orden de compra.')
-        canvas.drawString(_M + 8, box_y + box_h - 40, f'Folio: {folio}   |   Fecha: {fecha_fmt}')
-
+        canvas.drawString(_M + 8, box_y + box_h - 40,
+                          f'Folio: {folio}   |   Fecha: {fecha_fmt}')
         if os.path.exists(logo_footer):
             try:
                 logo_w = 0.55 * inch
@@ -178,7 +184,6 @@ def generar_pdf_presupuesto_compra(
                 )
             except Exception:
                 pass
-
         canvas.setFillColor(colors.HexColor('#555555'))
         canvas.setFont('Helvetica', 6)
         canvas.drawCentredString(
@@ -187,7 +192,6 @@ def generar_pdf_presupuesto_compra(
         )
         canvas.restoreState()
 
-    # ── Documento ─────────────────────────────────────────────────────────────
     footer_h = 1.1 * inch
     doc = BaseDocTemplate(
         buf,
@@ -229,16 +233,29 @@ def generar_pdf_presupuesto_compra(
     elementos.append(header_tbl)
     elementos.append(Spacer(1, 0.08 * inch))
 
-    # ── 2. INFO: Fecha + Folio ────────────────────────────────────────────────
+    # ── 2. INFO ───────────────────────────────────────────────────────────────
+    if insumos_norm:
+        totales_rows = [
+            ['SUBTOTAL A (ventas):', f'$ {subtotal_a:,.2f}'],
+            ['SUBTOTAL B (internos):',  f'$ {subtotal_b:,.2f}'],
+            ['TOTAL GENERAL:',          f'$ {total_general:,.2f}'],
+        ]
+        highlight_row = 2
+    else:
+        totales_rows = [
+            ['TOTAL EST.:', f'$ {total_general:,.2f}'],
+        ]
+        highlight_row = 0
+
     info_rows = [
         ['FOLIO:',         folio],
         ['FECHA:',         fecha_fmt],
         ['PEDIDOS INCL.:', str(len(cotizaciones))],
         ['PRODUCTOS:',     str(len(productos))],
-        ['TOTAL EST.:',    f'$ {total_general:,.2f}'],
-    ]
-    info_inner = Table(info_rows, colWidths=[1.3 * inch, 1.7 * inch])
-    info_inner.setStyle(TableStyle([
+    ] + totales_rows
+
+    info_inner = Table(info_rows, colWidths=[1.5 * inch, 1.5 * inch])
+    info_styles = [
         ('FONTNAME',      (0, 0), (0, -1), 'Helvetica-Bold'),
         ('FONTNAME',      (1, 0), (1, -1), 'Helvetica'),
         ('FONTSIZE',      (0, 0), (-1, -1), 8),
@@ -246,9 +263,10 @@ def generar_pdf_presupuesto_compra(
         ('TOPPADDING',    (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING',   (0, 0), (-1, -1), 5),
-        ('BACKGROUND',    (0, 4), (1, 4), colors.HexColor('#fffbe6')),
-        ('FONTNAME',      (0, 4), (1, 4), 'Helvetica-Bold'),
-    ]))
+        ('BACKGROUND',    (0, -1), (1, -1), colors.HexColor('#fffbe6')),
+        ('FONTNAME',      (0, -1), (1, -1), 'Helvetica-Bold'),
+    ]
+    info_inner.setStyle(TableStyle(info_styles))
 
     titulo_para = Paragraph(
         'SOLICITUD DE PRESUPUESTO<br/><font size="8" color="#555555">Productos con faltante de stock en pedidos programados</font>',
@@ -302,97 +320,164 @@ def generar_pdf_presupuesto_compra(
     elementos.append(cot_tbl)
     elementos.append(Spacer(1, 0.12 * inch))
 
-    # ── 4. TABLA PRINCIPAL DE PRODUCTOS ──────────────────────────────────────
-    elementos.append(Paragraph(
-        'PRODUCTOS CON FALTANTE DE STOCK',
-        ParagraphStyle('sec_hdr2', fontSize=8, fontName='Helvetica-Bold',
-                       textColor=colors.white, backColor=_AZUL_HDR,
-                       leftIndent=5, spaceAfter=0),
-    ))
+    # ── 4. SECCIÓN A — COMPRAS PARA VENTAS ───────────────────────────────────
+    if productos:
+        elementos.append(Paragraph(
+            'A · COMPRAS PARA VENTAS — Productos con faltante de stock',
+            ParagraphStyle('sec_a', fontSize=8, fontName='Helvetica-Bold',
+                           textColor=colors.white, backColor=_AZUL_HDR,
+                           leftIndent=5, spaceAfter=0),
+        ))
 
-    # Escala fuente según cantidad de productos para intentar caber en una hoja
-    n_prod = len(productos)
-    if n_prod <= 15:
-        fs = 7.5
-    elif n_prod <= 25:
-        fs = 7.0
-    elif n_prod <= 35:
-        fs = 6.5
-    else:
-        fs = 6.0
+        n_prod = len(productos)
+        fs = 7.5 if n_prod <= 20 else (7.0 if n_prod <= 35 else 6.5)
 
-    # Columnas: PRODUCTO, UNIDAD, A COMPRAR, PROVEEDOR SGER., P.U. EST., SUBTOTAL
-    col_widths = [
-        ancho * 0.30,   # PRODUCTO  — ancho generoso para evitar desbordamiento
-        ancho * 0.07,   # UNIDAD
-        ancho * 0.09,   # A COMPRAR
-        ancho * 0.26,   # PROVEEDOR SGER.
-        ancho * 0.13,   # P.U. EST.
-        ancho * 0.15,   # SUBTOTAL
-    ]
+        estilo_prod = ParagraphStyle('prod_cell', fontName='Helvetica',
+                                     fontSize=fs, leading=fs + 2, wordWrap='CJK')
+        estilo_hdr  = ParagraphStyle('hdr_cell',  fontName='Helvetica-Bold',
+                                     fontSize=fs, leading=fs + 2,
+                                     textColor=colors.white, wordWrap='CJK')
 
-    # Estilo de párrafo para la celda de nombre de producto (permite word-wrap)
-    estilo_prod = ParagraphStyle(
-        'prod_cell',
-        fontName='Helvetica',
-        fontSize=fs,
-        leading=fs + 2,
-        wordWrap='CJK',
-    )
-    estilo_hdr = ParagraphStyle(
-        'hdr_cell',
-        fontName='Helvetica-Bold',
-        fontSize=fs,
-        leading=fs + 2,
-        textColor=colors.white,
-        wordWrap='CJK',
-    )
+        col_w_a = [
+            ancho * 0.14,  # COT
+            ancho * 0.30,  # PRODUCTO
+            ancho * 0.07,  # UNIDAD
+            ancho * 0.09,  # A COMPRAR
+            ancho * 0.20,  # P.U. EST.
+            ancho * 0.20,  # SUBTOTAL
+        ]
 
-    col_names = [
-        Paragraph('PRODUCTO', estilo_hdr),
-        'UNIDAD', 'A COMPRAR', 'PROVEEDOR SGER.', 'P.U. EST.', 'SUBTOTAL',
-    ]
-    prod_data = [col_names]
+        prod_data = [[
+            Paragraph('COT', estilo_hdr),
+            Paragraph('PRODUCTO', estilo_hdr),
+            'UNIDAD', 'A COMPRAR', 'P.U. EST.', 'SUBTOTAL',
+        ]]
+        for p in productos:
+            precio = p["precio_min"] or 0.0
+            prod_data.append([
+                p['folio'],
+                Paragraph(p['nombre'], estilo_prod),
+                p['unidad_medida'] or 'Pza',
+                f"{p['cantidad_faltante']:g}",
+                f"$ {precio:,.2f}" if precio else "— sin precio —",
+                f"$ {p['subtotal']:,.2f}",
+            ])
 
-    for p in productos:
-        precio = p["precio_min"] or 0.0
-        prod_data.append([
-            Paragraph(p['nombre'], estilo_prod),
-            p['unidad_medida'] or 'Pza',
-            f"{p['cantidad_faltante']:g}",
-            p['proveedor_nombre'],
-            f"$ {precio:,.2f}" if precio else "— sin precio —",
-            f"$ {p['subtotal']:,.2f}",
-        ])
+        # Subtotal A row
+        prod_data.append(['', '', '', '', 'SUBTOTAL A', f"$ {subtotal_a:,.2f}"])
 
-    # Fila de total  (6 columnas: 0-3 vacías, 4=etiqueta, 5=monto)
-    prod_data.append(['', '', '', '', 'TOTAL ESTIMADO', f"$ {total_general:,.2f}"])
+        n_filas_a = len(prod_data)
+        prod_tbl = Table(prod_data, colWidths=col_w_a)
+        prod_tbl.setStyle(TableStyle([
+            ('BACKGROUND',     (0, 0), (-1, 0),  _NEGRO),
+            ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
+            ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
+            ('FONTSIZE',       (0, 0), (-1, 0),  fs),
+            ('FONTNAME',       (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE',       (0, 1), (-1, -1), fs),
+            ('GRID',           (0, 0), (-1, n_filas_a - 2), 0.5, _GRIS_GRID),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f7f7f7')]),
+            ('TOPPADDING',     (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
+            ('LEFTPADDING',    (0, 0), (-1, -1), 4),
+            ('ALIGN',          (2, 0), (3, -1),  'CENTER'),
+            ('ALIGN',          (4, 0), (5, -1),  'RIGHT'),
+            ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
+            ('BACKGROUND',     (0, -1), (-1, -1), colors.HexColor('#fffbe6')),
+            ('FONTNAME',       (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('LINEABOVE',      (0, -1), (-1, -1), 1.0, _NEGRO),
+            ('SPAN',           (0, -1), (3, -1)),
+            ('ALIGN',          (4, -1), (5, -1), 'RIGHT'),
+        ]))
+        elementos.append(prod_tbl)
 
-    n_filas = len(prod_data)
-    prod_tbl = Table(prod_data, colWidths=col_widths, rowHeights=None)
-    prod_tbl.setStyle(TableStyle([
-        ('BACKGROUND',    (0, 0), (-1, 0), _NEGRO),
-        ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
-        ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE',      (0, 0), (-1, 0), fs),
-        ('FONTNAME',      (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE',      (0, 1), (-1, -1), fs),
-        ('GRID',          (0, 0), (-1, n_filas - 2), 0.5, _GRIS_GRID),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f7f7f7')]),
-        ('TOPPADDING',    (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 4),
-        ('ALIGN',         (1, 0), (2, -1), 'CENTER'),
-        ('ALIGN',         (4, 0), (5, -1), 'RIGHT'),
-        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-        # Fila total
-        ('BACKGROUND',    (0, -1), (-1, -1), colors.HexColor('#fffbe6')),
-        ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('LINEABOVE',     (0, -1), (-1, -1), 1.0, _NEGRO),
-        ('SPAN',          (0, -1), (3, -1)),
-        ('ALIGN',         (4, -1), (5, -1), 'RIGHT'),
-    ]))
-    elementos.append(prod_tbl)
+    # ── 5. SECCIÓN B — CONSUMO INTERNO ────────────────────────────────────────
+    if insumos_norm:
+        elementos.append(Spacer(1, 0.12 * inch))
+        elementos.append(Paragraph(
+            'B · CONSUMO INTERNO — Insumos sin cotización de origen',
+            ParagraphStyle('sec_b', fontSize=8, fontName='Helvetica-Bold',
+                           textColor=colors.white, backColor=_VERDE_HDR,
+                           leftIndent=5, spaceAfter=0),
+        ))
+
+        n_ins = len(insumos_norm)
+        fs_b = 7.5 if n_ins <= 20 else 7.0
+
+        estilo_ins = ParagraphStyle('ins_cell', fontName='Helvetica',
+                                    fontSize=fs_b, leading=fs_b + 2, wordWrap='CJK')
+        estilo_ins_hdr = ParagraphStyle('ins_hdr', fontName='Helvetica-Bold',
+                                        fontSize=fs_b, leading=fs_b + 2,
+                                        textColor=colors.white, wordWrap='CJK')
+
+        col_w_b = [
+            ancho * 0.38,  # PRODUCTO
+            ancho * 0.10,  # UNIDAD
+            ancho * 0.12,  # CANTIDAD
+            ancho * 0.20,  # COSTO UNIT.
+            ancho * 0.20,  # SUBTOTAL
+        ]
+
+        ins_data = [[
+            Paragraph('PRODUCTO / DESCRIPCIÓN', estilo_ins_hdr),
+            'UNIDAD', 'CANTIDAD', 'COSTO UNIT.', 'SUBTOTAL',
+        ]]
+        for ins in insumos_norm:
+            ins_data.append([
+                Paragraph(ins['nombre'], estilo_ins),
+                ins['unidad'],
+                f"{ins['cantidad']:g}",
+                f"$ {ins['costo']:,.2f}" if ins['costo'] else "—",
+                f"$ {ins['subtotal']:,.2f}",
+            ])
+
+        ins_data.append(['', '', '', 'SUBTOTAL B', f"$ {subtotal_b:,.2f}"])
+
+        n_filas_b = len(ins_data)
+        ins_tbl = Table(ins_data, colWidths=col_w_b)
+        ins_tbl.setStyle(TableStyle([
+            ('BACKGROUND',     (0, 0), (-1, 0),  _NEGRO),
+            ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
+            ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
+            ('FONTSIZE',       (0, 0), (-1, 0),  fs_b),
+            ('FONTNAME',       (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE',       (0, 1), (-1, -1), fs_b),
+            ('GRID',           (0, 0), (-1, n_filas_b - 2), 0.5, _GRIS_GRID),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f0fff4')]),
+            ('TOPPADDING',     (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
+            ('LEFTPADDING',    (0, 0), (-1, -1), 4),
+            ('ALIGN',          (1, 0), (2, -1),  'CENTER'),
+            ('ALIGN',          (3, 0), (4, -1),  'RIGHT'),
+            ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
+            ('BACKGROUND',     (0, -1), (-1, -1), colors.HexColor('#f0fff4')),
+            ('FONTNAME',       (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('LINEABOVE',      (0, -1), (-1, -1), 1.0, _NEGRO),
+            ('SPAN',           (0, -1), (2, -1)),
+            ('ALIGN',          (3, -1), (4, -1), 'RIGHT'),
+        ]))
+        elementos.append(ins_tbl)
+
+    # ── 6. TOTAL GENERAL (si hay ambas secciones) ─────────────────────────────
+    if productos and insumos_norm:
+        elementos.append(Spacer(1, 0.06 * inch))
+        total_tbl = Table(
+            [['', 'TOTAL GENERAL', f"$ {total_general:,.2f}"]],
+            colWidths=[ancho * 0.60, ancho * 0.20, ancho * 0.20],
+        )
+        total_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#fffbe6')),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, 0), 9),
+            ('LINEABOVE',     (0, 0), (-1, 0), 1.5, _NEGRO),
+            ('LINEBELOW',     (0, 0), (-1, 0), 1.5, _NEGRO),
+            ('TOPPADDING',    (0, 0), (-1, 0), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+            ('LEFTPADDING',   (0, 0), (-1, 0), 4),
+            ('ALIGN',         (1, 0), (2, 0), 'RIGHT'),
+            ('VALIGN',        (0, 0), (-1, 0), 'MIDDLE'),
+        ]))
+        elementos.append(total_tbl)
 
     doc.build(elementos)
     return buf.getvalue()

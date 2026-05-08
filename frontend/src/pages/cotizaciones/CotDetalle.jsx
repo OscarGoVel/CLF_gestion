@@ -9,7 +9,23 @@ const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN',
 export default function CotDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  const handlePdf = async () => {
+    const token = sessionStorage.getItem('clf_token');
+    const res = await fetch(`/api/cotizaciones/${id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `Cotizacion_${id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const { data, loading, error } = useFetch(`/api/cotizaciones/${id}`);
+  const { data: estudiosData } = useFetch(`/api/cotizaciones/${id}/estudios`);
 
   if (loading) return <div className="page" style={{ paddingTop: 60, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</div>;
   if (error)   return <div className="page" style={{ paddingTop: 60, color: 'var(--danger)' }}>Error: {error}</div>;
@@ -20,6 +36,17 @@ export default function CotDetalle() {
   const etapas   = data.etapas ?? {};
   const facturas = data.facturas_vinculadas ?? [];
   const compras  = data.compras_vinculadas ?? [];
+
+  const estudios = estudiosData?.estudios ?? [];
+
+  const handleNuevoEstudio = () => {
+    // Usa form nativo para enviar con cookies de sesión (ruta Jinja)
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/estudio-mercado/desde-cotizacion/${id}`;
+    document.body.appendChild(form);
+    form.submit();
+  };
 
   const steps     = buildSteps(cot);
   const nextAction = buildNextAction(cot, {
@@ -49,7 +76,7 @@ export default function CotDetalle() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <a className="btn" href={`/cotizaciones/${id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
+          <button className="btn" onClick={handlePdf}>PDF</button>
           <button className="btn" onClick={() => navigate(`/cotizaciones/${id}/editar`)}>Editar</button>
         </div>
       </div>
@@ -236,6 +263,46 @@ export default function CotDetalle() {
               </div>
             </>
           )}
+
+          {/* Estudios de mercado */}
+          <div className="eyebrow">Estudios de mercado</div>
+          <div className="card" style={{ marginBottom: 14 }}>
+            {estudios.length === 0 ? (
+              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)' }}>
+                Sin estudios vinculados
+              </div>
+            ) : estudios.map((e, i) => {
+              const esActivo = e.estado === 'abierto';
+              return (
+                <div key={i} style={{
+                  padding: '10px 14px',
+                  borderBottom: i < estudios.length - 1 ? '1px solid var(--ink-100)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: esActivo ? 600 : 400 }}>{e.nombre}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-400)', marginTop: 2 }}>
+                      {e.fecha}
+                      {' · '}
+                      <span style={{ color: esActivo ? 'var(--accent)' : 'var(--ink-300)' }}>
+                        {esActivo ? 'Activo' : 'Cerrado'}
+                      </span>
+                    </div>
+                  </div>
+                  <a href={`/estudio-mercado/${e.id}`}
+                     style={{ fontSize: 11, color: 'var(--primary)', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    Ver →
+                  </a>
+                </div>
+              );
+            })}
+            <div style={{ padding: '10px 14px', borderTop: estudios.length > 0 ? '1px solid var(--ink-100)' : 'none' }}>
+              <button className="btn" onClick={handleNuevoEstudio}
+                      style={{ width: '100%', fontSize: 11 }}>
+                + Nuevo estudio de mercado
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

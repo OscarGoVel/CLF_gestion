@@ -7,6 +7,7 @@ import Dashboard   from './pages/Dashboard';
 import CotList     from './pages/cotizaciones/CotList';
 import CotDetalle  from './pages/cotizaciones/CotDetalle';
 import CotNueva    from './pages/cotizaciones/CotNueva';
+import CotEditar   from './pages/cotizaciones/CotEditar';
 import ClienteList from './pages/catalogos/ClienteList';
 import ProductoList from './pages/catalogos/ProductoList';
 import CompraList  from './pages/compras/CompraList';
@@ -14,6 +15,8 @@ import CompraNueva from './pages/compras/CompraNueva';
 import StockList   from './pages/stock/StockList';
 import FacturaList    from './pages/facturas/FacturaList';
 import FacturaImportar from './pages/facturas/FacturaImportar';
+import Ajustes        from './pages/Ajustes';
+import Analisis       from './pages/Analisis';
 
 const Placeholder = ({ title }) => (
   <div className="page">
@@ -51,9 +54,10 @@ export default function App() {
                     <Route path="/dashboard"  element={<Dashboard />} />
 
                     {/* Comercial */}
-                    <Route path="/cotizaciones"       element={<CotList />} />
-                    <Route path="/cotizaciones/nueva" element={<CotNueva />} />
-                    <Route path="/cotizaciones/:id"   element={<CotDetalle />} />
+                    <Route path="/cotizaciones"            element={<CotList />} />
+                    <Route path="/cotizaciones/nueva"      element={<CotNueva />} />
+                    <Route path="/cotizaciones/:id/editar" element={<CotEditar />} />
+                    <Route path="/cotizaciones/:id"        element={<CotDetalle />} />
 
                     {/* Operación */}
                     <Route path="/stock"          element={<StockList />} />
@@ -70,13 +74,17 @@ export default function App() {
                     <Route path="/estado-cuenta/*" element={<Placeholder title="Estado de cuenta" />} />
 
                     {/* Análisis */}
-                    <Route path="/analisis/*"      element={<Placeholder title="Análisis" />} />
+                    <Route path="/analisis"        element={<Analisis />} />
+                    <Route path="/analisis/*"      element={<Analisis />} />
 
                     {/* Catálogos */}
                     <Route path="/catalogos"          element={<Navigate to="/catalogos/clientes" replace />} />
                     <Route path="/catalogos/clientes"  element={<ClienteList />} />
                     <Route path="/catalogos/productos" element={<ProductoList />} />
                     <Route path="/catalogos/*"         element={<Placeholder title="Catálogos" />} />
+
+                    {/* Ajustes */}
+                    <Route path="/ajustes" element={<Ajustes />} />
 
                     {/* Admin */}
                     <Route path="/admin/*" element={<Placeholder title="Administración" />} />

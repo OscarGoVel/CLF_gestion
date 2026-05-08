@@ -5,7 +5,7 @@ web_app/routers/api_catalogos.py
 """
 
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from web_app.database import get_pool_empresa
@@ -65,6 +65,32 @@ async def listar_clientes(
         tipos = [r[0] for r in cur.fetchall()]
 
     return JSONResponse({"clientes": clientes, "tipos": tipos})
+
+
+@router.post("/clientes", status_code=201)
+async def crear_cliente(request: Request, user: dict = Depends(get_usuario_api)):
+    body = await request.json()
+    nombre = (body.get("nombre_comercial") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=422, detail="nombre_comercial requerido")
+
+    fields = ["nombre_comercial", "razon_social", "tipo", "rfc",
+              "contacto", "telefono", "email", "direccion"]
+    data = {f: (body.get(f) or "").strip() or None for f in fields}
+    data["nombre_comercial"] = nombre
+
+    cols = ", ".join(data.keys())
+    placeholders = ", ".join(["%s"] * len(data))
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        cur.execute(
+            f"INSERT INTO clientes ({cols}) VALUES ({placeholders}) RETURNING id",
+            list(data.values()),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+
+    return JSONResponse({"id": new_id}, status_code=201)
 
 
 @router.get("/clientes/{cliente_id}")

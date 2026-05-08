@@ -3,59 +3,131 @@ import { useAuth } from '../hooks/useAuth';
 
 export const NAV_BY_ROLE = {
   admin: [
-    { id: 'inicio',    label: 'Inicio',        path: '/dashboard' },
-    { id: 'comercial', label: 'Comercial',      path: '/cotizaciones', sub: 'Cotizar · Vender' },
-    { id: 'operacion', label: 'Operación',      path: '/stock',        sub: 'Comprar · Almacén' },
-    { id: 'cobranza',  label: 'Cobranza',       path: '/facturas',     sub: 'Facturar · Cobrar' },
-    { id: 'analisis',  label: 'Análisis',       path: '/analisis',     sub: 'Reportes · Costos' },
-    { id: 'config',    label: 'Configuración',  path: '/admin',        sub: 'Maestros · Sistema' },
+    { id: 'inicio',    label: 'Inicio',       path: '/dashboard',   paths: ['/dashboard'] },
+    { id: 'comercial', label: 'Comercial',    path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
+    { id: 'operacion', label: 'Operación',    path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/catalogos/productos', '/catalogos/proveedores'] },
+    { id: 'cobranza',  label: 'Cobranza',     path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
+    { id: 'analisis',  label: 'Análisis',     path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
+    { id: 'config',    label: 'Configuración', path: '/ajustes',     paths: ['/ajustes', '/admin'] },
   ],
   operador: [
-    { id: 'inicio',    label: 'Inicio',    path: '/dashboard' },
-    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', sub: 'Cotizar · Vender' },
-    { id: 'operacion', label: 'Operación', path: '/stock',        sub: 'Comprar · Almacén' },
-    { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     sub: 'Facturar · Cobrar' },
-    { id: 'analisis',  label: 'Análisis',  path: '/analisis' },
+    { id: 'inicio',    label: 'Inicio',    path: '/dashboard',   paths: ['/dashboard'] },
+    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
+    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/catalogos/productos'] },
+    { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
+    { id: 'analisis',  label: 'Análisis',  path: '/analisis',     paths: ['/analisis'] },
   ],
   almacenista: [
-    { id: 'inicio',    label: 'Inicio',           path: '/dashboard' },
-    { id: 'operacion', label: 'Operación',         path: '/stock', sub: 'Stock · Pre-inv · Recep.' },
-    { id: 'catalogos', label: 'Productos',         path: '/catalogos/productos' },
+    { id: 'inicio',    label: 'Inicio',    path: '/dashboard', paths: ['/dashboard'] },
+    { id: 'operacion', label: 'Operación', path: '/stock',     paths: ['/stock', '/preinventario', '/catalogos/productos'] },
   ],
   lectura: [
-    { id: 'inicio',    label: 'Inicio',        path: '/dashboard' },
-    { id: 'comercial', label: 'Comercial',     path: '/cotizaciones' },
-    { id: 'catalogos', label: 'Catálogos',     path: '/catalogos' },
-    { id: 'analisis',  label: 'Reportes',      path: '/analisis' },
+    { id: 'inicio',    label: 'Inicio',    path: '/dashboard',    paths: ['/dashboard'] },
+    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
+    { id: 'analisis',  label: 'Reportes',  path: '/analisis',     paths: ['/analisis'] },
   ],
+};
+
+const SUBNAV_BY_ROLE = {
+  admin: {
+    comercial: [
+      { label: 'Cotizaciones', path: '/cotizaciones' },
+      { label: 'Clientes',     path: '/catalogos/clientes' },
+    ],
+    operacion: [
+      { label: 'Compras',        path: '/compras' },
+      { label: 'Stock',          path: '/stock' },
+      { label: 'Pre-inventario', path: '/preinventario' },
+      { label: 'Productos',      path: '/catalogos/productos' },
+      { label: 'Proveedores',    path: '/catalogos/proveedores' },
+    ],
+    cobranza: [
+      { label: 'Facturas',         path: '/facturas' },
+      { label: 'Estado de Cuenta', path: '/estado-cuenta' },
+    ],
+    analisis: [
+      { label: 'Análisis',           path: '/analisis' },
+      { label: 'Costos Fijos',       path: '/costos-fijos' },
+      { label: 'Estudio de Mercado', path: '/estudio-mercado' },
+    ],
+    config: [
+      { label: 'Ajustes',     path: '/ajustes' },
+      { label: 'Usuarios',    path: '/admin/usuarios' },
+      { label: 'Permisos',    path: '/admin/permisos' },
+      { label: 'Ubicaciones', path: '/admin/ubicaciones' },
+      { label: 'Auditoría',   path: '/admin/auditoria' },
+    ],
+  },
+  operador: {
+    comercial: [
+      { label: 'Cotizaciones', path: '/cotizaciones' },
+      { label: 'Clientes',     path: '/catalogos/clientes' },
+    ],
+    operacion: [
+      { label: 'Compras',        path: '/compras' },
+      { label: 'Stock',          path: '/stock' },
+      { label: 'Pre-inventario', path: '/preinventario' },
+      { label: 'Productos',      path: '/catalogos/productos' },
+    ],
+    cobranza: [
+      { label: 'Facturas',         path: '/facturas' },
+      { label: 'Estado de Cuenta', path: '/estado-cuenta' },
+    ],
+  },
+  almacenista: {
+    operacion: [
+      { label: 'Stock',          path: '/stock' },
+      { label: 'Pre-inventario', path: '/preinventario' },
+      { label: 'Productos',      path: '/catalogos/productos' },
+    ],
+  },
+  lectura: {
+    comercial: [
+      { label: 'Cotizaciones', path: '/cotizaciones' },
+      { label: 'Clientes',     path: '/catalogos/clientes' },
+    ],
+  },
 };
 
 const ROLE_LABEL = {
-  admin: 'Admin',
-  operador: 'Operador',
-  almacenista: 'Almacén',
-  lectura: 'Solo lectura',
+  admin:          'Admin',
+  operador:       'Operador',
+  almacenista:    'Almacén',
+  lectura:        'Solo lectura',
+  Administrador:  'Admin',
+  Operador:       'Operador',
+  Almacenista:    'Almacén',
+  'Solo lectura': 'Solo lectura',
 };
 
-/* Determines which nav group is active based on current path */
 function activeId(items, pathname) {
   let best = null;
   let bestLen = 0;
   for (const it of items) {
-    if (pathname.startsWith(it.path) && it.path.length > bestLen) {
-      best = it.id;
-      bestLen = it.path.length;
+    for (const p of (it.paths ?? [it.path])) {
+      if (pathname.startsWith(p) && p.length > bestLen) {
+        best = it.id;
+        bestLen = p.length;
+      }
     }
   }
   return best;
 }
 
+const ROLE_KEY = {
+  'Administrador': 'admin',
+  'Operador':      'operador',
+  'Almacenista':   'almacenista',
+  'Solo lectura':  'lectura',
+};
+
 export function Shell({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const role = user?.role ?? 'lectura';
+  const role = ROLE_KEY[user?.role] ?? 'lectura';
   const items = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.lectura;
   const current = activeId(items, location.pathname);
+  const subitems = (SUBNAV_BY_ROLE[role] ?? {})[current] ?? [];
 
   return (
     <div className="shell">
@@ -71,10 +143,7 @@ export function Shell({ children }) {
               to={it.path}
               className={current === it.id ? 'active' : ''}
             >
-              <span style={{ fontSize: 12.5, fontWeight: current === it.id ? 500 : 400 }}>
-                {it.label}
-              </span>
-              {it.sub && <span className="sub">{it.sub}</span>}
+              {it.label}
             </Link>
           ))}
         </nav>
@@ -93,6 +162,20 @@ export function Shell({ children }) {
           </button>
         </div>
       </div>
+
+      {subitems.length > 0 && (
+        <div className="subnav">
+          {subitems.map((s) => (
+            <Link
+              key={s.path}
+              to={s.path}
+              className={location.pathname.startsWith(s.path) ? 'active' : ''}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="scroll" style={{ background: 'var(--paper)' }}>
         {children}

@@ -4,7 +4,7 @@
 
 {% set seccion = 'estudio_mercado' %}
 {% include "analisis/_nav.html" %}
-<main class="p-5 max-w-6xl mx-auto">
+<main class="p-5 max-w-7xl mx-auto">
 
     <!-- Encabezado del estudio -->
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-5">
@@ -20,17 +20,56 @@
                         <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-500">Cerrado</span>
                         {% endif %}
                     </div>
+                    {% if estudio.cot_folio %}
+                    <p class="text-xs text-blue-600 mt-0.5">
+                        Cotización de origen:
+                        <a href="/cotizaciones/{{ estudio.cotizacion_id }}"
+                           class="font-semibold hover:underline">{{ estudio.cot_folio }}</a>
+                        {% if estudio.cot_cliente %} — {{ estudio.cot_cliente }}{% endif %}
+                    </p>
+                    {% endif %}
                     {% if estudio.descripcion %}
-                    <p class="text-sm text-gray-500">{{ estudio.descripcion }}</p>
+                    <p class="text-sm text-gray-500 mt-1">{{ estudio.descripcion }}</p>
                     {% endif %}
                     <p class="text-xs text-gray-400 mt-1">Fecha: {{ estudio.fecha }}</p>
                 </div>
-                <div class="flex items-center gap-2">
+
+                <!-- Controles de margen y acciones -->
+                <div class="flex flex-wrap items-center gap-2">
+                    {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+                    <form method="post" action="/estudio-mercado/{{ estudio.id }}/margen"
+                          class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                        <label class="text-xs text-gray-500 font-semibold whitespace-nowrap">Margen:</label>
+                        <input type="number" name="margen_pct" value="{{ margen_pct_display }}"
+                               min="0" max="200" step="0.5"
+                               class="w-16 px-2 py-1 text-sm border border-gray-200 rounded text-center
+                                      focus:outline-none focus:ring-1 focus:ring-clf-green">
+                        <span class="text-xs text-gray-400">%</span>
+                        <button type="submit"
+                                class="text-xs font-semibold text-clf-green hover:text-green-700 transition-colors">
+                            Aplicar
+                        </button>
+                    </form>
+                    {% else %}
+                    <span class="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                        Margen: <strong>{{ margen_pct_display }}%</strong>
+                    </span>
+                    {% endif %}
+
+                    {% if items %}
+                    <a href="/estudio-mercado/{{ estudio.id }}/enviar-cotizacion"
+                       class="px-3 py-1.5 text-xs font-semibold text-white bg-navy-600
+                              hover:bg-navy-800 rounded-lg transition-colors whitespace-nowrap">
+                        Enviar a cotización →
+                    </a>
+                    {% endif %}
+
                     <a href="/estudio-mercado"
                        class="px-3 py-1.5 text-xs font-semibold text-navy-600 border border-navy-300
                               hover:bg-navy-50 rounded-lg transition-colors">
-                        ← Volver a estudios de mercado
+                        ← Volver
                     </a>
+
                     {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
                     <form method="post" action="/estudio-mercado/{{ estudio.id }}/cerrar"
                           onsubmit="return confirm('¿Cerrar este estudio? Ya no se podrán agregar items ni cotizaciones.')">
@@ -88,7 +127,6 @@
                         {% endfor %}
                     </datalist>
                 </div>
-
                 <script>
                 (function() {
                     const DATA = {
@@ -98,11 +136,7 @@
                     };
                     const input  = document.getElementById('prod-picker-input');
                     const hidden = document.getElementById('prod-picker-id');
-
-                    input.addEventListener('input', () => {
-                        const match = DATA[input.value];
-                        hidden.value = match || '';
-                    });
+                    input.addEventListener('input', () => { hidden.value = DATA[input.value] || ''; });
                     input.addEventListener('change', () => {
                         const match = DATA[input.value];
                         hidden.value = match || '';
@@ -120,163 +154,215 @@
     </div>
     {% endif %}
 
-    <!-- Items del estudio -->
+    <!-- Tabla comparativa horizontal -->
     {% if items %}
-    <div class="space-y-4">
-        {% for item in items %}
-        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-
-            <!-- Cabecera del item -->
-            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
-                <div class="flex items-center gap-3">
-                    <span class="text-sm font-bold text-navy-700">{{ item.nombre_articulo }}</span>
-                    <span class="text-xs text-gray-400">{{ item.cantidad }} {{ item.unidad or '' }}</span>
-                    {% if item.producto_codigo %}
-                    <span class="px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-600">{{ item.producto_codigo }}</span>
-                    {% endif %}
-                </div>
-                {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
-                <form method="post" action="/estudio-mercado/item/{{ item.id }}/eliminar">
-                    <button type="submit" class="text-xs text-red-400 hover:text-red-600 transition-colors"
-                            onclick="return confirm('¿Eliminar este item y todas sus cotizaciones?')">
-                        Eliminar
-                    </button>
-                </form>
-                {% endif %}
-            </div>
-
-            <!-- Tabla de cotizaciones -->
-            {% if item.cotizaciones %}
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
-                            <th class="px-5 py-2 text-left">Proveedor</th>
-                            <th class="px-5 py-2 text-right">Precio unit.</th>
-                            <th class="px-5 py-2 text-right">Total ({{ item.cantidad }} {{ item.unidad or 'u' }})</th>
-                            <th class="px-5 py-2 text-right hidden sm:table-cell">Vs mínimo</th>
-                            <th class="px-5 py-2 text-left hidden md:table-cell">Notas</th>
-                            <th class="px-5 py-2"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-50">
-                        {% for cot in item.cotizaciones %}
-                        {% set es_minimo = cot.precio_unitario == item.precio_minimo %}
-                        {% set diff_pct = ((cot.precio_unitario - item.precio_minimo) / item.precio_minimo * 100) if item.precio_minimo and not es_minimo else 0 %}
-                        <tr class="{% if es_minimo %}bg-green-50{% else %}hover:bg-gray-50{% endif %} transition-colors">
-                            <td class="px-5 py-2.5 font-medium {% if es_minimo %}text-green-700{% else %}text-gray-700{% endif %}">
-                                {% if es_minimo %}<span class="mr-1 text-green-500">★</span>{% endif %}
-                                {{ cot.nombre_proveedor }}
-                            </td>
-                            <td class="px-5 py-2.5 text-right font-semibold {% if es_minimo %}text-green-700{% else %}text-gray-800{% endif %}">
-                                ${{ '{:,.2f}'.format(cot.precio_unitario) }}
-                            </td>
-                            <td class="px-5 py-2.5 text-right text-gray-600">
-                                ${{ '{:,.2f}'.format(cot.precio_unitario * item.cantidad) }}
-                            </td>
-                            <td class="px-5 py-2.5 text-right hidden sm:table-cell">
-                                {% if es_minimo %}
-                                <span class="text-xs font-bold text-green-600">Mínimo</span>
-                                {% else %}
-                                <span class="text-xs text-red-500">+{{ '{:.1f}'.format(diff_pct) }}%</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-5 py-2.5 text-xs text-gray-400 hidden md:table-cell">{{ cot.notas or '—' }}</td>
-                            <td class="px-5 py-2.5 text-right">
-                                {% if user.rol in ('Administrador', 'Operador') %}
-                                <div class="flex items-center justify-end gap-2">
-                                    {% if es_minimo and item.producto_id and estudio.estado == 'abierto' %}
-                                    <form method="post" action="/estudio-mercado/item/{{ item.id }}/aplicar">
-                                        <button type="submit"
-                                                title="Aplicar este precio al catálogo"
-                                                class="px-2.5 py-1 text-xs font-semibold bg-green-600 text-white
-                                                       rounded hover:bg-green-700 transition-colors whitespace-nowrap"
-                                                onclick="return confirm('¿Actualizar el precio del producto en el catálogo a ${{ '{:,.2f}'.format(cot.precio_unitario) }}?')">
-                                            Aplicar al catálogo
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                    {% if estudio.estado == 'abierto' %}
-                                    <form method="post" action="/estudio-mercado/cotizacion/{{ cot.id }}/eliminar">
-                                        <button type="submit" class="text-xs text-red-400 hover:text-red-600 transition-colors"
-                                                onclick="return confirm('¿Eliminar esta cotización?')">✕</button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <p class="px-5 py-4 text-xs text-gray-400 italic">Sin cotizaciones aún.</p>
-            {% endif %}
-
-            <!-- Formulario agregar cotización -->
-            {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
-            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50">
-                <details class="group">
-                    <summary class="text-xs text-gray-500 font-semibold uppercase tracking-wide cursor-pointer
-                                    hover:text-clf-green select-none">
-                        + Agregar cotización de proveedor
-                    </summary>
-                    <form method="post" action="/estudio-mercado/item/{{ item.id }}/cotizacion"
-                          class="flex flex-wrap gap-3 items-end mt-3">
-                        <div class="flex-1 min-w-[180px]">
-                            <label class="block text-xs text-gray-500 mb-1">Proveedor</label>
-                            <select name="proveedor_id" id="prov-sel-{{ item.id }}"
-                                    onchange="document.getElementById('prov-nom-{{ item.id }}').value = this.options[this.selectedIndex].text !== '— Otro / escribir —' ? this.options[this.selectedIndex].text : ''"
-                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
-                                           focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
-                                <option value="">— Otro / escribir —</option>
-                                {% for prov in proveedores %}
-                                <option value="{{ prov.id }}">{{ prov.nombre }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="flex-1 min-w-[160px]">
-                            <label class="block text-xs text-gray-500 mb-1">Nombre proveedor</label>
-                            <input type="text" name="nombre_proveedor" id="prov-nom-{{ item.id }}" required
-                                   placeholder="Nombre del proveedor…"
-                                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
-                                          focus:outline-none focus:ring-2 focus:ring-clf-green">
-                        </div>
-                        <div class="w-36">
-                            <label class="block text-xs text-gray-500 mb-1">Precio unitario</label>
-                            <div class="relative">
-                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                                <input type="number" name="precio_unitario" required min="0" step="0.01"
-                                       class="pl-6 pr-3 py-2 w-full text-sm border border-gray-200 rounded-lg
-                                              focus:outline-none focus:ring-2 focus:ring-clf-green">
-                            </div>
-                        </div>
-                        <div class="flex-1 min-w-[140px]">
-                            <label class="block text-xs text-gray-500 mb-1">Notas (opcional)</label>
-                            <input type="text" name="notas" placeholder="Incluye envío, vigencia…"
-                                   class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
-                                          focus:outline-none focus:ring-2 focus:ring-clf-green">
-                        </div>
-                        <button type="submit"
-                                class="px-4 py-2 bg-clf-green text-white text-sm font-semibold rounded-lg
-                                       hover:bg-green-700 transition-colors whitespace-nowrap">
-                            Guardar
-                        </button>
-                    </form>
-                </details>
-            </div>
-            {% endif %}
-
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-5">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-700">Comparativa de precios</h3>
+            <span class="text-xs text-gray-400">{{ items|length }} artículo{% if items|length != 1 %}s{% endif %}</span>
         </div>
-        {% endfor %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
+                        <th class="px-4 py-3 text-left min-w-[160px]">Artículo</th>
+                        <th class="px-3 py-3 text-center w-16">Cant.</th>
+                        <th class="px-3 py-3 text-center w-16">Unidad</th>
+                        {% for prov in proveedores_unicos %}
+                        <th class="px-3 py-3 text-right min-w-[80px]">{{ prov }}<br><span class="font-normal normal-case">P.U.</span></th>
+                        <th class="px-3 py-3 text-right min-w-[80px]">{{ prov }}<br><span class="font-normal normal-case">Subtotal</span></th>
+                        {% endfor %}
+                        <th class="px-3 py-3 text-right min-w-[80px] bg-blue-50 text-blue-700">MIN P.U.</th>
+                        <th class="px-3 py-3 text-right min-w-[90px] bg-green-50 text-green-700">
+                            P. Estimado<br><span class="font-normal normal-case text-gray-400">+{{ margen_pct_display }}%</span>
+                        </th>
+                        <th class="px-3 py-3 w-28"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for item in items %}
+                    <tr class="hover:bg-gray-50 transition-colors group">
+                        <td class="px-4 py-3">
+                            <div class="font-semibold text-navy-700">{{ item.nombre_articulo }}</div>
+                            {% if item.producto_codigo %}
+                            <span class="text-xs font-mono text-blue-500">{{ item.producto_codigo }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-3 text-center text-gray-600">{{ item.cantidad }}</td>
+                        <td class="px-3 py-3 text-center text-gray-400 text-xs">{{ item.unidad or '—' }}</td>
+
+                        {% for prov in proveedores_unicos %}
+                        {% set precio = item.precios_por_prov[prov] %}
+                        {% set es_min = precio is not none and item.min_precio is not none and precio == item.min_precio %}
+                        <td class="px-3 py-3 text-right {% if es_min %}font-bold text-green-700 bg-green-50{% else %}text-gray-700{% endif %}">
+                            {% if precio is not none %}
+                            {% if es_min %}<span class="text-green-500 mr-0.5">★</span>{% endif %}
+                            ${{ '{:,.2f}'.format(precio) }}
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-3 text-right {% if es_min %}text-green-600 bg-green-50{% else %}text-gray-500{% endif %} text-xs">
+                            {% if precio is not none %}
+                            ${{ '{:,.2f}'.format(precio * item.cantidad) }}
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+
+                        <!-- MIN P.U. -->
+                        <td class="px-3 py-3 text-right bg-blue-50">
+                            {% if item.min_precio is not none %}
+                            <span class="font-bold text-blue-700">${{ '{:,.2f}'.format(item.min_precio) }}</span>
+                            {% if item.mejor_proveedor %}
+                            <div class="text-xs text-blue-400 truncate max-w-[80px]">{{ item.mejor_proveedor }}</div>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Precio Estimado -->
+                        <td class="px-3 py-3 text-right bg-green-50">
+                            {% if item.precio_estimado is not none %}
+                            <span class="font-bold text-green-700">${{ '{:,.2f}'.format(item.precio_estimado) }}</span>
+                            {% else %}
+                            <span class="text-gray-300">—</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Acciones por fila -->
+                        <td class="px-3 py-3 text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                {% if item.min_precio is not none and item.producto_id and user.rol == 'Administrador' %}
+                                <form method="post" action="/estudio-mercado/item/{{ item.id }}/aplicar">
+                                    <button type="submit"
+                                            title="Actualizar precio_base y precio_venta en el catálogo"
+                                            class="px-2 py-1 text-xs font-semibold bg-green-600 text-white
+                                                   rounded hover:bg-green-700 transition-colors whitespace-nowrap"
+                                            onclick="return confirm('¿Aplicar al catálogo?\nprecio_base: ${{ '{:,.2f}'.format(item.min_precio) }}\nprecio_venta: ${{ '{:,.2f}'.format(item.precio_estimado) if item.precio_estimado else 0 }}')">
+                                        Al catálogo
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+                                <form method="post" action="/estudio-mercado/item/{{ item.id }}/eliminar">
+                                    <button type="submit" class="text-xs text-red-400 hover:text-red-600"
+                                            onclick="return confirm('¿Eliminar este ítem y sus cotizaciones?')">✕</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Formulario inline para agregar cotización de proveedor -->
+                    {% if estudio.estado == 'abierto' and user.rol in ('Administrador', 'Operador') %}
+                    <tr class="bg-gray-50 border-b border-gray-100">
+                        <td colspan="{{ 3 + proveedores_unicos|length * 2 + 3 }}" class="px-4 py-2">
+                            <details class="group">
+                                <summary class="text-xs text-gray-500 font-semibold cursor-pointer hover:text-clf-green select-none">
+                                    + Agregar precio de proveedor para "{{ item.nombre_articulo }}"
+                                </summary>
+                                <form method="post" action="/estudio-mercado/item/{{ item.id }}/cotizacion"
+                                      class="flex flex-wrap gap-3 items-end mt-2">
+                                    <div class="flex-1 min-w-[160px]">
+                                        <label class="block text-xs text-gray-500 mb-1">Proveedor</label>
+                                        <select name="proveedor_id" id="prov-sel-{{ item.id }}"
+                                                onchange="
+                                                    var opt = this.options[this.selectedIndex];
+                                                    var nom = document.getElementById('prov-nom-{{ item.id }}');
+                                                    if (opt.value) nom.value = opt.text;
+                                                "
+                                                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                                       focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                                            <option value="">— Otro / escribir —</option>
+                                            {% for prov in proveedores %}
+                                            <option value="{{ prov.id }}">{{ prov.nombre }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="flex-1 min-w-[140px]">
+                                        <label class="block text-xs text-gray-500 mb-1">Nombre proveedor</label>
+                                        <input type="text" name="nombre_proveedor" id="prov-nom-{{ item.id }}" required
+                                               placeholder="Nombre del proveedor…"
+                                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                                      focus:outline-none focus:ring-2 focus:ring-clf-green">
+                                    </div>
+                                    <div class="w-32">
+                                        <label class="block text-xs text-gray-500 mb-1">Precio unitario</label>
+                                        <div class="relative">
+                                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                                            <input type="number" name="precio_unitario" required min="0" step="0.01"
+                                                   class="pl-6 pr-3 py-2 w-full text-sm border border-gray-200 rounded-lg
+                                                          focus:outline-none focus:ring-2 focus:ring-clf-green">
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 min-w-[120px]">
+                                        <label class="block text-xs text-gray-500 mb-1">Notas</label>
+                                        <input type="text" name="notas" placeholder="Incluye envío, vigencia…"
+                                               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                                      focus:outline-none focus:ring-2 focus:ring-clf-green">
+                                    </div>
+                                    <button type="submit"
+                                            class="px-4 py-2 bg-clf-green text-white text-sm font-semibold rounded-lg
+                                                   hover:bg-green-700 transition-colors whitespace-nowrap">
+                                        Guardar
+                                    </button>
+                                </form>
+                            </details>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+
     {% else %}
-    <div class="bg-white rounded-xl shadow-sm px-6 py-10 text-center">
+    <div class="bg-white rounded-xl shadow-sm px-6 py-10 text-center mb-5">
         <p class="text-gray-400 text-sm">Este estudio aún no tiene artículos.</p>
         {% if estudio.estado == 'abierto' %}
         <p class="text-gray-300 text-xs mt-1">Usa el formulario de arriba para agregar artículos a comparar.</p>
         {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Historial de aplicaciones -->
+    {% if historial %}
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100">
+            <h3 class="text-sm font-bold text-gray-700">Historial de aplicaciones</h3>
+        </div>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
+                    <th class="px-5 py-2 text-left">Fecha</th>
+                    <th class="px-5 py-2 text-left">Cotización</th>
+                    <th class="px-5 py-2 text-left">Estado al aplicar</th>
+                    <th class="px-5 py-2 text-left">Aplicado por</th>
+                    <th class="px-5 py-2 text-center">Tipo</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for h in historial %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-5 py-2.5 text-xs text-gray-500">{{ h.fecha[:16].replace('T', ' ') if h.fecha else '—' }}</td>
+                    <td class="px-5 py-2.5 font-medium text-navy-700">{{ h.cot_folio }}</td>
+                    <td class="px-5 py-2.5 text-xs text-gray-500">{{ h.estado_cot or '—' }}</td>
+                    <td class="px-5 py-2.5 text-xs text-gray-500">{{ h.aplicado_por or '—' }}</td>
+                    <td class="px-5 py-2.5 text-center">
+                        {% if h.forzado %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-600">⚠ Forzado</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-500">Normal</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
 

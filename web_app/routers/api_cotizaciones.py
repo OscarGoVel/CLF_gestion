@@ -5,11 +5,13 @@ web_app/routers/api_cotizaciones.py
 Coexiste con el router HTML legacy en cotizaciones.py.
 """
 
+import csv
+import io
 import json
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -137,6 +139,106 @@ async def listar(
     })
 
 
+# ── GET /api/cotizaciones/plantilla-import ────────────────────────────────────
+# IMPORTANTE: debe estar ANTES de /{cot_id}
+
+@router.get("/plantilla-import")
+async def descargar_plantilla_import(user: dict = Depends(get_usuario_api)):
+    """Descarga un CSV de ejemplo para importar líneas a una cotización."""
+    contenido = (
+        "descripcion,cantidad,unidad_medida\n"
+        "Ejemplo Producto 1,10,pza\n"
+        "Ejemplo Producto 2,5.5,kg\n"
+    )
+    return Response(
+        content=contenido.encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="plantilla_cotizacion.csv"'},
+    )
+
+
+# ── POST /api/cotizaciones/importar-plantilla ─────────────────────────────────
+
+@router.post("/importar-plantilla")
+async def importar_plantilla(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_usuario_api),
+):
+    """
+    Procesa un CSV con columnas: descripcion, cantidad, unidad_medida.
+    Retorna filas matched (producto encontrado en catálogo) y unmatched.
+    """
+    raw = await file.read()
+    # Tolerar BOM UTF-8
+    texto = raw.decode("utf-8-sig").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+
+    reader = csv.DictReader(io.StringIO(texto))
+    # Normalizar nombres de columnas (strip + lower)
+    fieldnames = [f.strip().lower() for f in (reader.fieldnames or [])]
+    if "descripcion" not in fieldnames:
+        raise HTTPException(
+            status_code=400,
+            detail="El CSV debe tener una columna 'descripcion'.",
+        )
+
+    filas: list[dict] = []
+    for row in reader:
+        norm = {k.strip().lower(): v.strip() for k, v in row.items()}
+        desc = norm.get("descripcion", "").strip()
+        if not desc:
+            continue
+        try:
+            cantidad = float(norm.get("cantidad", "1") or "1")
+        except ValueError:
+            cantidad = 1.0
+        filas.append({
+            "descripcion_csv": desc,
+            "cantidad": cantidad,
+            "unidad_medida": norm.get("unidad_medida", "").strip(),
+        })
+
+    if not filas:
+        raise HTTPException(status_code=400, detail="El CSV no contiene filas válidas.")
+
+    matched: list[dict] = []
+    unmatched: list[dict] = []
+
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        for fila in filas:
+            desc_norm = fila["descripcion_csv"].strip()
+            cur.execute("""
+                SELECT p.id, p.nombre, p.unidad_medida,
+                       COALESCE(p.precio_venta, p.precio_base, 0) AS precio,
+                       p.aplica_iva
+                FROM productos p
+                WHERE p.nombre ILIKE %s OR p.codigo ILIKE %s
+                ORDER BY p.nombre
+                LIMIT 1
+            """, (desc_norm, desc_norm))
+            row = cur.fetchone()
+            if row:
+                matched.append({
+                    "descripcion_csv": fila["descripcion_csv"],
+                    "producto_id":     row[0],
+                    "nombre_catalogo": row[1],
+                    "unidad_medida":   row[2] or fila["unidad_medida"],
+                    "cantidad":        fila["cantidad"],
+                    "precio":          _serial(row[3]),
+                    "aplica_iva":      bool(row[4]),
+                })
+            else:
+                unmatched.append({
+                    "descripcion_csv": fila["descripcion_csv"],
+                    "cantidad":        fila["cantidad"],
+                    "unidad_medida":   fila["unidad_medida"],
+                })
+
+    return JSONResponse({"matched": matched, "unmatched": unmatched})
+
+
 # ── GET /api/cotizaciones/buscar-producto ────────────────────────────────────
 # IMPORTANTE: debe estar ANTES de /{cot_id} para que FastAPI no lo capture como ID
 
@@ -242,7 +344,7 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
             etapas_db[r[0]] = {
                 "completada": bool(r[1]),
                 "referencia": r[2] or "",
-                "fecha_etapa": r[3].isoformat() if r[3] else "",
+                "fecha_etapa": (r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3])) if r[3] else "",
                 "notas": r[4] or "",
             }
 
@@ -381,3 +483,141 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
             )
 
     return JSONResponse({"id": cot_id, "folio": folio}, status_code=201)
+
+
+# ── PUT /api/cotizaciones/{cot_id} ───────────────────────────────────────────
+
+@router.put("/{cot_id}")
+async def actualizar(cot_id: int, body: CotizacionIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if not body.partidas:
+        raise HTTPException(status_code=400, detail="Debe incluir al menos una partida")
+
+    empresa_db = user["empresa_db"]
+    subtotal_global = Decimal("0")
+    iva_global      = Decimal("0")
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+        folio = row[0]
+
+        cur.execute("DELETE FROM cotizacion_detalle WHERE cotizacion_id = %s", (cot_id,))
+
+        detalle_rows = []
+        for p in body.partidas:
+            cant   = Decimal(str(p.cantidad))
+            precio = Decimal(str(p.precio_unitario))
+            sub    = (cant * precio).quantize(Decimal("0.01"))
+            es_libre = p.producto_id is None
+
+            if es_libre:
+                prod_iva   = p.aplica_iva
+                costo_snap = 0.0
+                tiene_stock = True
+            else:
+                cur.execute(
+                    "SELECT precio_base, aplica_iva, COALESCE(stock_actual,0) >= %s "
+                    "FROM productos WHERE id = %s",
+                    (float(cant), p.producto_id),
+                )
+                pb_row     = cur.fetchone()
+                costo_snap  = float(pb_row[0]) if pb_row else 0.0
+                prod_iva    = bool(pb_row[1])   if pb_row else False
+                tiene_stock = bool(pb_row[2])   if pb_row else False
+
+            p_iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if prod_iva else Decimal("0")
+            p_tot = (sub + p_iva).quantize(Decimal("0.01"))
+            subtotal_global += sub
+            iva_global      += p_iva
+            detalle_rows.append((
+                p.producto_id,
+                cant, precio, sub, p_iva, p_tot,
+                tiene_stock, costo_snap,
+                p.descripcion_libre if es_libre else None,
+                es_libre,
+            ))
+
+        total_global = (subtotal_global + iva_global).quantize(Decimal("0.01"))
+        hay_iva      = iva_global > 0
+
+        cur.execute(
+            """
+            UPDATE cotizaciones
+               SET cliente_id   = %s,
+                   fecha        = %s,
+                   notas        = %s,
+                   subtotal     = %s,
+                   iva          = %s,
+                   total        = %s,
+                   aplica_iva   = %s,
+                   orden_compra = %s,
+                   utilidad_pct = %s
+             WHERE id = %s
+            """,
+            (body.cliente_id, body.fecha, body.notas,
+             float(subtotal_global), float(iva_global), float(total_global),
+             1 if hay_iva else 0, body.orden_compra, body.utilidad_pct,
+             cot_id),
+        )
+
+        for (prod_id, cant, precio, sub, p_iva, p_tot,
+             tiene_stock, costo_snap, desc_libre, es_libre) in detalle_rows:
+            cur.execute(
+                """
+                INSERT INTO cotizacion_detalle
+                  (cotizacion_id, producto_id, descripcion_libre, pendiente_catalogo,
+                   cantidad, precio_unitario, subtotal, iva, total, tiene_stock, costo_snapshot)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (cot_id, prod_id, desc_libre, es_libre,
+                 float(cant), float(precio),
+                 float(sub), float(p_iva), float(p_tot),
+                 1 if tiene_stock else 0, costo_snap),
+            )
+
+    return JSONResponse({"id": cot_id, "folio": folio})
+
+
+# ── GET /api/cotizaciones/{cot_id}/pdf ────────────────────────────────────────
+
+@router.get("/{cot_id}/pdf")
+async def descargar_pdf(cot_id: int, user: dict = Depends(get_usuario_api)):
+    try:
+        from web_app.pdf_cotizacion import generar_pdf_cotizacion
+        pdf_bytes = generar_pdf_cotizacion(user["empresa_db"], cot_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {e}")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+        row = cur.fetchone()
+    folio = row[0] if row else f"COT-{cot_id}"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Cotizacion_{folio}.pdf"'},
+    )
+
+
+# ── GET /api/cotizaciones/{cot_id}/estudios ──────────────────────────────────
+
+@router.get("/{cot_id}/estudios")
+async def estudios_de_cotizacion(cot_id: int, user: dict = Depends(get_usuario_api)):
+    """Retorna los estudios de mercado vinculados a esta cotización."""
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, nombre, fecha, estado
+            FROM estudios_mercado
+            WHERE cotizacion_id = %s
+            ORDER BY fecha_registro DESC
+        """, (cot_id,))
+        estudios = _rows(cur)
+    return JSONResponse({"estudios": estudios})

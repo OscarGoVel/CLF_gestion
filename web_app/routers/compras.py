@@ -702,9 +702,19 @@ async def presupuesto_generar(request: Request):
     except ValueError:
         raise HTTPException(status_code=400, detail="IDs inválidos")
 
+    insumos_raw = form.get("insumos_json", "[]") or "[]"
+    try:
+        insumos = json.loads(insumos_raw)
+        if not isinstance(insumos, list):
+            insumos = []
+    except (json.JSONDecodeError, ValueError):
+        insumos = []
+
     from web_app.pdf_presupuesto_compra import generar_pdf_presupuesto_compra
     try:
-        pdf_bytes = generar_pdf_presupuesto_compra(user["empresa_db"], cotizacion_ids)
+        pdf_bytes = generar_pdf_presupuesto_compra(
+            user["empresa_db"], cotizacion_ids, insumos=insumos
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

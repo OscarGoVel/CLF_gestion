@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Mapeo de precios — {{ estudio.nombre }}{% endblock %}
+{% block body %}
+
+{% set seccion = 'estudio_mercado' %}
+{% include "analisis/_nav.html" %}
+<main class="p-5 max-w-4xl mx-auto">
+
+    <!-- Encabezado -->
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-5">
+        <div class="h-1.5 {% if es_estado_avanzado %}bg-orange-400{% else %}bg-clf-green{% endif %}"></div>
+        <div class="px-6 py-5">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-navy-700">Mapeo de precios</h2>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Estudio <strong>{{ estudio.nombre }}</strong>
+                        → Cotización <strong>{{ cotizacion.folio }}</strong>
+                        <span class="text-gray-400">({{ cotizacion.cliente }})</span>
+                    </p>
+                </div>
+                <a href="/estudio-mercado/{{ estudio.id }}/enviar-cotizacion"
+                   class="px-3 py-1.5 text-xs font-semibold text-navy-600 border border-navy-300
+                          hover:bg-navy-50 rounded-lg transition-colors whitespace-nowrap">
+                    ← Cambiar cotización
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerta para estado avanzado -->
+    {% if es_estado_avanzado %}
+    <div class="bg-orange-50 border border-orange-200 rounded-xl px-5 py-4 mb-5">
+        <div class="flex gap-3 items-start">
+            <span class="text-orange-500 text-xl">⚠</span>
+            <div>
+                <p class="text-sm font-bold text-orange-700">Cotización en estado "{{ cotizacion.estado }}"</p>
+                <p class="text-xs text-orange-600 mt-0.5">
+                    Modificar precios en este estado puede afectar márgenes ya registrados.
+                    {% if es_admin %}
+                    Como administrador puedes continuar marcando la casilla de autorización.
+                    {% else %}
+                    Se requiere autorización de un administrador para continuar.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Instrucciones -->
+    <div class="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 mb-5 text-xs text-blue-700">
+        Por cada ítem del estudio, selecciona la línea de la cotización que corresponde, o elige <strong>"Agregar como nueva línea"</strong>.
+        Las líneas de la cotización que no tengan ítem en el estudio se muestran como advertencia al final.
+    </div>
+
+    <form method="post" action="/estudio-mercado/{{ estudio.id }}/enviar-cotizacion" id="form-mapeo">
+        <input type="hidden" name="cotizacion_id" value="{{ cotizacion.id }}">
+        {% if es_estado_avanzado %}
+        <input type="hidden" name="forzar" id="forzar-hidden" value="false">
+        {% endif %}
+
+        <!-- Mapeo: ítems del estudio → líneas de cotización -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-5">
+            <div class="px-5 py-3 border-b border-gray-100">
+                <h3 class="text-sm font-bold text-gray-700">Ítems del estudio → línea en cotización</h3>
+            </div>
+            <div class="divide-y divide-gray-50">
+                {% for item in items %}
+                <div class="px-5 py-4 flex flex-wrap gap-4 items-center">
+                    <div class="flex-1 min-w-[180px]">
+                        <p class="font-semibold text-navy-700 text-sm">{{ item.nombre_articulo }}</p>
+                        <p class="text-xs text-gray-400">{{ item.cantidad }} {{ item.unidad or '' }}</p>
+                        <p class="text-xs mt-0.5">
+                            MIN: <span class="font-semibold text-blue-600">${{ '{:,.2f}'.format(item.min_precio) }}</span>
+                            &nbsp;→&nbsp;
+                            P.Estimado: <span class="font-bold text-green-600">${{ '{:,.2f}'.format(item.precio_estimado) }}</span>
+                        </p>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs text-gray-500 mb-1">Asignar a línea de cotización</label>
+                        <select name="item_{{ item.id }}"
+                                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg
+                                       focus:outline-none focus:ring-2 focus:ring-clf-green bg-white">
+                            <option value="">— No aplicar este ítem —</option>
+                            <option value="nueva">+ Agregar como nueva línea</option>
+                            {% for linea in lineas_cot %}
+                            <option value="{{ linea.id }}"
+                                {% if item.producto_id and item.producto_id == linea.producto_id %}selected{% endif %}>
+                                {{ linea.descripcion }} ({{ linea.cantidad }} u. · ${{ '{:,.2f}'.format(linea.precio_unitario) }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Líneas de cotización sin match en estudio -->
+        {% set ids_con_producto = items | map(attribute='producto_id') | list %}
+        {% set lineas_sin_match = lineas_cot | selectattr('producto_id', 'defined') | list %}
+        {% set lineas_advertencia = [] %}
+        {% for linea in lineas_cot %}
+            {% if linea.producto_id not in ids_con_producto or not linea.producto_id %}
+                {% set _ = lineas_advertencia.append(linea) %}
+            {% endif %}
+        {% endfor %}
+
+        {% if lineas_advertencia %}
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-5">
+            <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                <span class="text-orange-500">⚠</span>
+                <h3 class="text-sm font-bold text-gray-700">Líneas sin ítem en el estudio</h3>
+                <span class="text-xs text-gray-400">(sin cambios automáticos)</span>
+            </div>
+            <div class="divide-y divide-gray-50">
+                {% for linea in lineas_advertencia %}
+                <div class="px-5 py-3 flex items-center gap-4">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-600">{{ linea.descripcion }}</p>
+                        <p class="text-xs text-gray-400">{{ linea.cantidad }} u. · ${{ '{:,.2f}'.format(linea.precio_unitario) }} actual</p>
+                    </div>
+                    {% if linea.precio_venta_catalogo %}
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400">Precio sugerido catálogo:</p>
+                        <p class="text-sm font-semibold text-blue-600">${{ '{:,.2f}'.format(linea.precio_venta_catalogo) }}</p>
+                    </div>
+                    {% endif %}
+                    <span class="text-xs text-gray-400 italic">No se modifica</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Autorización admin para estado avanzado -->
+        {% if es_estado_avanzado and es_admin %}
+        <div class="bg-white rounded-xl shadow-sm px-5 py-4 mb-5 border border-orange-200">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="chk-autorizar"
+                       class="w-4 h-4 accent-orange-500"
+                       onchange="document.getElementById('forzar-hidden').value = this.checked ? 'true' : 'false';
+                                 document.getElementById('btn-confirmar').disabled = !this.checked;">
+                <span class="text-sm text-orange-700 font-semibold">
+                    Autorizo la modificación de precios en una cotización en estado "{{ cotizacion.estado }}"
+                </span>
+            </label>
+        </div>
+        {% endif %}
+
+        <!-- Botones -->
+        <div class="flex justify-end gap-3">
+            <a href="/estudio-mercado/{{ estudio.id }}"
+               class="px-4 py-2 text-sm font-semibold text-gray-600 border border-gray-300
+                      hover:bg-gray-50 rounded-lg transition-colors">
+                Cancelar
+            </a>
+            <button type="submit" id="btn-confirmar"
+                    {% if es_estado_avanzado and es_admin %}disabled{% endif %}
+                    class="px-5 py-2 text-sm font-semibold text-white bg-clf-green
+                           hover:bg-green-700 rounded-lg transition-colors
+                           disabled:opacity-40 disabled:cursor-not-allowed">
+                Confirmar y aplicar precios
+            </button>
+        </div>
+
+        {% if es_estado_avanzado and not es_admin %}
+        <p class="text-center text-xs text-red-500 mt-3">
+            No tienes permisos para modificar una cotización en estado "{{ cotizacion.estado }}".
+        </p>
+        {% endif %}
+    </form>
+
+</main>
+{% endblock %}
