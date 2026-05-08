@@ -3,6 +3,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
+import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -11,21 +12,9 @@ export default function CotDetalle() {
   const navigate = useNavigate();
 
   const handlePdf = async () => {
-    const token = sessionStorage.getItem('clf_token');
-    const res = await fetch(`/api/cotizaciones/${id}/pdf`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `Cotizacion_${id}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await api.download(`/api/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
   };
   const { data, loading, error } = useFetch(`/api/cotizaciones/${id}`);
-  const { data: estudiosData } = useFetch(`/api/cotizaciones/${id}/estudios`);
 
   if (loading) return <div className="page" style={{ paddingTop: 60, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</div>;
   if (error)   return <div className="page" style={{ paddingTop: 60, color: 'var(--danger)' }}>Error: {error}</div>;
@@ -37,7 +26,7 @@ export default function CotDetalle() {
   const facturas = data.facturas_vinculadas ?? [];
   const compras  = data.compras_vinculadas ?? [];
 
-  const estudios = estudiosData?.estudios ?? [];
+  const estudios = data.estudios ?? [];
 
   const handleNuevoEstudio = () => {
     // Usa form nativo para enviar con cookies de sesión (ruta Jinja)

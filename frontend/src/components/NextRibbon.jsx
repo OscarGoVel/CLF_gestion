@@ -73,7 +73,20 @@ export function buildNextAction(cot, handlers = {}) {
     return {
       message: 'Stock completo. Lista para entregar.',
       detail: 'Programa la entrega con el cliente.',
-      buttons: [{ label: 'Marcar entregada', onClick: handlers.onEntregar, primary: true }],
+      buttons: [
+        { label: 'Nota remision', onClick: handlers.onNotaRemision, primary: true },
+        { label: 'Marcar entregada', onClick: handlers.onEntregar },
+      ].filter((b) => b.onClick),
+    };
+  }
+
+  if (estado === 'Parcialmente Entregada') {
+    return {
+      message: 'Entrega parcial registrada.',
+      detail: 'Emite la nota de remision con las cantidades entregadas.',
+      buttons: [
+        { label: 'Nota remision', onClick: handlers.onNotaRemision, primary: true },
+      ].filter((b) => b.onClick),
     };
   }
 

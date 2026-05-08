@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { api } from '../lib/apiClient';
 
 export default function Login() {
   const { login } = useAuth();
@@ -15,8 +16,7 @@ export default function Login() {
 
   // Cargar lista de empresas al montar
   useEffect(() => {
-    fetch('/api/auth/empresas')
-      .then((r) => r.json())
+    api.get('/api/auth/empresas')
       .then((list) => {
         setEmpresas(list);
         if (list.length > 0) setEmpresaId(list[0].id);

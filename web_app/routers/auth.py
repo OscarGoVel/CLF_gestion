@@ -179,7 +179,7 @@ async def login_api(request: Request, body: LoginJSON):
         "empresa_nombre": empresa["nombre"],
     })
 
-    return JSONResponse({
+    response = JSONResponse({
         "access_token": token,
         "token_type": "bearer",
         "user": {
@@ -191,11 +191,21 @@ async def login_api(request: Request, body: LoginJSON):
             "empresa_id": empresa_id,
         },
     })
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.es_produccion,
+    )
+    return response
 
 
 @router.get("/api/auth/logout")
 async def logout_api():
-    return JSONResponse({"ok": True})
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("access_token")
+    return response
 
 
 @router.get("/api/auth/empresas")

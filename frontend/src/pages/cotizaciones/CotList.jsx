@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
+import { api } from '../../lib/apiClient';
 import { Pill } from '../../components/Pill';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
@@ -39,6 +40,9 @@ export default function CotList() {
 
   function handleFiltro(v) { setFiltro(v); setPagina(1); setBuscar(''); }
   function handleBuscar(e) { setBuscar(e.target.value); setPagina(1); }
+  async function handlePdf(cotId, folio) {
+    await api.download(`/api/cotizaciones/${cotId}/pdf`, `Cotizacion_${folio ?? cotId}.pdf`);
+  }
 
   return (
     <div className="page">
@@ -215,15 +219,9 @@ export default function CotList() {
               <button className="btn btn-sm" onClick={() => navigate(`/cotizaciones/${sel.id}/editar`)}>
                 Editar
               </button>
-              <a
-                className="btn btn-sm"
-                href={`/cotizaciones/${sel.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                style={{ textAlign: 'center', textDecoration: 'none' }}
-              >
+              <button className="btn btn-sm" onClick={() => handlePdf(sel.id, sel.folio)}>
                 PDF
-              </a>
+              </button>
               <button className="btn btn-sm" onClick={() => setSelected(null)}>Cerrar ×</button>
             </div>
           </div>

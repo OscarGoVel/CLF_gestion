@@ -385,6 +385,14 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
         """, (cot_id,))
         costos_reales = {r[0]: _serial(r[1]) for r in cur.fetchall() if r[1] is not None}
 
+        cur.execute("""
+            SELECT id, nombre, fecha, estado
+            FROM estudios_mercado
+            WHERE cotizacion_id = %s
+            ORDER BY fecha_registro DESC
+        """, (cot_id,))
+        estudios = _rows(cur)
+
     # Enriquecer partidas con costo real
     for p in partidas:
         pid = p.get("producto_id")
@@ -396,6 +404,7 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
         "etapas": etapas_db,
         "facturas_vinculadas": facturas_vinculadas,
         "compras_vinculadas": compras_vinculadas,
+        "estudios": estudios,
     })
 
 
@@ -607,6 +616,31 @@ async def descargar_pdf(cot_id: int, user: dict = Depends(get_usuario_api)):
 
 
 # ── GET /api/cotizaciones/{cot_id}/estudios ──────────────────────────────────
+
+@router.get("/{cot_id}/nota-remision/pdf")
+async def descargar_nota_remision(cot_id: int, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador", "Almacenista"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    try:
+        from web_app.pdf_nota_remision import generar_pdf_nota_remision
+        pdf_bytes = generar_pdf_nota_remision(user["empresa_db"], cot_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar nota de remision: {e}")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+        row = cur.fetchone()
+    folio = row[0] if row else f"COT-{cot_id}"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="NotaRemision_{folio}.pdf"'},
+    )
+
 
 @router.get("/{cot_id}/estudios")
 async def estudios_de_cotizacion(cot_id: int, user: dict = Depends(get_usuario_api)):
