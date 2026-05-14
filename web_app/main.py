@@ -49,6 +49,10 @@ from web_app.routers import api_stock as api_stock_router
 from web_app.routers import api_facturas as api_facturas_router
 from web_app.routers import api_ajustes as api_ajustes_router
 from web_app.routers import api_analisis as api_analisis_router
+from web_app.routers import api_estado_cuenta as api_estado_cuenta_router
+from web_app.routers import api_preinventario as api_preinventario_router
+from web_app.routers import api_costos_fijos as api_costos_fijos_router
+from web_app.routers import api_estudio_mercado as api_estudio_mercado_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -129,6 +133,26 @@ async def lifespan(app: FastAPI):
             fecha          TIMESTAMPTZ DEFAULT NOW()
         )
         """,
+        # Costos fijos mensuales (módulo nuevo)
+        """
+        CREATE TABLE IF NOT EXISTS costos_fijos (
+            id           SERIAL PRIMARY KEY,
+            periodo      TEXT NOT NULL,
+            categoria    TEXT NOT NULL,
+            descripcion  TEXT NOT NULL,
+            monto        NUMERIC(14,2) NOT NULL,
+            created_by   TEXT,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        # Fase 4: margen por línea de cotización (costo_snapshot ya prioriza costo_promedio)
+        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS margen_pct NUMERIC(8,4)",
+        # Fase 5: resultado de cotización y motivo de pérdida (tasa de conversión)
+        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS resultado VARCHAR(20)",
+        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS motivo_perdida VARCHAR(50)",
+        # Fase 5: alerta de precio de venta desactualizado por aumento de costo de compra
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_desactualizado BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta_fecha TIMESTAMPTZ",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -253,6 +277,10 @@ app.include_router(api_stock_router.router)
 app.include_router(api_facturas_router.router)
 app.include_router(api_ajustes_router.router)
 app.include_router(api_analisis_router.router)
+app.include_router(api_estado_cuenta_router.router)
+app.include_router(api_preinventario_router.router)
+app.include_router(api_costos_fijos_router.router)
+app.include_router(api_estudio_mercado_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────

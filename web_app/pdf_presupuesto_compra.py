@@ -91,23 +91,23 @@ def generar_pdf_presupuesto_compra(
         ]
 
         # Per-cotización rows — one row per (cotización, product) with faltante
+        # Usa MAX(costo_historial) como estimación conservadora para el presupuesto
         cur.execute(
             """
             SELECT c.folio,
                    p.nombre,
                    p.unidad_medida,
                    GREATEST(cd.cantidad - COALESCE(p.stock_actual, 0), 0) AS cantidad_faltante,
-                   COALESCE(min_h.precio, p.precio_base)                  AS precio_min
+                   COALESCE(max_h.costo_max, p.precio_base)               AS costo_max,
+                   COALESCE(p.costo_promedio, p.precio_base)              AS costo_promedio
             FROM cotizacion_detalle cd
             JOIN cotizaciones c  ON c.id  = cd.cotizacion_id
             JOIN productos    p  ON p.id  = cd.producto_id
             LEFT JOIN LATERAL (
-                SELECT h.precio
+                SELECT MAX(h.precio) AS costo_max
                 FROM producto_precio_historial h
                 WHERE h.producto_id = p.id
-                ORDER BY h.precio ASC
-                LIMIT 1
-            ) min_h ON TRUE
+            ) max_h ON TRUE
             WHERE cd.cotizacion_id = ANY(%s)
               AND GREATEST(cd.cantidad - COALESCE(p.stock_actual, 0), 0) > 0
             ORDER BY c.folio, p.nombre
@@ -128,7 +128,7 @@ def generar_pdf_presupuesto_compra(
 
     # Calcular subtotales
     for p in productos:
-        p["subtotal"] = round(p["cantidad_faltante"] * (p["precio_min"] or 0.0), 2)
+        p["subtotal"] = round(p["cantidad_faltante"] * (p["costo_max"] or 0.0), 2)
 
     subtotal_a = round(sum(p["subtotal"] for p in productos), 2)
 
@@ -339,32 +339,35 @@ def generar_pdf_presupuesto_compra(
                                      textColor=colors.white, wordWrap='CJK')
 
         col_w_a = [
-            ancho * 0.14,  # COT
-            ancho * 0.30,  # PRODUCTO
+            ancho * 0.13,  # COT
+            ancho * 0.27,  # PRODUCTO
             ancho * 0.07,  # UNIDAD
             ancho * 0.09,  # A COMPRAR
-            ancho * 0.20,  # P.U. EST.
-            ancho * 0.20,  # SUBTOTAL
+            ancho * 0.14,  # COSTO PROM
+            ancho * 0.14,  # COSTO MAX
+            ancho * 0.16,  # SUBTOTAL
         ]
 
         prod_data = [[
             Paragraph('COT', estilo_hdr),
             Paragraph('PRODUCTO', estilo_hdr),
-            'UNIDAD', 'A COMPRAR', 'P.U. EST.', 'SUBTOTAL',
+            'UNIDAD', 'A COMPRAR', 'COSTO PROM', 'COSTO MAX', 'SUBTOTAL',
         ]]
         for p in productos:
-            precio = p["precio_min"] or 0.0
+            costo_max  = p["costo_max"] or 0.0
+            costo_prom = p["costo_promedio"] or 0.0
             prod_data.append([
                 p['folio'],
                 Paragraph(p['nombre'], estilo_prod),
                 p['unidad_medida'] or 'Pza',
                 f"{p['cantidad_faltante']:g}",
-                f"$ {precio:,.2f}" if precio else "— sin precio —",
+                f"$ {costo_prom:,.2f}" if costo_prom else "—",
+                f"$ {costo_max:,.2f}" if costo_max else "— sin costo —",
                 f"$ {p['subtotal']:,.2f}",
             ])
 
-        # Subtotal A row
-        prod_data.append(['', '', '', '', 'SUBTOTAL A', f"$ {subtotal_a:,.2f}"])
+        # Subtotal A row (5 celdas vacías + label + valor para 7 columnas)
+        prod_data.append(['', '', '', '', '', 'SUBTOTAL A', f"$ {subtotal_a:,.2f}"])
 
         n_filas_a = len(prod_data)
         prod_tbl = Table(prod_data, colWidths=col_w_a)
@@ -381,13 +384,13 @@ def generar_pdf_presupuesto_compra(
             ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
             ('LEFTPADDING',    (0, 0), (-1, -1), 4),
             ('ALIGN',          (2, 0), (3, -1),  'CENTER'),
-            ('ALIGN',          (4, 0), (5, -1),  'RIGHT'),
+            ('ALIGN',          (4, 0), (6, -1),  'RIGHT'),
             ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
             ('BACKGROUND',     (0, -1), (-1, -1), colors.HexColor('#fffbe6')),
             ('FONTNAME',       (0, -1), (-1, -1), 'Helvetica-Bold'),
             ('LINEABOVE',      (0, -1), (-1, -1), 1.0, _NEGRO),
-            ('SPAN',           (0, -1), (3, -1)),
-            ('ALIGN',          (4, -1), (5, -1), 'RIGHT'),
+            ('SPAN',           (0, -1), (4, -1)),
+            ('ALIGN',          (5, -1), (6, -1), 'RIGHT'),
         ]))
         elementos.append(prod_tbl)
 

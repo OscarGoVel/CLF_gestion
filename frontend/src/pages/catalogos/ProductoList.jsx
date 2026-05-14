@@ -1,6 +1,13 @@
 import { useState } from 'react';
+import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
+import { toast } from '../../lib/toast';
+import { api } from '../../lib/apiClient';
+import { exportCSV } from '../../lib/exportCSV';
+import { DataTable } from '../../components/DataTable';
+import { SidePreview, FieldGrid } from '../../components/SidePreview';
+import { Modal } from '../../components/Modal';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -12,18 +19,71 @@ function StockBadge({ actual, minimo }) {
   return <span style={{ color: 'var(--ink-700)' }}>{a}</span>;
 }
 
+const COLUMNS = [
+  { header: 'Código',      key: 'codigo',        width: 100, style: { fontFamily: 'var(--mono)', fontSize: 11.5 } },
+  { header: 'Nombre',      key: 'nombre',        sortKey: 'nombre' },
+  { header: 'Categoría',   key: 'categoria',     width: 100, style: { fontSize: 11.5, color: 'var(--ink-500)' } },
+  { header: 'U/M',         key: 'unidad_medida', width: 60,  style: { fontSize: 11.5, color: 'var(--ink-500)' } },
+  { header: 'Stock',       className: 'num', width: 80, sortKey: 'stock_actual',
+    render: (p) => <StockBadge actual={p.stock_actual} minimo={p.stock_minimo} /> },
+  { header: 'Mín.',        key: 'stock_minimo',  className: 'num', width: 70,
+    style: { color: 'var(--ink-400)', fontSize: 12 } },
+  { header: 'Costo prom.', className: 'num', width: 100, sortKey: 'costo_prom',
+    render: (p) => p.costo_prom ? MXN.format(p.costo_prom) : '—' },
+];
+
 export default function ProductoList() {
   const navigate = useNavigate();
   const [q, setQ]               = useState('');
-  const [categoria, setCategoria] = useState('');
+  const [catFiltro, setCatFiltro] = useState([]);
   const [bajoMin, setBajoMin]   = useState('');
   const [sel, setSel]           = useState(null);
+  const [editItem, setEditItem] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [saving, setSaving]     = useState(false);
+  const [editErr, setEditErr]   = useState('');
+  const [refetch, setRefetch]   = useState(0);
+
+  function openEdit(p) {
+    setEditData({
+      nombre:        p.nombre ?? '',
+      codigo:        p.codigo ?? '',
+      unidad_medida: p.unidad_medida ?? '',
+      precio_base:   p.precio_base ?? '',
+      stock_minimo:  p.stock_minimo ?? '',
+      aplica_iva:    p.aplica_iva ?? false,
+    });
+    setEditErr('');
+    setEditItem(p);
+  }
+
+  async function handleEditar(e) {
+    e.preventDefault();
+    setSaving(true);
+    setEditErr('');
+    try {
+      await api.patch(`/api/catalogos/productos/${editItem.id}`, {
+        ...editData,
+        precio_base:  editData.precio_base !== '' ? parseFloat(editData.precio_base) : null,
+        stock_minimo: editData.stock_minimo !== '' ? parseFloat(editData.stock_minimo) : null,
+      });
+      setEditItem(null);
+      setSel(null);
+      setRefetch((n) => n + 1);
+      toast.success('Producto actualizado');
+    } catch (err) {
+      setEditErr(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (categoria) params.set('categoria', categoria);
+  catFiltro.forEach((c) => params.append('categoria', c));
   if (bajoMin) params.set('bajo_minimo', bajoMin);
 
+  if (refetch) params.set('_r', refetch);
   const { data, loading } = useFetch(`/api/catalogos/productos?${params}`);
   const productos   = data?.productos  ?? [];
   const categorias  = data?.categorias ?? [];
@@ -44,6 +104,7 @@ export default function ProductoList() {
         {[
           { label: 'Clientes',    path: '/catalogos/clientes' },
           { label: 'Productos',   path: '/catalogos/productos' },
+          { label: 'Proveedores', path: '/catalogos/proveedores' },
         ].map((t) => (
           <button key={t.path} onClick={() => navigate(t.path)} style={{
             padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
@@ -62,10 +123,15 @@ export default function ProductoList() {
             {stats.total ?? 0} productos · {stats.bajo_minimo ?? 0} bajo mínimo · {stats.sin_stock ?? 0} sin stock
           </div>
         </div>
-        <button className="btn btn-primary">Nuevo producto</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => exportCSV(
+            ['codigo', 'nombre', 'categoria', 'unidad_medida', 'stock_actual', 'stock_minimo', 'costo_prom'],
+            productos, 'productos'
+          )}>Exportar CSV</button>
+          <button className="btn btn-primary" onClick={() => navigate('/catalogos/productos/nuevo')}>Nuevo producto</button>
+        </div>
       </div>
 
-      {/* Stats rápidos */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 20,
         border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden' }}>
         {[
@@ -86,10 +152,12 @@ export default function ProductoList() {
         <input className="input" style={{ maxWidth: 260 }}
           placeholder="Buscar nombre o código…" value={q}
           onChange={(e) => setQ(e.target.value)} />
-        <span className={`chip${categoria === '' ? ' active' : ''}`} onClick={() => setCategoria('')}>Todas</span>
-        {categorias.map((c) => (
-          <span key={c} className={`chip${categoria === c ? ' active' : ''}`} onClick={() => setCategoria(c)}>{c}</span>
-        ))}
+        <MultiSelectDropdown
+          options={categorias.map((c) => ({ label: c, value: c }))}
+          values={catFiltro}
+          onChange={setCatFiltro}
+          placeholder="Categoría…"
+        />
         <span className={`chip${bajoMin === '1' ? ' active' : ''}`}
           onClick={() => setBajoMin(bajoMin === '1' ? '' : '1')}>
           ⚠ Bajo mínimo
@@ -100,68 +168,35 @@ export default function ProductoList() {
         display: 'grid', gridTemplateColumns: selected ? '1fr 320px' : '1fr',
         gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
       }}>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th style={{ width: 100 }}>Código</th>
-              <th>Nombre</th>
-              <th style={{ width: 100 }}>Categoría</th>
-              <th style={{ width: 60 }}>U/M</th>
-              <th className="num" style={{ width: 80 }}>Stock</th>
-              <th className="num" style={{ width: 70 }}>Mín.</th>
-              <th className="num" style={{ width: 100 }}>Costo prom.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
-            ) : productos.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
-            ) : productos.map((p) => (
-              <tr key={p.id} className={sel === p.id ? 'sel' : ''} style={{ cursor: 'pointer' }}
-                  onClick={() => setSel(sel === p.id ? null : p.id)}>
-                <td style={{ fontFamily: 'var(--mono)', fontSize: 11.5 }}>{p.codigo ?? '—'}</td>
-                <td>{p.nombre}</td>
-                <td style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{p.categoria ?? '—'}</td>
-                <td style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{p.unidad_medida}</td>
-                <td className="num"><StockBadge actual={p.stock_actual} minimo={p.stock_minimo} /></td>
-                <td className="num" style={{ color: 'var(--ink-400)', fontSize: 12 }}>{p.stock_minimo ?? '—'}</td>
-                <td className="num">{p.costo_prom ? MXN.format(p.costo_prom) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div>
+          <DataTable
+            columns={COLUMNS}
+            data={productos}
+            loading={loading}
+            selectedId={sel}
+            onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
+            footer={<span>{productos.length} productos</span>}
+          />
+        </div>
 
         {selected && (
-          <div className="side-pre" style={{ padding: '18px 20px', overflowY: 'auto', maxHeight: '70vh' }}>
+          <SidePreview>
             <div className="note">PRODUCTO</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-500)', marginTop: 4 }}>
               {selected.codigo}
             </div>
             <div style={{ fontSize: 16, fontWeight: 500, marginTop: 4 }}>{selected.nombre}</div>
 
-            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0,
-              border: '1px solid var(--ink-200)', borderRadius: 4 }}>
-              {[
-                ['Categoría', selected.categoria],
-                ['Subcategoría', selected.subcategoria],
-                ['U/M', selected.unidad_medida],
-                ['IVA', selected.aplica_iva ? 'Sí' : 'No'],
-                ['Stock actual', selected.stock_actual],
-                ['Stock mínimo', selected.stock_minimo],
-                ['Costo prom.', selected.costo_prom != null ? MXN.format(selected.costo_prom) : '—'],
-                ['Precio base', selected.precio_base != null ? MXN.format(selected.precio_base) : '—'],
-              ].map(([k, v], i, arr) => (
-                <div key={i} style={{
-                  padding: '10px 12px',
-                  borderBottom: i < arr.length - 2 ? '1px solid var(--ink-100)' : 'none',
-                  borderRight: i % 2 === 0 ? '1px solid var(--ink-100)' : 'none',
-                }}>
-                  <div className="note">{k.toUpperCase()}</div>
-                  <div style={{ fontSize: 12, marginTop: 2 }}>{v ?? '—'}</div>
-                </div>
-              ))}
-            </div>
+            <FieldGrid fields={[
+              ['Categoría',   selected.categoria],
+              ['Subcategoría', selected.subcategoria],
+              ['U/M',         selected.unidad_medida],
+              ['IVA',         selected.aplica_iva ? 'Sí' : 'No'],
+              ['Stock actual', selected.stock_actual],
+              ['Stock mínimo', selected.stock_minimo],
+              ['Costo prom. real', selected.costo_prom != null ? MXN.format(selected.costo_prom) : '—'],
+              ['Costo base (catálogo)', selected.precio_base != null ? MXN.format(selected.precio_base) : '—'],
+            ]} />
 
             {selected.proveedor_principal && (
               <div style={{ marginTop: 12 }}>
@@ -171,11 +206,68 @@ export default function ProductoList() {
             )}
 
             <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
+              <button className="btn btn-sm" onClick={() => openEdit(selected)}>Editar</button>
               <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
             </div>
-          </div>
+          </SidePreview>
         )}
       </div>
+
+      <Modal open={!!editItem} onClose={() => setEditItem(null)} title="Editar producto">
+        <form onSubmit={handleEditar}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div>
+              <div className="note" style={{ marginBottom: 4 }}>NOMBRE *</div>
+              <input className="input" style={{ width: '100%' }}
+                value={editData.nombre ?? ''}
+                onChange={(e) => setEditData((d) => ({ ...d, nombre: e.target.value }))}
+                required autoFocus />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div className="note" style={{ marginBottom: 4 }}>CÓDIGO / SKU</div>
+                <input className="input" style={{ width: '100%' }}
+                  value={editData.codigo ?? ''}
+                  onChange={(e) => setEditData((d) => ({ ...d, codigo: e.target.value }))} />
+              </div>
+              <div>
+                <div className="note" style={{ marginBottom: 4 }}>UNIDAD DE MEDIDA</div>
+                <input className="input" style={{ width: '100%' }}
+                  value={editData.unidad_medida ?? ''}
+                  placeholder="pza, kg, lt…"
+                  onChange={(e) => setEditData((d) => ({ ...d, unidad_medida: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div className="note" style={{ marginBottom: 4 }}>COSTO BASE (catálogo)</div>
+                <input className="input" type="number" min="0" step="0.01" style={{ width: '100%' }}
+                  value={editData.precio_base ?? ''}
+                  onChange={(e) => setEditData((d) => ({ ...d, precio_base: e.target.value }))} />
+              </div>
+              <div>
+                <div className="note" style={{ marginBottom: 4 }}>STOCK MÍNIMO</div>
+                <input className="input" type="number" min="0" style={{ width: '100%' }}
+                  value={editData.stock_minimo ?? ''}
+                  onChange={(e) => setEditData((d) => ({ ...d, stock_minimo: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox"
+                checked={editData.aplica_iva ?? false}
+                onChange={(e) => setEditData((d) => ({ ...d, aplica_iva: e.target.checked }))} />
+              <span style={{ fontSize: 13 }}>Aplica IVA (16%)</span>
+            </div>
+          </div>
+          {editErr && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{editErr}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button type="button" className="btn" onClick={() => setEditItem(null)}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

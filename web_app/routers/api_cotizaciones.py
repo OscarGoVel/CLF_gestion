@@ -74,7 +74,7 @@ class CotizacionIn(BaseModel):
 
 @router.get("")
 async def listar(
-    estado: str = Query(""),
+    estado: List[str] = Query([]),
     q: str = Query(""),
     pagina: int = Query(1, ge=1),
     user: dict = Depends(get_usuario_api),
@@ -85,7 +85,9 @@ async def listar(
     empresa_db = user["empresa_db"]
     clauses, params = [], []
     if estado:
-        clauses.append("c.estado = %s"); params.append(estado)
+        placeholders = ",".join(["%s"] * len(estado))
+        clauses.append(f"c.estado IN ({placeholders})")
+        params.extend(estado)
     if q:
         clauses.append("(c.folio ILIKE %s OR COALESCE(cl.nombre_comercial,'') ILIKE %s)")
         params += [f"%{q}%", f"%{q}%"]
@@ -137,6 +139,171 @@ async def listar(
         "total_pags": total_pags,
         "conteo_estado": conteo_estado,
     })
+
+
+# ── Helpers internos ─────────────────────────────────────────────────────────
+
+def _resolver_costo_entrega(cur, cot_id: int, prod_id: int) -> tuple:
+    """Retorna (costo, tipo) para un producto al momento de marcar Entregada.
+    Prioridad: compra asignada → costo promedio del producto → snapshot catálogo."""
+    cur.execute("""
+        SELECT SUM(comp.costo_unitario * cdc.cantidad) / NULLIF(SUM(cdc.cantidad), 0)
+        FROM compra_detalle_cotizacion cdc
+        JOIN compra_detalle comp ON comp.id = cdc.compra_detalle_id
+        WHERE cdc.cotizacion_id = %s AND comp.producto_id = %s
+    """, (cot_id, prod_id))
+    r = cur.fetchone()[0]
+    if r:
+        return float(r), 'compra_directa'
+    cur.execute("SELECT COALESCE(costo_promedio, 0) FROM productos WHERE id = %s", (prod_id,))
+    prom = float(cur.fetchone()[0] or 0)
+    if prom > 0:
+        return prom, 'promedio'
+    cur.execute(
+        "SELECT costo_snapshot FROM cotizacion_detalle WHERE cotizacion_id = %s AND producto_id = %s",
+        (cot_id, prod_id),
+    )
+    snap_row = cur.fetchone()
+    snap = float(snap_row[0] or 0) if snap_row else 0
+    return snap, 'catalogo'
+
+
+# ── PATCH /api/cotizaciones/{cot_id}/estado ───────────────────────────────────
+
+class EstadoIn(BaseModel):
+    nuevo_estado: str
+    fecha_entrega: Optional[str] = None
+    fecha_pago: Optional[str] = None
+    monto_pagado: Optional[float] = None
+    numero_factura: Optional[str] = None
+    orden_compra: Optional[str] = None
+
+
+@router.patch("/{cot_id}/estado")
+async def cambiar_estado(cot_id: int, body: EstadoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso para cambiar estado")
+    if body.nuevo_estado == "Pagada" and user.get("rol") != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede marcar como Pagada")
+    if body.nuevo_estado not in ESTADOS:
+        raise HTTPException(status_code=400, detail="Estado no válido")
+
+    empresa_db = user["empresa_db"]
+
+    if body.nuevo_estado == "Pagada":
+        if not body.monto_pagado or body.monto_pagado <= 0:
+            with get_pool_empresa(empresa_db).conexion() as (_, cur):
+                cur.execute("SELECT COALESCE(monto_pagado, 0) FROM cotizaciones WHERE id = %s", (cot_id,))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
+                if float(row[0]) <= 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Registra el monto pagado antes de marcar la cotización como Pagada.",
+                    )
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            UPDATE cotizaciones SET
+                estado         = %s,
+                fecha_entrega  = COALESCE(%s::date,     fecha_entrega),
+                fecha_pago     = COALESCE(%s::date,     fecha_pago),
+                monto_pagado   = COALESCE(%s::numeric,  monto_pagado),
+                numero_factura = COALESCE(NULLIF(%s,''), numero_factura),
+                orden_compra   = COALESCE(NULLIF(%s,''), orden_compra)
+            WHERE id = %s
+        """, (
+            body.nuevo_estado,
+            body.fecha_entrega or None, body.fecha_pago or None,
+            body.monto_pagado,
+            body.numero_factura or '', body.orden_compra or '',
+            cot_id,
+        ))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+        if body.nuevo_estado == "Entregada":
+            cur.execute("SELECT folio FROM cotizaciones WHERE id = %s", (cot_id,))
+            folio_cot = cur.fetchone()[0]
+
+            cur.execute("""
+                SELECT cd.producto_id, cd.cantidad,
+                       COALESCE(SUM(ep.cantidad_entregada), 0) AS ya_entregado
+                FROM cotizacion_detalle cd
+                LEFT JOIN entregas_parciales ep
+                       ON ep.cotizacion_id = cd.cotizacion_id
+                      AND ep.producto_id   = cd.producto_id
+                WHERE cd.cotizacion_id = %s AND cd.producto_id IS NOT NULL
+                GROUP BY cd.producto_id, cd.cantidad
+            """, (cot_id,))
+
+            for prod_id, cant_total, ya_entregado in cur.fetchall():
+                pendiente = float(cant_total) - float(ya_entregado)
+                if pendiente <= 0:
+                    continue
+                cur.execute("SELECT COALESCE(stock_actual,0) FROM productos WHERE id=%s", (prod_id,))
+                stock_antes = float(cur.fetchone()[0])
+                stock_despues = stock_antes - pendiente
+                cur.execute("UPDATE productos SET stock_actual=%s WHERE id=%s", (stock_despues, prod_id))
+                costo_e, tipo_e = _resolver_costo_entrega(cur, cot_id, prod_id)
+                cur.execute("""
+                    UPDATE cotizacion_detalle
+                       SET costo_entrega = %s, costo_entrega_tipo = %s
+                     WHERE cotizacion_id = %s AND producto_id = %s
+                """, (costo_e, tipo_e, cot_id, prod_id))
+                cur.execute("""
+                    INSERT INTO movimientos_stock
+                        (producto_id, tipo, motivo, cantidad,
+                         stock_antes, stock_despues, referencia, notas, fecha)
+                    VALUES (%s,'salida','Entrega directa cotización',
+                            %s,%s,%s,%s,%s,CURRENT_DATE)
+                """, (prod_id, pendiente, stock_antes, stock_despues,
+                      folio_cot, f"Cambio estado→Entregada {folio_cot}"))
+
+        _etapa_map = {"Entregada": "Entregada", "Pagada": "Pagada"}
+        if body.nuevo_estado in _etapa_map:
+            _etapa = _etapa_map[body.nuevo_estado]
+            _fecha_sync = body.fecha_entrega if body.nuevo_estado == "Entregada" else body.fecha_pago
+            cur.execute("""
+                INSERT INTO seguimiento_etapas
+                    (cotizacion_id, etapa, completada, fecha_etapa)
+                VALUES (%s, %s, 1, %s::date)
+                ON CONFLICT (cotizacion_id, etapa) DO UPDATE SET
+                    completada  = 1,
+                    fecha_etapa = COALESCE(EXCLUDED.fecha_etapa, seguimiento_etapas.fecha_etapa)
+            """, (cot_id, _etapa, _fecha_sync or None))
+
+    from web_app.cache import cache as _cache
+    _cache.invalidar(f"dashboard:{empresa_db}")
+
+    return JSONResponse({"ok": True})
+
+
+# ── PATCH /api/cotizaciones/{cot_id}/resultado ────────────────────────────────
+
+class ResultadoIn(BaseModel):
+    resultado: str
+    motivo_perdida: Optional[str] = None
+
+
+@router.patch("/{cot_id}/resultado")
+async def registrar_resultado(cot_id: int, body: ResultadoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if body.resultado not in ("ganada", "perdida", "sin_respuesta"):
+        raise HTTPException(status_code=400, detail="resultado debe ser ganada|perdida|sin_respuesta")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            UPDATE cotizaciones
+               SET resultado = %s, motivo_perdida = %s
+             WHERE id = %s
+        """, (body.resultado, body.motivo_perdida or None, cot_id))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+    return JSONResponse({"ok": True})
 
 
 # ── GET /api/cotizaciones/plantilla-import ────────────────────────────────────
@@ -251,15 +418,29 @@ async def buscar_producto(
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute("""
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
-                   p.precio_base AS costo_base,
+                   COALESCE(p.costo_promedio, p.precio_base, 0) AS costo_promedio,
                    COALESCE(
-                       (SELECT MAX(h.precio)
+                       p.precio_venta,
+                       (SELECT MAX(h.precio) * 1.35
                         FROM producto_precio_historial h
                         WHERE h.producto_id = p.id),
-                       p.precio_base, 0
+                       p.precio_base * 1.35,
+                       0
                    ) AS precio,
                    p.stock_actual, p.aplica_iva,
-                   prov.nombre AS proveedor_nombre
+                   prov.nombre AS proveedor_nombre,
+                   COALESCE(p.precio_desactualizado, FALSE) AS precio_desactualizado,
+                   EXISTS(
+                       SELECT 1 FROM producto_precio_historial h
+                       WHERE h.producto_id = p.id AND h.fuente = 'compra'
+                   ) AS tiene_historial_compras,
+                   EXTRACT(DAY FROM NOW() - GREATEST(
+                       (SELECT MAX(h.fecha_registro) FROM producto_precio_historial h
+                        WHERE h.producto_id = p.id),
+                       CASE WHEN p.precio_base_fecha IS NOT NULL
+                            THEN p.precio_base_fecha::TIMESTAMPTZ
+                            ELSE NULL END
+                   ))::int AS dias_sin_actualizar
             FROM productos p
             LEFT JOIN producto_proveedor pp ON pp.producto_id = p.id AND pp.es_principal = 1
             LEFT JOIN proveedores prov ON prov.id = pp.proveedor_id
@@ -269,6 +450,46 @@ async def buscar_producto(
         """, (f"%{q}%", f"%{q}%"))
         resultados = _rows(cur)
     return JSONResponse({"resultados": resultados})
+
+
+# ── GET /api/cotizaciones/export ─────────────────────────────────────────────
+
+@router.get("/export")
+async def exportar(user: dict = Depends(get_usuario_api)):
+    if user.get("rol") == "Almacenista":
+        raise HTTPException(status_code=403, detail="Sin acceso")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT c.folio, c.fecha,
+                   COALESCE(cl.nombre_comercial, '—') AS cliente,
+                   c.total, c.estado,
+                   c.orden_compra, c.numero_factura
+            FROM cotizaciones c
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            ORDER BY c.fecha DESC, c.id DESC
+        """)
+        rows = _rows(cur)
+
+        cur.execute("""
+            SELECT
+                SUM(total) FILTER (WHERE estado <> 'Cancelada')              AS solicitado,
+                SUM(total) FILTER (WHERE estado IN (
+                    'Programada','Parcialmente Entregada',
+                    'Entregada','Facturada','Pagada'))                        AS entregado,
+                SUM(total) FILTER (WHERE estado IN ('Facturada','Pagada'))   AS facturado,
+                SUM(total) FILTER (WHERE estado = 'Pagada')                  AS pagado
+            FROM cotizaciones
+        """)
+        r = cur.fetchone()
+
+    totales = {
+        "solicitado": _serial(r[0]) or 0,
+        "entregado":  _serial(r[1]) or 0,
+        "facturado":  _serial(r[2]) or 0,
+        "pagado":     _serial(r[3]) or 0,
+    }
+    return JSONResponse({"cotizaciones": rows, "totales": totales})
 
 
 # ── GET /api/cotizaciones/{cot_id} ───────────────────────────────────────────
@@ -319,7 +540,14 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
                    cd.descripcion_libre,
                    COALESCE(cd.pendiente_catalogo, FALSE)          AS pendiente_catalogo,
                    COALESCE(p.stock_actual, 0)                     AS stock_actual,
-                   cd.cantidad <= COALESCE(p.stock_actual, 0)      AS stock_ok
+                   cd.cantidad <= COALESCE(p.stock_actual, 0)      AS stock_ok,
+                   cd.costo_snapshot,
+                   COALESCE(cd.margen_pct,
+                       CASE WHEN cd.precio_unitario > 0
+                       THEN (cd.precio_unitario - COALESCE(cd.costo_snapshot, 0))
+                            / cd.precio_unitario * 100
+                       ELSE NULL END
+                   )                                               AS margen_pct
             FROM cotizacion_detalle cd
             LEFT JOIN productos p ON p.id = cd.producto_id
             WHERE cd.cotizacion_id = %s
@@ -436,9 +664,11 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
                 prod_iva = p.aplica_iva
                 costo_snap = 0.0
                 tiene_stock = True
+                margen_pct = None
             else:
                 cur.execute(
-                    "SELECT precio_base, aplica_iva, COALESCE(stock_actual,0) >= %s "
+                    "SELECT COALESCE(NULLIF(costo_promedio,0), precio_base, 0), "
+                    "aplica_iva, COALESCE(stock_actual,0) >= %s "
                     "FROM productos WHERE id = %s",
                     (float(cant), p.producto_id),
                 )
@@ -446,6 +676,8 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
                 costo_snap = float(pb_row[0]) if pb_row else 0.0
                 prod_iva = bool(pb_row[1]) if pb_row else False
                 tiene_stock = bool(pb_row[2]) if pb_row else False
+                precio_f = float(precio)
+                margen_pct = round((precio_f - costo_snap) / precio_f * 100, 4) if precio_f > 0 else 0.0
 
             p_iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if prod_iva else Decimal("0")
             p_tot = (sub + p_iva).quantize(Decimal("0.01"))
@@ -456,7 +688,7 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
                 cant, precio, sub, p_iva, p_tot,
                 tiene_stock, costo_snap,
                 p.descripcion_libre if es_libre else None,
-                es_libre,
+                es_libre, margen_pct,
             ))
 
         total_global = (subtotal_global + iva_global).quantize(Decimal("0.01"))
@@ -477,18 +709,19 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
         cot_id = cur.lastrowid
 
         for (prod_id, cant, precio, sub, p_iva, p_tot,
-             tiene_stock, costo_snap, desc_libre, es_libre) in detalle_rows:
+             tiene_stock, costo_snap, desc_libre, es_libre, margen_pct) in detalle_rows:
             cur.execute(
                 """
                 INSERT INTO cotizacion_detalle
                   (cotizacion_id, producto_id, descripcion_libre, pendiente_catalogo,
-                   cantidad, precio_unitario, subtotal, iva, total, tiene_stock, costo_snapshot)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   cantidad, precio_unitario, subtotal, iva, total,
+                   tiene_stock, costo_snapshot, margen_pct)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (cot_id, prod_id, desc_libre, es_libre,
                  float(cant), float(precio),
                  float(sub), float(p_iva), float(p_tot),
-                 1 if tiene_stock else 0, costo_snap),
+                 1 if tiene_stock else 0, costo_snap, margen_pct),
             )
 
     return JSONResponse({"id": cot_id, "folio": folio}, status_code=201)
@@ -527,9 +760,11 @@ async def actualizar(cot_id: int, body: CotizacionIn, user: dict = Depends(get_u
                 prod_iva   = p.aplica_iva
                 costo_snap = 0.0
                 tiene_stock = True
+                margen_pct = None
             else:
                 cur.execute(
-                    "SELECT precio_base, aplica_iva, COALESCE(stock_actual,0) >= %s "
+                    "SELECT COALESCE(NULLIF(costo_promedio,0), precio_base, 0), "
+                    "aplica_iva, COALESCE(stock_actual,0) >= %s "
                     "FROM productos WHERE id = %s",
                     (float(cant), p.producto_id),
                 )
@@ -537,6 +772,8 @@ async def actualizar(cot_id: int, body: CotizacionIn, user: dict = Depends(get_u
                 costo_snap  = float(pb_row[0]) if pb_row else 0.0
                 prod_iva    = bool(pb_row[1])   if pb_row else False
                 tiene_stock = bool(pb_row[2])   if pb_row else False
+                precio_f = float(precio)
+                margen_pct = round((precio_f - costo_snap) / precio_f * 100, 4) if precio_f > 0 else 0.0
 
             p_iva = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if prod_iva else Decimal("0")
             p_tot = (sub + p_iva).quantize(Decimal("0.01"))
@@ -547,7 +784,7 @@ async def actualizar(cot_id: int, body: CotizacionIn, user: dict = Depends(get_u
                 cant, precio, sub, p_iva, p_tot,
                 tiene_stock, costo_snap,
                 p.descripcion_libre if es_libre else None,
-                es_libre,
+                es_libre, margen_pct,
             ))
 
         total_global = (subtotal_global + iva_global).quantize(Decimal("0.01"))
@@ -574,18 +811,19 @@ async def actualizar(cot_id: int, body: CotizacionIn, user: dict = Depends(get_u
         )
 
         for (prod_id, cant, precio, sub, p_iva, p_tot,
-             tiene_stock, costo_snap, desc_libre, es_libre) in detalle_rows:
+             tiene_stock, costo_snap, desc_libre, es_libre, margen_pct) in detalle_rows:
             cur.execute(
                 """
                 INSERT INTO cotizacion_detalle
                   (cotizacion_id, producto_id, descripcion_libre, pendiente_catalogo,
-                   cantidad, precio_unitario, subtotal, iva, total, tiene_stock, costo_snapshot)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   cantidad, precio_unitario, subtotal, iva, total,
+                   tiene_stock, costo_snapshot, margen_pct)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (cot_id, prod_id, desc_libre, es_libre,
                  float(cant), float(precio),
                  float(sub), float(p_iva), float(p_tot),
-                 1 if tiene_stock else 0, costo_snap),
+                 1 if tiene_stock else 0, costo_snap, margen_pct),
             )
 
     return JSONResponse({"id": cot_id, "folio": folio})

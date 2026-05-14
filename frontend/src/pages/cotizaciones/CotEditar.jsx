@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { useFetch } from '../../hooks/useFetch';
+import { toast } from '../../lib/toast';
 
 let _nextId = 1;
 const newLine = () => ({
@@ -12,6 +13,10 @@ const newLine = () => ({
   precio_unitario: '',
   aplica_iva: true,
   no_catalogado: false,
+  costo_promedio: null,
+  precio_desactualizado: false,
+  tiene_historial_compras: false,
+  dias_sin_actualizar: null,
 });
 
 const MXN = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,6 +28,14 @@ function calcImporte(l) {
   const q = parseFloat(l.cantidad) || 0;
   const p = parseFloat(l.precio_unitario) || 0;
   return q * p;
+}
+
+const MARGEN_MIN = 0.35;
+function calcMargen(precio_unitario, costo_promedio) {
+  const p = parseFloat(precio_unitario);
+  const c = parseFloat(costo_promedio);
+  if (!c || c <= 0 || !p || p <= 0) return null;
+  return (p - c) / p;
 }
 
 function ProductoSearch({ linea, onSelect, onChange }) {
@@ -154,6 +167,10 @@ export default function CotEditar() {
       descripcion: producto.nombre,
       precio_unitario: producto.precio ?? '',
       aplica_iva: producto.aplica_iva ?? true,
+      costo_promedio: producto.costo_promedio ?? null,
+      precio_desactualizado: producto.precio_desactualizado ?? false,
+      tiene_historial_compras: producto.tiene_historial_compras ?? false,
+      dias_sin_actualizar: producto.dias_sin_actualizar ?? null,
     } : l));
   }, []);
 
@@ -184,6 +201,7 @@ export default function CotEditar() {
         })),
       };
       await api.put(`/api/cotizaciones/${id}`, payload);
+      toast.success('Cotización actualizada');
       navigate(`/cotizaciones/${id}`);
     } catch (e) {
       setError(e.message ?? 'Error al guardar');
@@ -326,6 +344,45 @@ export default function CotEditar() {
                     Línea libre (sin catálogo)
                   </label>
                 </div>
+                {!l.no_catalogado && l.producto_id && (() => {
+                  const margen = calcMargen(l.precio_unitario, l.costo_promedio);
+                  const diasSin = l.dias_sin_actualizar;
+                  const sinHistorial = !l.tiene_historial_compras;
+                  return (
+                    <div style={{ padding: '1px 12px 4px 36px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {margen !== null && (
+                        <span style={{ fontSize: 10.5, fontFamily: 'var(--mono)',
+                          color: margen < 0 ? '#c0392b' : margen >= MARGEN_MIN ? '#27ae60' : '#e67e22' }}>
+                          Costo prom: ${parseFloat(l.costo_promedio).toFixed(2)}
+                          {' | Margen: '}{(margen * 100).toFixed(1)}%
+                          {margen < 0 && ' ⚠ NEGATIVO'}
+                        </span>
+                      )}
+                      {l.precio_desactualizado && (
+                        <span style={{ fontSize: 10, background: '#fff3cd', color: '#856404',
+                                       padding: '1px 6px', borderRadius: 3, border: '1px solid #ffc107' }}>
+                          ⚠ costo reciente supera margen — actualizar precio
+                        </span>
+                      )}
+                      {sinHistorial && !l.precio_desactualizado && (
+                        <span style={{ fontSize: 10, background: '#f0f0f0', color: '#555',
+                                       padding: '1px 6px', borderRadius: 3, border: '1px solid #ddd' }}>
+                          {diasSin === null
+                            ? 'ℹ precio de catálogo — sin fecha de referencia'
+                            : diasSin > 90
+                              ? `ℹ precio de catálogo — ${diasSin} días sin actualizar`
+                              : 'precio de catálogo'}
+                        </span>
+                      )}
+                      {!sinHistorial && diasSin !== null && diasSin > 90 && !l.precio_desactualizado && (
+                        <span style={{ fontSize: 10, background: '#fff7ed', color: '#92400e',
+                                       padding: '1px 6px', borderRadius: 3, border: '1px solid #fed7aa' }}>
+                          ⚠ {diasSin} días sin nueva compra registrada
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
 

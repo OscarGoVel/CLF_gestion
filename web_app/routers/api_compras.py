@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from web_app.database import get_pool_empresa
@@ -33,7 +33,20 @@ class CompraIn(BaseModel):
     fecha_compra: str
     ticket_referencia: Optional[str] = None
     notas: Optional[str] = None
+    factura_xml_id: Optional[int] = None
     lineas: List[LineaIn]
+
+
+class InsumoIn(BaseModel):
+    nombre: str
+    unidad: str = "pza"
+    cantidad: float
+    costo: float
+
+
+class PresupuestoIn(BaseModel):
+    cotizacion_ids: List[int]
+    insumos: List[InsumoIn] = []
 
 
 def _generar_folio(cur, año: int) -> str:
@@ -101,6 +114,56 @@ async def listar(
     total_pags = max(1, (total + POR_PAGINA - 1) // POR_PAGINA)
     return JSONResponse({"compras": compras, "total": total,
                          "pagina": pagina, "total_pags": total_pags})
+
+
+@router.get("/presupuesto/faltantes")
+async def presupuesto_faltantes(user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute(
+            """
+            SELECT c.id, c.folio,
+                   COALESCE(cl.nombre_comercial, '— sin cliente —') AS cliente,
+                   c.fecha_entrega,
+                   COUNT(cd.id) AS productos_faltantes
+            FROM cotizaciones c
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            JOIN productos p ON p.id = cd.producto_id
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.estado = 'Programada'
+              AND COALESCE(p.stock_actual, 0) < cd.cantidad
+            GROUP BY c.id, c.folio, cl.nombre_comercial, c.fecha_entrega
+            ORDER BY c.fecha_entrega ASC NULLS LAST
+            """
+        )
+        cols = [d[0] for d in cur.description]
+        pedidos = [{k: _serial(v) for k, v in zip(cols, r)} for r in cur.fetchall()]
+    return JSONResponse({"pedidos": pedidos})
+
+
+@router.post("/presupuesto/pdf")
+async def presupuesto_pdf(body: PresupuestoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if not body.cotizacion_ids:
+        raise HTTPException(status_code=400, detail="Seleccione al menos un pedido")
+    from web_app.pdf_presupuesto_compra import generar_pdf_presupuesto_compra
+    try:
+        pdf_bytes = generar_pdf_presupuesto_compra(
+            user["empresa_db"],
+            body.cotizacion_ids,
+            insumos=[i.model_dump() for i in body.insumos],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    filename = f"PresupuestoCompra_{date.today().isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{compra_id}")
@@ -189,12 +252,13 @@ async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
         cur.execute("""
             INSERT INTO compras
               (folio, proveedor_id, fecha_compra, subtotal, iva, total,
-               ticket_referencia, notas)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+               ticket_referencia, notas, factura_xml_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             folio, body.proveedor_id, body.fecha_compra,
             float(subtotal_g), float(iva_g), float(total_g),
             body.ticket_referencia or None, body.notas or None,
+            body.factura_xml_id or None,
         ))
         compra_id = cur.lastrowid
 
@@ -236,7 +300,20 @@ async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
                 (stock_despues, float(nuevo_prom.quantize(Decimal("0.0001"))), row["producto_id"]),
             )
 
-            # Historial de precios
+            # Verificar si precio_venta cubre el nuevo costo con margen mínimo (35%)
+            _MARGEN_MIN = Decimal("0.35")
+            cur.execute(
+                "SELECT COALESCE(precio_venta, 0) FROM productos WHERE id = %s",
+                (row["producto_id"],),
+            )
+            precio_venta_actual = Decimal(str(cur.fetchone()[0]))
+            if precio_venta_actual < nuevo_prom * (1 + _MARGEN_MIN):
+                cur.execute(
+                    "UPDATE productos SET precio_desactualizado = TRUE WHERE id = %s",
+                    (row["producto_id"],),
+                )
+
+            # Historial de costos de compra
             cur.execute("""
                 INSERT INTO producto_precio_historial
                     (producto_id, precio, fecha, motivo, fuente, proveedor_id)
