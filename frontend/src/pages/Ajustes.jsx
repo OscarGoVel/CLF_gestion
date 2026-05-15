@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useFetch } from '../hooks/useFetch';
 import { api } from '../lib/apiClient';
+import { toast } from '../lib/toast';
 
 const ROLES = ['Administrador', 'Operador', 'Almacenista', 'Solo lectura'];
 const ROL_LABEL = { Administrador: 'Admin', Operador: 'Operador', Almacenista: 'Almacén', 'Solo lectura': 'Solo lectura' };
@@ -63,7 +64,7 @@ function MiCuenta({ user }) {
     }
   };
 
-  if (loading) return <div style={{ padding: 32, color: 'var(--ink-400)' }}>Cargando…</div>;
+  if (loading) return <div className="page"><div className="page-state">Cargando…</div></div>;
 
   return (
     <div style={{ display: 'grid', gap: 20, maxWidth: 520 }}>
@@ -297,11 +298,13 @@ function Usuarios({ user }) {
   const usuarios = data?.usuarios ?? [];
 
   const handleToggle = async (uid) => {
+    const u = usuarios.find((x) => x.id === uid);
     try {
       await api.patch(`/api/ajustes/usuarios/${uid}/activo`);
       setRefetch((n) => n + 1);
+      toast.success(u?.activo ? 'Usuario desactivado' : 'Usuario activado');
     } catch (e) {
-      alert(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -309,6 +312,7 @@ function Usuarios({ user }) {
     setEditando(null);
     setShowNew(false);
     setRefetch((n) => n + 1);
+    toast.success('Usuario guardado');
   };
 
   return (

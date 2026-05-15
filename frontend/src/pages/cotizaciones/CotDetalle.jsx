@@ -1,23 +1,71 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
+import { Modal } from '../../components/Modal';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
 export default function CotDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const ids = location.state?.ids ?? [];
+  const currentIdx = ids.indexOf(Number(id));
+  const prevId = currentIdx > 0 ? ids[currentIdx - 1] : null;
+  const nextId = currentIdx < ids.length - 1 ? ids[currentIdx + 1] : null;
 
   const handlePdf = async () => {
     await api.download(`/api/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
   };
-  const { data, loading, error } = useFetch(`/api/cotizaciones/${id}`);
 
-  if (loading) return <div className="page" style={{ paddingTop: 60, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</div>;
-  if (error)   return <div className="page" style={{ paddingTop: 60, color: 'var(--danger)' }}>Error: {error}</div>;
+  const handleNotaRemision = async () => {
+    await api.download(`/api/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
+  };
+  const { data, loading, error, refetch } = useFetch(`/api/cotizaciones/${id}`);
+
+  const [resultado,      setResultado]      = useState(null);
+  const [motivoPerdida,  setMotivoPerdida]  = useState('');
+  const [guardandoRes,   setGuardandoRes]   = useState(false);
+
+  const [modalOC,        setModalOC]        = useState(false);
+  const [ocInput,        setOcInput]        = useState('');
+  const [confirmEntregar, setConfirmEntregar] = useState(false);
+  const [modalEntregar,  setModalEntregar]  = useState(false);
+  const [fechaEntrega,   setFechaEntrega]   = useState('');
+  const [modalPago,      setModalPago]      = useState(false);
+  const [pagoMonto,      setPagoMonto]      = useState('');
+  const [pagoFecha,      setPagoFecha]      = useState('');
+  const [guardandoEst,   setGuardandoEst]   = useState(false);
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
+
+  const LABELS_ESTADO = {
+    Programada: 'OC registrada — cotización programada',
+    Entregada:  'Cotización marcada como Entregada',
+    Pagada:     'Pago registrado',
+  };
+
+  const handleCambiarEstado = async (nuevoEstado, extras = {}) => {
+    setGuardandoEst(true);
+    try {
+      await api.patch(`/api/cotizaciones/${id}/estado`, { nuevo_estado: nuevoEstado, ...extras });
+      await refetch();
+      toast.success(LABELS_ESTADO[nuevoEstado] ?? 'Estado actualizado');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setGuardandoEst(false);
+    }
+  };
+
+  if (loading) return <div className="page"><div className="page-state">Cargando…</div></div>;
+  if (error)   return <div className="page"><div className="page-state page-state--error">Error: {error}</div></div>;
   if (!data)   return null;
 
   const cot      = data.cotizacion;
@@ -28,6 +76,25 @@ export default function CotDetalle() {
 
   const estudios = data.estudios ?? [];
 
+  const resActual = resultado ?? cot.resultado;
+  const motivoActual = motivoPerdida || cot.motivo_perdida || '';
+
+  const handleGuardarResultado = async () => {
+    if (!resActual) return;
+    setGuardandoRes(true);
+    try {
+      await api.patch(`/api/cotizaciones/${id}/resultado`, {
+        resultado: resActual,
+        motivo_perdida: resActual === 'perdida' ? motivoActual : null,
+      });
+      toast.success('Resultado guardado');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setGuardandoRes(false);
+    }
+  };
+
   const handleNuevoEstudio = () => {
     // Usa form nativo para enviar con cookies de sesión (ruta Jinja)
     const form = document.createElement('form');
@@ -37,18 +104,42 @@ export default function CotDetalle() {
     form.submit();
   };
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const steps     = buildSteps(cot);
   const nextAction = buildNextAction(cot, {
-    onGenerarOC: () => navigate(`/compras/nueva?cot=${cot.id}`),
-    onFacturar:  () => navigate(`/facturas/nueva?cot=${cot.id}`),
+    onGenerarOC:    () => navigate(`/compras/nueva?cot=${cot.id}`),
+    onFacturar:     () => navigate(`/facturas/nueva?cot=${cot.id}`),
+    onNotaRemision: handleNotaRemision,
+    onRegistrarOC:  () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
+    onEntregar:     () => { setFechaEntrega(today); setConfirmEntregar(true); },
+    onPago:         () => { setPagoMonto(''); setPagoFecha(today); setModalPago(true); },
   });
 
   return (
+    <>
     <div className="page">
-      <div className="crumbs">
-        <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
-        <span className="sep">/</span>
-        <span>{cot.folio}</span>
+      <div className="crumbs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
+          <span className="sep">/</span>
+          <span>{cot.folio}</span>
+        </div>
+        {ids.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button className="btn btn-sm" disabled={!prevId}
+              onClick={() => navigate(`/cotizaciones/${prevId}`, { state: { ids } })}>
+              ←
+            </button>
+            <span style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>
+              {currentIdx + 1} / {ids.length}
+            </span>
+            <button className="btn btn-sm" disabled={!nextId}
+              onClick={() => navigate(`/cotizaciones/${nextId}`, { state: { ids } })}>
+              →
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="page-header">
@@ -66,7 +157,14 @@ export default function CotDetalle() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={handlePdf}>PDF</button>
+          <button className="btn" onClick={handleNotaRemision}>Nota de Remisión</button>
+          <button className="btn" onClick={() => navigate(`/cotizaciones/${id}/expediente`)}>Expediente</button>
           <button className="btn" onClick={() => navigate(`/cotizaciones/${id}/editar`)}>Editar</button>
+          {!['Cancelada', 'Pagada'].includes(cot.estado) && (
+            <button className="btn btn-danger" onClick={() => setConfirmCancelar(true)}>
+              Cancelar
+            </button>
+          )}
         </div>
       </div>
 
@@ -128,19 +226,46 @@ export default function CotDetalle() {
                   <th className="num" style={{ width: 70 }}>Cant.</th>
                   <th className="num" style={{ width: 90 }}>Unit.</th>
                   <th className="num" style={{ width: 100 }}>Importe</th>
-                  <th style={{ width: 90 }}>Stock</th>
+                  <th className="num" style={{ width: 72 }}>Margen</th>
+                  <th style={{ width: 100 }}>Entrega</th>
                 </tr>
               </thead>
               <tbody>
                 {partidas.map((p, i) => {
-                  const stockFalta = p.producto_id && !p.stock_ok;
+                  const costoAlto  = p.costo_real != null && p.costo_snapshot != null
+                                     && p.costo_real > p.costo_snapshot;
+
+                  const DELIVERED = ['Entregada', 'Pagada', 'Facturada'];
+                  const isDelivered = DELIVERED.includes(cot.estado);
+                  const isPartial   = cot.estado === 'Parcialmente Entregada';
+                  const entregado   = p.ya_entregado ?? 0;
+                  let barPct, barColor, barLabel;
+                  if (isDelivered) {
+                    barPct = 100; barColor = 'var(--accent)'; barLabel = null;
+                  } else if (isPartial || entregado > 0) {
+                    barPct    = p.cantidad > 0 ? Math.min(entregado / p.cantidad * 100, 100) : 0;
+                    barColor  = barPct >= 100 ? 'var(--accent)' : 'var(--warn)';
+                    barLabel  = `${entregado} / ${p.cantidad}`;
+                  } else {
+                    const stock = p.stock_actual ?? 0;
+                    barPct    = p.cantidad > 0 ? Math.min(stock / p.cantidad * 100, 100) : 0;
+                    barColor  = p.stock_ok ? 'var(--accent)' : 'var(--danger)';
+                    barLabel  = `${stock} / ${p.cantidad}`;
+                  }
+
                   return (
-                    <tr key={i}>
+                    <tr key={i} style={costoAlto ? { background: 'rgba(239,68,68,0.04)' } : {}}>
                       <td style={{ color: 'var(--ink-400)' }}>{i + 1}</td>
                       <td>
                         {p.nombre}
                         {p.pendiente_catalogo && (
                           <span className="qb-tag" style={{ marginLeft: 4, color: 'var(--warn)' }}>libre</span>
+                        )}
+                        {costoAlto && (
+                          <span title={`Costo real ${MXN.format(p.costo_real)} > snapshot ${MXN.format(p.costo_snapshot)}`}
+                                style={{ marginLeft: 6, fontSize: 10, color: 'var(--danger)', cursor: 'help' }}>
+                            ⚠ costo real mayor
+                          </span>
                         )}
                       </td>
                       <td className="num">{p.cantidad}</td>
@@ -148,12 +273,28 @@ export default function CotDetalle() {
                       <td className="num" style={{ fontWeight: 500 }}>
                         {p.total != null ? MXN.format(p.total) : '—'}
                       </td>
-                      <td style={{ fontSize: 11.5, color: stockFalta ? 'var(--danger)' : 'var(--ink-500)' }}>
+                      <td className="num" style={{
+                        fontSize: 11.5,
+                        color: p.margen_pct == null ? 'var(--ink-400)'
+                             : p.margen_pct < 0    ? 'var(--danger)'
+                             : p.margen_pct < 15   ? 'var(--warn)'
+                             : 'var(--ink-600)',
+                      }}>
+                        {p.margen_pct != null ? `${p.margen_pct.toFixed(1)}%` : '—'}
+                      </td>
+                      <td style={{ fontSize: 11 }}>
                         {p.producto_id ? (
-                          <>
-                            {p.stock_actual ?? 0} / {p.cantidad}
-                            {stockFalta && <span className="qb-tag" style={{ marginLeft: 4 }}>Falta</span>}
-                          </>
+                          <div style={{ paddingRight: 4 }}>
+                            <div style={{ height: 4, background: 'var(--ink-100)', borderRadius: 2, marginBottom: 3 }}>
+                              <div style={{ width: `${barPct}%`, height: '100%', background: barColor, borderRadius: 2 }} />
+                            </div>
+                            {barLabel && (
+                              <span style={{ color: 'var(--ink-500)' }}>{barLabel}</span>
+                            )}
+                            {!p.stock_ok && !isDelivered && !isPartial && (
+                              <span className="qb-tag" style={{ marginLeft: 4 }}>Falta</span>
+                            )}
+                          </div>
                         ) : (
                           <span style={{ color: 'var(--ink-400)' }}>—</span>
                         )}
@@ -253,6 +394,48 @@ export default function CotDetalle() {
             </>
           )}
 
+          {/* Resultado de la cotización */}
+          <div className="eyebrow">Resultado</div>
+          <div className="card" style={{ marginBottom: 14, padding: '10px 14px' }}>
+            <div style={{ marginBottom: 8 }}>
+              {['ganada', 'perdida', 'sin_respuesta'].map((r) => (
+                <button key={r} onClick={() => setResultado(r)} style={{
+                  marginRight: 6, marginBottom: 4, padding: '3px 10px', fontSize: 11,
+                  borderRadius: 4, border: '1px solid',
+                  cursor: 'pointer',
+                  background: resActual === r
+                    ? r === 'ganada' ? '#dcfce7' : r === 'perdida' ? '#fee2e2' : '#f3f4f6'
+                    : 'transparent',
+                  borderColor: resActual === r
+                    ? r === 'ganada' ? '#16a34a' : r === 'perdida' ? '#dc2626' : '#9ca3af'
+                    : 'var(--ink-200)',
+                  color: resActual === r
+                    ? r === 'ganada' ? '#166534' : r === 'perdida' ? '#991b1b' : '#374151'
+                    : 'var(--ink-500)',
+                }}>
+                  {r === 'ganada' ? 'Ganada' : r === 'perdida' ? 'Perdida' : 'Sin respuesta'}
+                </button>
+              ))}
+            </div>
+            {resActual === 'perdida' && (
+              <select className="input" style={{ fontSize: 11, marginBottom: 8 }}
+                value={motivoActual}
+                onChange={(e) => setMotivoPerdida(e.target.value)}>
+                <option value="">— Motivo —</option>
+                <option value="precio">Precio</option>
+                <option value="tiempo">Tiempo de entrega</option>
+                <option value="competidor">Competidor</option>
+                <option value="presupuesto">Sin presupuesto</option>
+                <option value="otro">Otro</option>
+              </select>
+            )}
+            <button className="btn" style={{ width: '100%', fontSize: 11 }}
+              disabled={!resActual || guardandoRes}
+              onClick={handleGuardarResultado}>
+              {guardandoRes ? 'Guardando…' : 'Guardar resultado'}
+            </button>
+          </div>
+
           {/* Estudios de mercado */}
           <div className="eyebrow">Estudios de mercado</div>
           <div className="card" style={{ marginBottom: 14 }}>
@@ -295,5 +478,104 @@ export default function CotDetalle() {
         </div>
       </div>
     </div>
+
+    {/* Modal: Registrar OC */}
+    <Modal open={modalOC} onClose={() => setModalOC(false)} title="Registrar Orden de Compra" width={400}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>NÚMERO DE OC</div>
+          <input className="input" value={ocInput} onChange={(e) => setOcInput(e.target.value)}
+            placeholder="Ej. OC-2025-001" autoFocus />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalOC(false)}>Cancelar</button>
+          <button className="btn btn-primary" disabled={!ocInput.trim() || guardandoEst}
+            onClick={async () => {
+              await handleCambiarEstado('Programada', { orden_compra: ocInput.trim() });
+              setModalOC(false);
+            }}>
+            {guardandoEst ? 'Guardando…' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {/* Confirm: Cancelar cotización */}
+    <ConfirmModal
+      open={confirmCancelar}
+      onClose={() => setConfirmCancelar(false)}
+      onConfirm={async () => {
+        setConfirmCancelar(false);
+        await handleCambiarEstado('Cancelada');
+      }}
+      title="¿Cancelar cotización?"
+      description={`Se marcará ${cot.folio} como Cancelada. Esta acción no se puede deshacer.`}
+      confirmLabel="Cancelar cotización"
+      danger
+    />
+
+    {/* Confirm: Marcar entregada (aviso de stock) */}
+    <ConfirmModal
+      open={confirmEntregar}
+      onClose={() => setConfirmEntregar(false)}
+      onConfirm={() => { setConfirmEntregar(false); setModalEntregar(true); }}
+      title="¿Marcar como Entregada?"
+      description={`Se descontará del inventario el stock de los productos de catálogo en esta cotización. Esta acción no se puede deshacer.`}
+      confirmLabel="Continuar"
+      danger
+    />
+
+    {/* Modal: Fecha de entrega */}
+    <Modal open={modalEntregar} onClose={() => setModalEntregar(false)} title="Fecha de entrega" width={400}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>FECHA DE ENTREGA</div>
+          <input className="input" type="date" value={fechaEntrega}
+            onChange={(e) => setFechaEntrega(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalEntregar(false)}>Cancelar</button>
+          <button className="btn btn-primary" disabled={guardandoEst}
+            onClick={async () => {
+              await handleCambiarEstado('Entregada', { fecha_entrega: fechaEntrega || null });
+              setModalEntregar(false);
+            }}>
+            {guardandoEst ? 'Guardando…' : 'Confirmar entrega'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {/* Modal: Registrar pago */}
+    <Modal open={modalPago} onClose={() => setModalPago(false)} title="Registrar pago" width={400}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>MONTO PAGADO (MXN)</div>
+          <input className="input" type="number" step="0.01" min="0"
+            value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value)}
+            placeholder="0.00" autoFocus />
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>FECHA DE PAGO</div>
+          <input className="input" type="date" value={pagoFecha}
+            onChange={(e) => setPagoFecha(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalPago(false)}>Cancelar</button>
+          <button className="btn btn-primary"
+            disabled={!pagoMonto || parseFloat(pagoMonto) <= 0 || guardandoEst}
+            onClick={async () => {
+              await handleCambiarEstado('Pagada', {
+                monto_pagado: parseFloat(pagoMonto),
+                fecha_pago: pagoFecha || null,
+              });
+              setModalPago(false);
+            }}>
+            {guardandoEst ? 'Guardando…' : 'Confirmar pago'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }
