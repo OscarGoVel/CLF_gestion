@@ -3,6 +3,19 @@ import { useAuth } from '../hooks/useAuth';
 import { MobileNav } from './MobileNav';
 import { ToastContainer } from './ToastContainer';
 
+const MODULE_COLOR = {
+  inicio:       '#10b981',
+  comercial:    '#3b82f6',
+  operacion:    '#f59e0b',
+  stock:        '#f59e0b',
+  preinventario:'#f59e0b',
+  cobranza:     '#14b8a6',
+  catalogos:    '#6b7280',
+  analisis:     '#8b5cf6',
+  crm:          '#ec4899',
+  config:       '#64748b',
+};
+
 export const NAV_BY_ROLE = {
   admin: [
     { id: 'inicio',    label: 'Inicio',        path: '/dashboard',   paths: ['/dashboard'] },
@@ -154,6 +167,8 @@ export function Shell({ children }) {
   const current = activeId(items, location.pathname);
   const subitems = (SUBNAV_BY_ROLE[role] ?? {})[current] ?? [];
 
+  const activeColor = MODULE_COLOR[current] ?? 'var(--accent)';
+
   return (
     <div className="shell">
       <div className="topbar">
@@ -162,15 +177,20 @@ export function Shell({ children }) {
         </Link>
 
         <nav>
-          {items.map((it) => (
-            <Link
-              key={it.id}
-              to={it.path}
-              className={current === it.id ? 'active' : ''}
-            >
-              {it.label}
-            </Link>
-          ))}
+          {items.map((it) => {
+            const isActive = current === it.id;
+            const color = MODULE_COLOR[it.id] ?? 'var(--accent)';
+            return (
+              <Link
+                key={it.id}
+                to={it.path}
+                className={isActive ? 'active' : ''}
+                style={isActive ? { '--nav-color': color } : undefined}
+              >
+                {it.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="right">
@@ -189,7 +209,7 @@ export function Shell({ children }) {
       </div>
 
       {subitems.length > 0 && (
-        <div className="subnav">
+        <div className="subnav" style={{ '--subnav-color': activeColor }}>
           {subitems.map((s) => (
             <Link
               key={s.path}

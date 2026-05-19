@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { useState } from 'react';
+import { KpiCard } from '../../components/KpiCard';
 
 const SEGMENTO_COLOR = {
   Champions: '#10b981',
@@ -68,9 +69,9 @@ export default function CrmDashboard() {
       {!loading && (
         <>
           {/* KPIs principales */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14, marginBottom: 24 }}>
-            <KpiCard label="Envíos (30d)"  value={metricas.total_envios ?? 0} />
-            <KpiCard label="Entregados"    value={metricas.enviados ?? 0} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+            <KpiCard label="Envíos (30d)"  value={metricas.total_envios ?? 0}  color="#6b7280" />
+            <KpiCard label="Entregados"    value={metricas.enviados ?? 0}       color="#10b981" />
             <KpiCard
               label="Tasa apertura"
               value={`${metricas.tasa_apertura ?? 0}%`}
@@ -81,9 +82,9 @@ export default function CrmDashboard() {
               value={`${metricas.tasa_clics ?? 0}%`}
               color={metricas.tasa_clics >= 3 ? '#10b981' : '#f59e0b'}
             />
-            <KpiCard label="Rebotes"    value={metricas.rebotes ?? 0} />
-            <KpiCard label="Contactos"  value={contactos.total ?? 0} />
-            <KpiCard label="Opt-outs"   value={contactos.opt_outs ?? 0} />
+            <KpiCard label="Rebotes"    value={metricas.rebotes ?? 0}    color="#ef4444" />
+            <KpiCard label="Contactos"  value={contactos.total ?? 0}     color="#3b82f6" />
+            <KpiCard label="Opt-outs"   value={contactos.opt_outs ?? 0}  color="#f59e0b" />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
@@ -192,15 +193,6 @@ export default function CrmDashboard() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function KpiCard({ label, value, color }) {
-  return (
-    <div className="card" style={{ padding: '14px 16px' }}>
-      <div style={{ fontSize: 11, color: 'var(--ink-400)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: color ?? 'inherit' }}>{value}</div>
     </div>
   );
 }

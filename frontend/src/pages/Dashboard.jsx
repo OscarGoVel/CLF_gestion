@@ -66,12 +66,12 @@ export default function Dashboard() {
 
       {/* KPIs */}
       <KpiGrid cards={[
-        { label: 'Monto vendido (total)', value: kpis.monto_vendido != null ? MXN.format(kpis.monto_vendido) : null },
-        { label: 'Por cobrar',            value: kpis.pendiente_cobrar != null ? MXN.format(kpis.pendiente_cobrar) : null },
-        { label: 'Pendientes de respuesta', value: kpis.num_pendientes ?? '—', foot: 'cotizaciones enviadas' },
-        { label: 'Programadas para entrega', value: kpis.num_programadas ?? '—', foot: 'en proceso' },
+        { label: 'Monto vendido (total)', value: kpis.monto_vendido != null ? MXN.format(kpis.monto_vendido) : null, color: '#10b981' },
+        { label: 'Por cobrar',            value: kpis.pendiente_cobrar != null ? MXN.format(kpis.pendiente_cobrar) : null, color: '#3b82f6' },
+        { label: 'Pendientes de respuesta', value: kpis.num_pendientes ?? '—', foot: 'cotizaciones enviadas', color: '#f59e0b' },
+        { label: 'Programadas para entrega', value: kpis.num_programadas ?? '—', foot: 'en proceso', color: '#8b5cf6' },
         { label: 'Sin costo real', value: kpis.sin_costo_real ?? '—', foot: 'entregadas sin compra asignada',
-          warn: (kpis.sin_costo_real ?? 0) > 0 },
+          color: (kpis.sin_costo_real ?? 0) > 0 ? '#ef4444' : '#6b7280' },
       ]} />
 
       {/* Aging de cartera */}

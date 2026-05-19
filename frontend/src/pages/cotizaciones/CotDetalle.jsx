@@ -45,6 +45,9 @@ export default function CotDetalle() {
   const [guardandoEst,   setGuardandoEst]   = useState(false);
   const [confirmCancelar, setConfirmCancelar] = useState(false);
   const [docsOpen,        setDocsOpen]        = useState(false);
+  const [modalSinCfdi,   setModalSinCfdi]   = useState(false);
+  const [nroFactura,     setNroFactura]     = useState('');
+  const [fechaFactura,   setFechaFactura]   = useState('');
 
   const LABELS_ESTADO = {
     Programada: 'OC registrada — cotización programada',
@@ -109,12 +112,14 @@ export default function CotDetalle() {
 
   const steps     = buildSteps(cot);
   const nextAction = buildNextAction(cot, {
-    onGenerarOC:    () => navigate(`/compras/nueva?cot=${cot.id}`),
-    onFacturar:     () => navigate(`/facturas/nueva?cot=${cot.id}`),
-    onNotaRemision: handleNotaRemision,
-    onRegistrarOC:  () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
-    onEntregar:     () => { setFechaEntrega(today); setConfirmEntregar(true); },
-    onPago:         () => { setPagoMonto(''); setPagoFecha(today); setModalPago(true); },
+    onEnviar:            () => handleCambiarEstado('Pendiente'),
+    onGenerarOC:         () => navigate(`/compras/nueva?cot=${cot.id}`),
+    onFacturar:          () => navigate(`/facturas/importar`),
+    onRegistrarSinCfdi:  () => { setNroFactura(''); setFechaFactura(today); setModalSinCfdi(true); },
+    onNotaRemision:      handleNotaRemision,
+    onRegistrarOC:       () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
+    onEntregar:          () => { setFechaEntrega(today); setConfirmEntregar(true); },
+    onPago:              () => { setPagoMonto(''); setPagoFecha(today); setModalPago(true); },
   });
 
   return (
@@ -587,6 +592,35 @@ export default function CotDetalle() {
               setModalPago(false);
             }}>
             {guardandoEst ? 'Guardando…' : 'Confirmar pago'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {/* Modal: Registrar factura sin CFDI */}
+    <Modal open={modalSinCfdi} onClose={() => setModalSinCfdi(false)} title="Registrar número de factura" width={400}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>NÚMERO DE FACTURA</div>
+          <input className="input" value={nroFactura} onChange={(e) => setNroFactura(e.target.value)}
+            placeholder="Ej. FAC-2026-001" autoFocus />
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>FECHA DE FACTURA</div>
+          <input className="input" type="date" value={fechaFactura}
+            onChange={(e) => setFechaFactura(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalSinCfdi(false)}>Cancelar</button>
+          <button className="btn btn-primary" disabled={!nroFactura.trim() || guardandoEst}
+            onClick={async () => {
+              await handleCambiarEstado('Facturada', {
+                numero_factura: nroFactura.trim(),
+                fecha_entrega: fechaFactura || null,
+              });
+              setModalSinCfdi(false);
+            }}>
+            {guardandoEst ? 'Guardando…' : 'Confirmar'}
           </button>
         </div>
       </div>

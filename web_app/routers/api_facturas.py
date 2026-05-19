@@ -327,15 +327,32 @@ async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_u
         raise HTTPException(status_code=403, detail="Sin permiso")
     empresa_db = user["empresa_db"]
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
-        cur.execute("SELECT id FROM facturas WHERE id = %s", (factura_id,))
-        if not cur.fetchone():
+        cur.execute("SELECT tipo, COALESCE(serie,'') || COALESCE(folio_factura,'') FROM facturas WHERE id = %s", (factura_id,))
+        fac_row = cur.fetchone()
+        if not fac_row:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
-        cur.execute("SELECT id FROM cotizaciones WHERE id = %s", (body.cotizacion_id,))
-        if not cur.fetchone():
+        tipo_factura, folio_factura = fac_row
+
+        cur.execute("SELECT estado FROM cotizaciones WHERE id = %s", (body.cotizacion_id,))
+        cot_row = cur.fetchone()
+        if not cot_row:
             raise HTTPException(status_code=404, detail="Cotización no encontrada")
+        estado_cot = cot_row[0]
+
         cur.execute("""
             INSERT INTO factura_cotizaciones (factura_id, cotizacion_id)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING
         """, (factura_id, body.cotizacion_id))
+
+        if tipo_factura == 'I' and estado_cot == 'Entregada':
+            cur.execute("""
+                UPDATE cotizaciones
+                   SET estado = 'Facturada',
+                       numero_factura = COALESCE(NULLIF(%s,''), numero_factura)
+                 WHERE id = %s
+            """, (folio_factura, body.cotizacion_id))
+            from web_app.cache import cache as _cache
+            _cache.invalidar(f"dashboard:{empresa_db}")
+
     return JSONResponse({"ok": True})

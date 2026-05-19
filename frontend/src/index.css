@@ -69,9 +69,14 @@ html, body, #root {
   cursor: pointer; text-decoration: none; white-space: nowrap;
 }
 .topbar nav a:hover { background: var(--ink-50); color: var(--ink-800); }
-.topbar nav a.active { color: var(--ink-900); font-weight: 500; background: var(--ink-50); }
+.topbar nav a.active {
+  color: var(--nav-color, var(--accent));
+  font-weight: 600;
+  background: color-mix(in srgb, var(--nav-color, var(--accent)) 6%, transparent);
+}
 .topbar nav a.active::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent);
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--nav-color, var(--accent));
 }
 .subnav {
   display: flex; align-items: center; gap: 2px;
@@ -83,8 +88,12 @@ html, body, #root {
   font-size: 12px; color: var(--ink-600); padding: 8px 12px;
   text-decoration: none; white-space: nowrap; border-radius: 3px;
 }
-.subnav a:hover { background: var(--ink-100); color: var(--ink-800); }
-.subnav a.active { color: var(--accent-ink); font-weight: 500; background: var(--accent-soft); }
+.subnav a:hover { background: var(--ink-200); color: var(--ink-800); }
+.subnav a.active {
+  color: var(--subnav-color, var(--accent-ink));
+  font-weight: 500;
+  background: color-mix(in srgb, var(--subnav-color, var(--accent)) 12%, transparent);
+}
 .topbar .right {
   display: flex; align-items: center; gap: 14px; padding: 0 16px;
   border-left: 1px solid var(--ink-200); color: var(--ink-500); font-size: 12px; flex-shrink: 0;

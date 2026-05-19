@@ -607,13 +607,20 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
         # Facturas de venta vinculadas
         cur.execute("""
             SELECT f.id, f.uuid, f.serie, f.folio_factura, f.fecha, f.total,
-                   f.nombre_receptor
+                   f.nombre_receptor, f.tipo
             FROM factura_cotizaciones fc
             JOIN facturas f ON f.id = fc.factura_id
             WHERE fc.cotizacion_id = %s
             ORDER BY f.fecha DESC
         """, (cot_id,))
         facturas_vinculadas = _rows(cur)
+
+        folio_factura_vinculada = None
+        for fv in facturas_vinculadas:
+            if fv.get("tipo") == "I":
+                folio_factura_vinculada = (fv.get("serie") or "") + (fv.get("folio_factura") or "")
+                break
+        cot["folio_factura"] = folio_factura_vinculada or cot.get("numero_factura")
 
         # Compras vinculadas
         cur.execute("""

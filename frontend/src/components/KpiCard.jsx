@@ -1,8 +1,10 @@
-export function KpiCard({ label, value, foot, warn }) {
+export function KpiCard({ label, value, foot, warn, color }) {
   return (
-    <div className="kpi">
+    <div className="card kpi" style={color ? { borderLeft: `4px solid ${color}` } : undefined}>
       <div className="k-label">{label}</div>
-      <div className="k-value" style={warn ? { color: 'var(--danger)' } : undefined}>{value ?? '—'}</div>
+      <div className="k-value" style={{ color: color ?? (warn ? 'var(--danger)' : undefined) }}>
+        {value ?? '—'}
+      </div>
       {foot && <div className="k-foot">{foot}</div>}
     </div>
   );
@@ -13,16 +15,10 @@ export function KpiGrid({ cards }) {
     <div style={{
       display: 'grid',
       gridTemplateColumns: `repeat(${cards.length}, 1fr)`,
-      gap: 0,
-      border: '1px solid var(--ink-200)',
-      borderRadius: 6,
+      gap: 12,
       marginBottom: 28,
     }}>
-      {cards.map((card, i) => (
-        <div key={i} style={{ borderRight: i < cards.length - 1 ? '1px solid var(--ink-200)' : 'none' }}>
-          <KpiCard {...card} />
-        </div>
-      ))}
+      {cards.map((card, i) => <KpiCard key={i} {...card} />)}
     </div>
   );
 }

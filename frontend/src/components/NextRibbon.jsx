@@ -93,8 +93,11 @@ export function buildNextAction(cot, handlers = {}) {
   if (estado === 'Entregada' && !folio_factura) {
     return {
       message: 'Entregada. Pendiente de facturar.',
-      detail: 'Genera el CFDI para cerrar el ciclo.',
-      buttons: [{ label: 'Facturar ahora →', onClick: handlers.onFacturar, primary: true }],
+      detail: 'Vincula el CFDI o registra el número de factura manualmente.',
+      buttons: [
+        { label: 'Vincular CFDI →', onClick: handlers.onFacturar, primary: true },
+        { label: 'Sin CFDI', onClick: handlers.onRegistrarSinCfdi },
+      ].filter((b) => b.onClick),
     };
   }
 
