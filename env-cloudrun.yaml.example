@@ -1,0 +1,7 @@
+CLF_ENV: "production"
+CLF_SECRET_KEY: "<generar con: python -c \"import secrets; print(secrets.token_hex(32))\">"
+CLF_CLOUD_SQL_INSTANCE: "clf-gestion:us-central1:clf-db-instance"
+CLF_PG_USER: "postgres"
+CLF_PG_PASSWORD: "<contraseña de Cloud SQL>"
+CLF_PG_DB_USUARIOS: "clf_usuarios"
+CLF_EMPRESAS_JSON: '[{"id":"emp_<RFC>_default","nombre":"<RAZON SOCIAL>","rfc":"<RFC>","razon_social":"<RAZON SOCIAL COMPLETA>","email":"<EMAIL>","telefono":"<TEL>","direccion":"<DIR>","pg_database":"clf_empresa","fecha_registro":"YYYY-MM-DD"}]'

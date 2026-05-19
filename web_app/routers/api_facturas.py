@@ -7,6 +7,8 @@ web_app/routers/api_facturas.py
 from decimal import Decimal
 from pathlib import Path
 
+from typing import List
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -38,7 +40,8 @@ def _rows(cur):
 @router.get("")
 async def listar(
     q: str = Query(""),
-    tipo: str = Query(""),
+    tipo: List[str] = Query([]),
+    sin_vincular: bool = Query(False),
     pagina: int = Query(1, ge=1),
     user: dict = Depends(get_usuario_api),
 ):
@@ -54,7 +57,11 @@ async def listar(
                      "OR f.uuid ILIKE %s)")
         params += [f"%{q}%"] * 5
     if tipo:
-        where.append("f.tipo = %s"); params.append(tipo)
+        placeholders = ",".join(["%s"] * len(tipo))
+        where.append(f"f.tipo IN ({placeholders})")
+        params.extend(tipo)
+    if sin_vincular:
+        where.append("f.tipo = 'I' AND (SELECT COUNT(*) FROM factura_cotizaciones fc2 WHERE fc2.factura_id = f.id) = 0")
     filtro = ("WHERE " + " AND ".join(where)) if where else ""
     offset = (pagina - 1) * POR_PAGINA
 
@@ -161,8 +168,35 @@ async def importar_xml(
     empresa_db = user["empresa_db"]
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute("SELECT id FROM facturas WHERE uuid = %s", (uuid,))
-        if cur.fetchone():
-            raise HTTPException(status_code=409, detail=f"Factura ya registrada (UUID: {uuid[:8]}…)")
+        existing = cur.fetchone()
+        if existing:
+            existing_id = existing[0]
+            cur.execute(
+                "SELECT descripcion, cantidad, valor_unitario, importe, descuento FROM factura_conceptos"
+                " WHERE factura_id = %s ORDER BY id",
+                (existing_id,),
+            )
+            conceptos_ex = [
+                {
+                    "descripcion": r[0], "cantidad": float(r[1] or 0),
+                    "valor_unitario": float(r[2] or 0),
+                    "importe": float(r[3] or 0), "descuento": float(r[4] or 0),
+                }
+                for r in cur.fetchall()
+            ]
+            return JSONResponse({
+                "id": existing_id,
+                "already_exists": True,
+                "folio": f"{datos['serie']}{datos['folio']}",
+                "emisor": datos["nombre_emisor"],
+                "rfc_emisor": datos["rfc_emisor"],
+                "fecha": datos["fecha"],
+                "total": float(datos["total"]),
+                "tipo": datos["tipo"],
+                "tipo_label": TIPO_LABEL.get(datos["tipo"], datos["tipo"]),
+                "uuid": uuid,
+                "conceptos": conceptos_ex,
+            })
 
         nombre_archivo = archivo.filename or f"{uuid[:8]}.xml"
         ruta_destino = XML_DIR / nombre_archivo
@@ -209,11 +243,99 @@ async def importar_xml(
 
     return JSONResponse({
         "id": factura_id,
+        "already_exists": False,
         "folio": f"{datos['serie']}{datos['folio']}",
         "receptor": datos["nombre_receptor"],
         "emisor": datos["nombre_emisor"],
+        "rfc_emisor": datos["rfc_emisor"],
+        "fecha": datos["fecha"],
         "total": float(datos["total"]),
         "tipo": datos["tipo"],
         "tipo_label": TIPO_LABEL.get(datos["tipo"], datos["tipo"]),
         "uuid": uuid,
+        "conceptos": [
+            {
+                "descripcion": c["descripcion"],
+                "cantidad": float(c["cantidad"] or 0),
+                "valor_unitario": float(c["valor_unitario"] or 0),
+                "importe": float(c["importe"] or 0),
+                "descuento": float(c["descuento"] or 0),
+            }
+            for c in datos["conceptos"]
+        ],
     }, status_code=201)
+
+
+# ── GET /api/facturas/{id}/sugerencias ────────────────────────────────────────
+
+@router.get("/{factura_id}/sugerencias")
+async def sugerencias_fuzzy(factura_id: int, user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT rfc_receptor, total FROM facturas WHERE id = %s", (factura_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        rfc_receptor, total_factura = row
+        if not rfc_receptor:
+            return JSONResponse({"sugerencias": []})
+        total_f = float(total_factura or 0)
+
+        cur.execute("""
+            SELECT cot.id, cot.folio, cot.estado, cot.total,
+                   COALESCE(cl.nombre_comercial, cl.nombre_fiscal, '—') AS cliente,
+                   ABS(cot.total - %s) / NULLIF(%s, 0) * 100 AS diff_pct
+            FROM cotizaciones cot
+            JOIN clientes cl ON cl.id = cot.cliente_id
+            WHERE UPPER(COALESCE(cl.rfc, '')) = UPPER(%s)
+              AND cot.estado IN ('Entregada', 'Facturada')
+              AND cot.total BETWEEN %s AND %s
+              AND cot.id NOT IN (
+                  SELECT cotizacion_id FROM factura_cotizaciones WHERE factura_id = %s
+              )
+            ORDER BY diff_pct ASC
+            LIMIT 10
+        """, (
+            total_f, total_f, rfc_receptor,
+            total_f * 0.85, total_f * 1.15,
+            factura_id,
+        ))
+        sugerencias = [
+            {
+                "cot_id":   r[0],
+                "folio":    r[1],
+                "estado":   r[2],
+                "total":    float(r[3] or 0),
+                "cliente":  r[4],
+                "diff_pct": round(float(r[5] or 0), 1),
+            }
+            for r in cur.fetchall()
+        ]
+    return JSONResponse({"sugerencias": sugerencias})
+
+
+# ── POST /api/facturas/{id}/vincular ─────────────────────────────────────────
+
+from pydantic import BaseModel as _BM
+
+class VincularIn(_BM):
+    cotizacion_id: int
+
+@router.post("/{factura_id}/vincular")
+async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT id FROM facturas WHERE id = %s", (factura_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        cur.execute("SELECT id FROM cotizaciones WHERE id = %s", (body.cotizacion_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+        cur.execute("""
+            INSERT INTO factura_cotizaciones (factura_id, cotizacion_id)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+        """, (factura_id, body.cotizacion_id))
+    return JSONResponse({"ok": True})

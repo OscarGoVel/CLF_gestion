@@ -1,8 +1,14 @@
 import { useState } from 'react';
+import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
+import { toast } from '../../lib/toast';
+import { Modal } from '../../components/Modal';
+import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
+
+const MOTIVOS_AJUSTE = ['Conteo físico', 'Merma', 'Corrección sistema', 'Donación', 'Robo/pérdida', 'Otro'];
 
 function StockBar({ actual, minimo }) {
   const a = actual ?? 0;
@@ -12,28 +18,64 @@ function StockBar({ actual, minimo }) {
   return <span style={{ color, fontWeight: m > 0 && a < m ? 600 : 400 }}>{a}</span>;
 }
 
-function ABCBadge({ valor, minimo, actual }) {
-  const v = (actual ?? 0) * valor;
-  if (v > 50000) return <span style={{ background: '#dcfce7', color: '#166534', fontSize: 10, padding: '1px 5px', borderRadius: 3 }}>A</span>;
-  if (v > 10000) return <span style={{ background: '#fef9c3', color: '#854d0e', fontSize: 10, padding: '1px 5px', borderRadius: 3 }}>B</span>;
-  return <span style={{ background: '#f3f4f6', color: '#6b7280', fontSize: 10, padding: '1px 5px', borderRadius: 3 }}>C</span>;
+const ABC_STYLE = {
+  A: { background: '#dcfce7', color: '#166534' },
+  B: { background: '#fef9c3', color: '#854d0e' },
+  C: { background: '#f3f4f6', color: '#6b7280' },
+};
+
+function ABCBadge({ abc }) {
+  const s = ABC_STYLE[abc] ?? ABC_STYLE.C;
+  return <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600, ...s }}>{abc ?? 'C'}</span>;
+}
+
+function PrecioBadge({ dias }) {
+  if (dias == null) return <span style={{ color: 'var(--ink-300)', fontSize: 11 }}>—</span>;
+  if (dias > 30) return (
+    <span title={`Hace ${dias} días`} style={{ fontSize: 10.5, color: 'var(--danger)', fontWeight: 600, cursor: 'help' }}>
+      ⚠ {dias}d
+    </span>
+  );
+  return <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>{dias}d</span>;
+}
+
+function TipoBadge({ tipo }) {
+  const styles = {
+    entrada: { background: '#dcfce7', color: '#166534' },
+    salida:  { background: '#fee2e2', color: '#991b1b' },
+    ajuste:  { background: '#e0f2fe', color: '#075985' },
+  };
+  const s = styles[tipo] ?? { background: '#f3f4f6', color: '#374151' };
+  return (
+    <span style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 3, ...s }}>{tipo}</span>
+  );
 }
 
 export default function StockList() {
   const navigate = useNavigate();
   const [q, setQ]               = useState('');
-  const [categoria, setCategoria] = useState('');
+  const [catFiltro, setCatFiltro] = useState([]);
   const [bajoMin, setBajoMin]   = useState('');
+  const [abcFiltro, setAbcFiltro] = useState([]);
   const [vista, setVista]       = useState('inventario');
   const [movPag, setMovPag]     = useState(1);
 
+  // Modal ajuste
+  const [ajusteProd, setAjusteProd] = useState(null);
+  const [sNuevo, setSNuevo]         = useState('');
+  const [motivo, setMotivo]         = useState('Conteo físico');
+  const [notas, setNotas]           = useState('');
+  const [referencia, setReferencia] = useState('');
+  const [saving, setSaving]         = useState(false);
+  const [ajusteErr, setAjusteErr]   = useState('');
+
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (categoria) params.set('categoria', categoria);
+  catFiltro.forEach((c) => params.append('categoria', c));
   if (bajoMin) params.set('bajo_minimo', bajoMin);
 
-  const { data, loading }    = useFetch(vista === 'inventario' ? `/api/stock?${params}` : null);
-  const { data: movData, loading: movLoading } = useFetch(
+  const { data, loading, refetch }    = useFetch(vista === 'inventario' ? `/api/stock?${params}` : null);
+  const { data: movData, loading: movLoading, refetch: refetchMov } = useFetch(
     vista === 'movimientos' ? `/api/stock/movimientos?pagina=${movPag}` : null
   );
 
@@ -43,6 +85,48 @@ export default function StockList() {
   const movs       = movData?.movimientos ?? [];
   const movTotal   = movData?.total ?? 0;
   const movPags    = movData?.total_pags ?? 1;
+
+  function abrirAjuste(p) {
+    setAjusteProd(p);
+    setSNuevo(String(p.stock_actual ?? 0));
+    setMotivo('Conteo físico');
+    setNotas('');
+    setReferencia('');
+    setAjusteErr('');
+  }
+
+  function cerrarAjuste() {
+    setAjusteProd(null);
+  }
+
+  async function submitAjuste(e) {
+    e.preventDefault();
+    setAjusteErr('');
+    const stockNuevo = parseFloat(sNuevo);
+    if (isNaN(stockNuevo)) { setAjusteErr('Ingresa un número válido'); return; }
+    if (motivo === 'Otro' && !notas.trim()) { setAjusteErr('Las notas son obligatorias cuando el motivo es "Otro"'); return; }
+    setSaving(true);
+    try {
+      await api.post('/api/stock/ajuste', {
+        producto_id: ajusteProd.id,
+        stock_nuevo: stockNuevo,
+        motivo,
+        notas: notas.trim() || null,
+        referencia: referencia.trim() || null,
+      });
+      cerrarAjuste();
+      await refetch();
+      toast.success('Stock ajustado');
+    } catch (err) {
+      setAjusteErr(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const diferencia = ajusteProd != null ? parseFloat(sNuevo) - (ajusteProd.stock_actual ?? 0) : 0;
+  const difLabel = isNaN(diferencia) ? '' : diferencia === 0 ? 'Sin cambio' : diferencia > 0 ? `+${diferencia}` : `${diferencia}`;
+  const difColor = isNaN(diferencia) || diferencia === 0 ? 'var(--ink-400)' : diferencia > 0 ? 'var(--accent)' : 'var(--danger)';
 
   return (
     <div className="page">
@@ -72,7 +156,7 @@ export default function StockList() {
           ['Valor inventario', stats.total_valor != null ? MXN.format(stats.total_valor) : '—'],
           ['Bajo mínimo',  stats.bajo_minimo ?? 0],
           ['Stock negativo', stats.negativo ?? 0],
-          ['Sin stock',    stats.sin_stock ?? 0],
+          ['Precio stale >30d', stats.precio_stale ?? 0],
         ].map(([k, v], i, arr) => (
           <div key={k} style={{ flex: 1, padding: '14px 18px',
             borderRight: i < arr.length - 1 ? '1px solid var(--ink-200)' : 'none' }}>
@@ -91,14 +175,26 @@ export default function StockList() {
             <input className="input" style={{ maxWidth: 260 }}
               placeholder="Buscar nombre o código…" value={q}
               onChange={(e) => setQ(e.target.value)} />
-            <span className={`chip${categoria === '' ? ' active' : ''}`} onClick={() => setCategoria('')}>Todas</span>
-            {categorias.map((c) => (
-              <span key={c} className={`chip${categoria === c ? ' active' : ''}`} onClick={() => setCategoria(c)}>{c}</span>
-            ))}
+            <MultiSelectDropdown
+              options={categorias.map((c) => ({ label: c, value: c }))}
+              values={catFiltro}
+              onChange={setCatFiltro}
+              placeholder="Categoría…"
+            />
             <span className={`chip${bajoMin === '1' ? ' active' : ''}`}
               onClick={() => setBajoMin(bajoMin === '1' ? '' : '1')}>
               ⚠ Bajo mínimo
             </span>
+            {['A', 'B', 'C'].map((letra) => (
+              <span key={letra}
+                className={`chip${abcFiltro.includes(letra) ? ' active' : ''}`}
+                style={abcFiltro.includes(letra) ? ABC_STYLE[letra] : {}}
+                onClick={() => setAbcFiltro((f) =>
+                  f.includes(letra) ? f.filter((x) => x !== letra) : [...f, letra]
+                )}>
+                ABC {letra}
+              </span>
+            ))}
           </div>
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -112,16 +208,27 @@ export default function StockList() {
                   <th className="num" style={{ width: 80 }}>Stock</th>
                   <th className="num" style={{ width: 70 }}>Mín.</th>
                   <th className="num" style={{ width: 100 }}>Valor inv.</th>
+                  <th className="num" style={{ width: 70 }}>Días inv.</th>
                   <th style={{ width: 40 }}>ABC</th>
+                  <th className="num" style={{ width: 70 }} title="Días desde última actualización del precio base">Precio</th>
+                  <th style={{ width: 72 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
+                  <tr><td colSpan={11} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
                 ) : productos.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
-                ) : productos.map((p) => {
+                  <tr><td colSpan={11} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
+                ) : productos
+                    .filter((p) => abcFiltro.length === 0 || abcFiltro.includes(p.abc))
+                    .map((p) => {
                   const valorInv = (p.stock_actual ?? 0) * (p.costo_prom || p.precio_base || 0);
+                  const dias = p.dias_inventario;
+                  const diasColor = dias == null ? 'var(--ink-300)'
+                    : dias === 0    ? 'var(--danger)'
+                    : dias <= 30    ? 'var(--accent)'
+                    : dias <= 90    ? 'var(--warn)'
+                    : 'var(--danger)';
                   return (
                     <tr key={p.id}>
                       <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{p.codigo ?? '—'}</td>
@@ -131,8 +238,21 @@ export default function StockList() {
                       <td className="num"><StockBar actual={p.stock_actual} minimo={p.stock_minimo} /></td>
                       <td className="num" style={{ color: 'var(--ink-400)', fontSize: 11.5 }}>{p.stock_minimo ?? '—'}</td>
                       <td className="num" style={{ fontSize: 11.5 }}>{valorInv > 0 ? MXN.format(valorInv) : '—'}</td>
+                      <td className="num" style={{ fontSize: 11.5, fontWeight: dias != null && dias > 90 ? 600 : 400, color: diasColor }}
+                          title={dias == null ? 'Sin ventas recientes' : `${dias} días de inventario`}>
+                        {dias == null ? '—' : `${dias}d`}
+                      </td>
                       <td style={{ textAlign: 'center' }}>
-                        <ABCBadge valor={p.costo_prom || p.precio_base || 0} actual={p.stock_actual} />
+                        <ABCBadge abc={p.abc} />
+                      </td>
+                      <td className="num">
+                        <PrecioBadge dias={p.precio_base_dias} />
+                      </td>
+                      <td style={{ textAlign: 'right', paddingRight: 10 }}>
+                        <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => abrirAjuste(p)}>
+                          Ajustar
+                        </button>
                       </td>
                     </tr>
                   );
@@ -169,17 +289,11 @@ export default function StockList() {
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-500)' }}>{m.codigo}</div>
                     <div style={{ fontSize: 12 }}>{m.nombre}</div>
                   </td>
-                  <td>
-                    <span style={{
-                      fontSize: 10.5, padding: '2px 6px', borderRadius: 3,
-                      background: m.tipo === 'entrada' ? '#dcfce7' : '#fee2e2',
-                      color: m.tipo === 'entrada' ? '#166534' : '#991b1b',
-                    }}>{m.tipo}</span>
-                  </td>
+                  <td><TipoBadge tipo={m.tipo} /></td>
                   <td style={{ fontSize: 11.5, color: 'var(--ink-600)' }}>{m.motivo}</td>
                   <td className="num" style={{ fontWeight: 500,
-                    color: m.tipo === 'entrada' ? 'var(--accent)' : 'var(--danger)' }}>
-                    {m.tipo === 'entrada' ? '+' : '-'}{m.cantidad}
+                    color: m.tipo === 'entrada' ? 'var(--accent)' : m.tipo === 'salida' ? 'var(--danger)' : 'var(--ink-600)' }}>
+                    {m.tipo === 'entrada' ? '+' : m.tipo === 'salida' ? '-' : '±'}{m.cantidad}
                   </td>
                   <td className="num" style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{m.stock_antes}</td>
                   <td className="num" style={{ fontSize: 11.5,
@@ -201,6 +315,64 @@ export default function StockList() {
           </div>
         </div>
       )}
+
+      {/* Modal ajuste */}
+      <Modal open={!!ajusteProd} onClose={cerrarAjuste} title="Ajuste de stock" width={420}>
+        {ajusteProd && (
+          <form onSubmit={submitAjuste}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-500)' }}>{ajusteProd.codigo}</div>
+              <div style={{ fontWeight: 600 }}>{ajusteProd.nombre}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-500)', marginTop: 2 }}>
+                Stock actual: <strong>{ajusteProd.stock_actual ?? 0}</strong> {ajusteProd.unidad_medida}
+              </div>
+            </div>
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="label">Nuevo stock</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input className="input" type="number" step="any" style={{ width: 140 }}
+                  value={sNuevo} onChange={(e) => setSNuevo(e.target.value)} required />
+                {sNuevo !== '' && (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: difColor }}>{difLabel}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="label">Motivo</label>
+              <select className="input" value={motivo} onChange={(e) => setMotivo(e.target.value)} required>
+                {MOTIVOS_AJUSTE.map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label className="label">
+                Notas {motivo === 'Otro' ? <span style={{ color: 'var(--danger)' }}>*</span> : <span style={{ color: 'var(--ink-400)', fontSize: 11 }}>(opcional)</span>}
+              </label>
+              <textarea className="input" rows={2} style={{ resize: 'vertical' }}
+                value={notas} onChange={(e) => setNotas(e.target.value)} />
+            </div>
+
+            <div className="field" style={{ marginBottom: 20 }}>
+              <label className="label">Referencia <span style={{ color: 'var(--ink-400)', fontSize: 11 }}>(opcional)</span></label>
+              <input className="input" type="text" placeholder="Folio, documento…"
+                value={referencia} onChange={(e) => setReferencia(e.target.value)} />
+            </div>
+
+            {ajusteErr && (
+              <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 12 }}>{ajusteErr}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn" onClick={cerrarAjuste} disabled={saving}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Guardando…' : 'Confirmar ajuste'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

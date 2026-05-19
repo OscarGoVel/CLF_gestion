@@ -38,21 +38,23 @@ function calcMargen(precio_unitario, costo_promedio) {
   return (p - c) / p;
 }
 
-function ProductoSearch({ linea, onSelect, onChange }) {
+function ProductoSearch({ linea, onSelect, onChange, onQuickAdd }) {
   const [q, setQ] = useState(linea.descripcion);
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const [searched, setSearched] = useState(false);
   const debounce = useRef(null);
   const wrapRef = useRef(null);
 
   useEffect(() => {
     if (linea.no_catalogado) return;
     clearTimeout(debounce.current);
-    if (q.length < 2) { setResults([]); return; }
+    if (q.length < 2) { setResults([]); setSearched(false); return; }
     debounce.current = setTimeout(async () => {
       try {
         const data = await api.get(`/api/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
         setResults(data.resultados ?? []);
+        setSearched(true);
         setOpen(true);
       } catch { setResults([]); }
     }, 300);
@@ -78,6 +80,8 @@ function ProductoSearch({ linea, onSelect, onChange }) {
     );
   }
 
+  const noResults = searched && results.length === 0 && q.length >= 2;
+
   return (
     <div ref={wrapRef} style={{ position: 'relative', flex: 1 }}>
       <input
@@ -85,22 +89,18 @@ function ProductoSearch({ linea, onSelect, onChange }) {
         onChange={(e) => { setQ(e.target.value); onChange('descripcion', e.target.value); }}
         onFocus={() => results.length > 0 && setOpen(true)}
         placeholder="Buscar producto…"
-        style={{ width: '100%' }}
+        style={{ width: '100%', borderColor: noResults ? 'var(--warn)' : undefined }}
       />
       {open && results.length > 0 && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
           background: '#fff', border: '1px solid var(--ink-200)', borderRadius: 4,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 240, overflowY: 'auto',
         }}>
           {results.map((p) => (
             <div key={p.id}
               style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--ink-100)', fontSize: 13 }}
-              onMouseDown={() => {
-                onSelect(p);
-                setQ(p.nombre);
-                setOpen(false);
-              }}
+              onMouseDown={() => { onSelect(p); setQ(p.nombre); setOpen(false); }}
             >
               <div style={{ fontWeight: 500 }}>{p.nombre}</div>
               <div style={{ fontSize: 11, color: 'var(--ink-500)', fontFamily: 'var(--mono)' }}>
@@ -110,6 +110,141 @@ function ProductoSearch({ linea, onSelect, onChange }) {
           ))}
         </div>
       )}
+      {noResults && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-400)' }}>Sin resultados.</span>
+          {onQuickAdd && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ fontSize: 11.5, padding: '2px 8px', color: 'var(--accent)', borderColor: 'var(--accent)' }}
+              onMouseDown={(e) => { e.preventDefault(); onQuickAdd(q); }}
+            >
+              + Crear en catálogo
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickAddModal({ nombre: nombreInicial, onConfirm, onClose }) {
+  const [nombre, setNombre] = useState(nombreInicial);
+  const [codigo, setCodigo] = useState('');
+  const [categoriaId, setCategoriaId] = useState('');
+  const [subcategoriaId, setSubcategoriaId] = useState('');
+  const [precio, setPrecio] = useState('');
+  const [iva, setIva] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [cats, setCats] = useState([]);
+  const [subcats, setSubcats] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/catalogos/categorias').then(d => {
+      setCats(d.categorias ?? []);
+      setSubcats(d.subcategorias ?? []);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!categoriaId) return;
+    const qs = subcategoriaId
+      ? `?categoria_id=${categoriaId}&subcategoria_id=${subcategoriaId}`
+      : `?categoria_id=${categoriaId}`;
+    api.get(`/api/catalogos/generar-sku${qs}`).then(d => {
+      if (d.sku) setCodigo(d.sku);
+    }).catch(() => {});
+  }, [categoriaId, subcategoriaId]);
+
+  function handleCategoriaChange(e) {
+    setCategoriaId(e.target.value);
+    setSubcategoriaId('');
+    setCodigo('');
+  }
+
+  const filteredSubcats = subcats.filter(s => String(s.categoria_id) === String(categoriaId));
+
+  async function handleSave() {
+    if (!nombre.trim()) { setErr('El nombre es requerido'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      const p = await api.post('/api/catalogos/productos/rapido', {
+        nombre: nombre.trim(),
+        codigo: codigo.trim() || null,
+        precio_base: parseFloat(precio) || 0,
+        aplica_iva: iva,
+        categoria_id: categoriaId ? parseInt(categoriaId) : null,
+        subcategoria_id: subcategoriaId ? parseInt(subcategoriaId) : null,
+      });
+      onConfirm(p);
+    } catch (e) {
+      setErr(e.message ?? 'Error al crear');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 8, width: 420,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+      }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--ink-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Agregar al catálogo</h3>
+          <span style={{ cursor: 'pointer', fontSize: 20, color: 'var(--ink-400)', lineHeight: 1 }} onClick={onClose}>×</span>
+        </div>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label className="label">Nombre *</label>
+            <input className="input" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="label">Categoría</label>
+              <select className="input" value={categoriaId} onChange={handleCategoriaChange}>
+                <option value="">— Sin categoría —</option>
+                {cats.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Subcategoría</label>
+              <select className="input" value={subcategoriaId} onChange={(e) => setSubcategoriaId(e.target.value)}
+                disabled={!categoriaId || filteredSubcats.length === 0}>
+                <option value="">— Ninguna —</option>
+                {filteredSubcats.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="label">Código</label>
+              <input className="input" value={codigo} onChange={(e) => setCodigo(e.target.value)}
+                placeholder={categoriaId ? 'Auto-generado' : 'Selecciona categoría'} />
+            </div>
+            <div>
+              <label className="label">Precio base ($)</label>
+              <input className="input" type="number" min="0" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="0.00" />
+            </div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={iva} onChange={(e) => setIva(e.target.checked)} />
+            Aplica IVA (16%)
+          </label>
+          {err && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ink-100)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Creando…' : 'Crear y agregar'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -127,6 +262,7 @@ export default function CotNueva() {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [quickAdd, setQuickAdd] = useState(null); // { lineaId, nombre }
   const [importModal, setImportModal] = useState(null); // { matched, unmatched, mappings }
   const [importError, setImportError] = useState('');
   const fileRef = useRef(null);
@@ -354,6 +490,7 @@ export default function CotNueva() {
                       linea={l}
                       onSelect={(p) => selectProducto(l._id, p)}
                       onChange={(field, val) => updateLinea(l._id, field, val)}
+                      onQuickAdd={(nombre) => setQuickAdd({ lineaId: l._id, nombre })}
                     />
                     {l.no_catalogado && <span className="qb-tag">Libre</span>}
                   </span>
@@ -390,16 +527,6 @@ export default function CotNueva() {
                   >
                     ×
                   </span>
-                </div>
-                <div style={{ padding: '2px 12px 4px 36px', display: 'flex', gap: 8 }}>
-                  <label style={{ fontSize: 11, color: 'var(--ink-500)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      type="checkbox"
-                      checked={l.no_catalogado}
-                      onChange={(e) => updateLinea(l._id, 'no_catalogado', e.target.checked)}
-                    />
-                    Línea libre (sin catálogo)
-                  </label>
                 </div>
                 {!l.no_catalogado && l.producto_id && (() => {
                   const margen = calcMargen(l.precio_unitario, l.costo_promedio);
@@ -451,10 +578,11 @@ export default function CotNueva() {
 
             <div style={{ padding: '10px 12px', display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '1px solid var(--ink-100)' }}>
               <button className="btn btn-sm" onClick={() => setLineas((ls) => [...ls, newLine()])}>
-                + Del catálogo
+                + Agregar partida
               </button>
-              <button className="btn btn-sm" onClick={() => setLineas((ls) => [...ls, { ...newLine(), no_catalogado: true }])}>
-                + Línea libre
+              <button className="btn btn-sm" style={{ color: 'var(--ink-500)' }}
+                onClick={() => setLineas((ls) => [...ls, { ...newLine(), no_catalogado: true }])}>
+                + Descripción manual
               </button>
               <a href="/api/cotizaciones/plantilla-import"
                  onClick={(e) => {
@@ -557,6 +685,19 @@ export default function CotNueva() {
           </div>
         </div>
       </div>
+
+      {/* Modal quick-add al catálogo */}
+      {quickAdd && (
+        <QuickAddModal
+          nombre={quickAdd.nombre}
+          onClose={() => setQuickAdd(null)}
+          onConfirm={(producto) => {
+            selectProducto(quickAdd.lineaId, producto);
+            setQuickAdd(null);
+            toast.success(`"${producto.nombre}" agregado al catálogo`);
+          }}
+        />
+      )}
 
       {/* Modal de revisión de importación CSV */}
       {importModal && (

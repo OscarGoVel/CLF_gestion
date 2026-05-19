@@ -1,6 +1,7 @@
 # Credenciales y configuración sensible
 .env
 config.json
+env-cloudrun.yaml
 
 # Bases de datos locales
 *.db

@@ -34,6 +34,7 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
 
     kpis: dict = {}
     bloques: dict = {}
+    proximos_vencer: list = []
 
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
 
@@ -60,6 +61,49 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 "pendiente_cobrar": _serial(r[1]),
                 "num_pendientes":   r[2],
                 "num_programadas":  r[3],
+            }
+
+            # sin_costo_real: entregadas sin compra vinculada
+            cur.execute("""
+                SELECT COUNT(DISTINCT id)
+                FROM cotizaciones
+                WHERE estado IN ('Entregada','Facturada','Pagada')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM compra_detalle_cotizacion
+                      WHERE cotizacion_id = cotizaciones.id
+                  )
+            """)
+            kpis["sin_costo_real"] = cur.fetchone()[0]
+
+            # Aging de pendiente_cobro por antigüedad desde fecha_entrega
+            cur.execute("""
+                SELECT
+                    COALESCE(SUM(total - COALESCE(monto_pagado,0)) FILTER (
+                        WHERE fecha_entrega IS NOT NULL
+                          AND CURRENT_DATE - fecha_entrega::date <= 30
+                    ), 0)  AS dias_0_30,
+                    COALESCE(SUM(total - COALESCE(monto_pagado,0)) FILTER (
+                        WHERE fecha_entrega IS NOT NULL
+                          AND CURRENT_DATE - fecha_entrega::date BETWEEN 31 AND 60
+                    ), 0)  AS dias_30_60,
+                    COALESCE(SUM(total - COALESCE(monto_pagado,0)) FILTER (
+                        WHERE fecha_entrega IS NOT NULL
+                          AND CURRENT_DATE - fecha_entrega::date BETWEEN 61 AND 90
+                    ), 0)  AS dias_60_90,
+                    COALESCE(SUM(total - COALESCE(monto_pagado,0)) FILTER (
+                        WHERE fecha_entrega IS NOT NULL
+                          AND CURRENT_DATE - fecha_entrega::date > 90
+                    ), 0)  AS dias_mas_90
+                FROM cotizaciones
+                WHERE estado IN ('Programada','Parcialmente Entregada','Entregada','Facturada')
+                  AND (total - COALESCE(monto_pagado,0)) > 0.01
+            """)
+            ar = cur.fetchone()
+            kpis["aging"] = {
+                "dias_0_30":   _serial(ar[0]),
+                "dias_30_60":  _serial(ar[1]),
+                "dias_60_90":  _serial(ar[2]),
+                "dias_mas_90": _serial(ar[3]),
             }
 
             # Comercial: sin respuesta + sin OC
@@ -119,6 +163,21 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 "entregas_pendientes": entregas_pendientes,
             }
 
+            cur.execute("""
+                SELECT c.id, c.folio, c.estado,
+                       COALESCE(cl.nombre_comercial,'—') AS cliente,
+                       c.total, c.fecha_entrega::text AS fecha_entrega,
+                       (c.fecha_entrega::date - CURRENT_DATE) AS dias_restantes
+                FROM cotizaciones c
+                LEFT JOIN clientes cl ON cl.id = c.cliente_id
+                WHERE c.estado IN ('Programada', 'Parcialmente Entregada')
+                  AND c.fecha_entrega IS NOT NULL
+                  AND c.fecha_entrega::date <= CURRENT_DATE + INTERVAL '14 days'
+                ORDER BY c.fecha_entrega::date ASC
+                LIMIT 15
+            """)
+            proximos_vencer = _rows(cur)
+
         if rol == "Administrador":
             cur.execute("""
                 SELECT c.id, c.folio, c.fecha,
@@ -177,5 +236,6 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
         "bloques": bloques,
         "embudo": embudo,
         "stock_bajo": stock_bajo,
+        "proximos_vencer": proximos_vencer,
         "rol": rol,
     })

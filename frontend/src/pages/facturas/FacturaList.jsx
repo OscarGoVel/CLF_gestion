@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
+import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -14,26 +16,50 @@ const TIPO_COLOR = {
 
 export default function FacturaList() {
   const navigate = useNavigate();
-  const [q, setQ]       = useState('');
-  const [tipo, setTipo] = useState('');
-  const [pagina, setPag] = useState(1);
-  const [sel, setSel]   = useState(null);
+  const [q, setQ]             = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState([]);
+  const [sinVincular, setSinVincular] = useState(false);
+  const [pagina, setPag]      = useState(1);
+  const [sel, setSel]         = useState(null);
+  const [vinculando, setVinculando] = useState(null);
+  const [sugKey, setSugKey]   = useState(0);
 
   const params = new URLSearchParams({ pagina });
   if (q) params.set('q', q);
-  if (tipo) params.set('tipo', tipo);
+  if (sinVincular) params.set('sin_vincular', 'true');
+  tipoFiltro.forEach((t) => params.append('tipo', t));
 
-  const { data, loading } = useFetch(`/api/facturas?${params}`);
-  const { data: detData } = useFetch(sel ? `/api/facturas/${sel}` : null);
+  const { data, loading, refetch } = useFetch(`/api/facturas?${params}`);
+  const { data: detData, refetch: refetchDet } = useFetch(sel ? `/api/facturas/${sel}` : null);
+  const { data: sugData } = useFetch(
+    sel && detData?.factura?.tipo === 'I' ? `/api/facturas/${sel}/sugerencias?_k=${sugKey}` : null
+  );
 
   const facturas   = data?.facturas   ?? [];
   const total      = data?.total      ?? 0;
   const totalPags  = data?.total_pags ?? 1;
   const tipos      = data?.tipos      ?? [];
 
-  const factura    = detData?.factura    ?? null;
-  const conceptos  = detData?.conceptos  ?? [];
+  const factura      = detData?.factura      ?? null;
+  const conceptos    = detData?.conceptos    ?? [];
   const cotizaciones = detData?.cotizaciones ?? [];
+  const sugerencias  = sugData?.sugerencias  ?? [];
+
+  async function handleVincular(cotizacionId) {
+    setVinculando(cotizacionId);
+    try {
+      await api.post(`/api/facturas/${sel}/vincular`, { cotizacion_id: cotizacionId });
+      setSugKey((k) => k + 1);
+      refetchDet();
+      refetch();
+    } finally {
+      setVinculando(null);
+    }
+  }
+
+  function handleSelToggle(id) {
+    setSel(sel === id ? null : id);
+  }
 
   return (
     <div className="page">
@@ -53,21 +79,27 @@ export default function FacturaList() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
         <input className="input" style={{ maxWidth: 300 }}
           placeholder="Buscar folio, RFC, nombre, UUID…"
           value={q} onChange={(e) => { setQ(e.target.value); setPag(1); }} />
-        <span className={`chip${tipo === '' ? ' active' : ''}`} onClick={() => { setTipo(''); setPag(1); }}>Todos</span>
-        {tipos.map((t) => (
-          <span key={t.value} className={`chip${tipo === t.value ? ' active' : ''}`}
-            onClick={() => { setTipo(t.value); setPag(1); }}>
-            {t.label}
-          </span>
-        ))}
+        <MultiSelectDropdown
+          options={tipos}
+          values={tipoFiltro}
+          onChange={(v) => { setTipoFiltro(v); setPag(1); }}
+          placeholder="Tipo…"
+        />
+        <button
+          className={`btn btn-sm${sinVincular ? ' btn-primary' : ''}`}
+          onClick={() => { setSinVincular((v) => !v); setPag(1); }}
+          title="Facturas de ingreso sin cotización vinculada"
+        >
+          Sin vincular
+        </button>
       </div>
 
       <div style={{
-        display: 'grid', gridTemplateColumns: sel ? '1fr 380px' : '1fr',
+        display: 'grid', gridTemplateColumns: sel ? '1fr 400px' : '1fr',
         gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
       }}>
         <div>
@@ -77,19 +109,20 @@ export default function FacturaList() {
                 <th style={{ width: 40 }}>Tipo</th>
                 <th style={{ width: 90 }}>Folio</th>
                 <th style={{ width: 95 }}>Fecha</th>
-                <th>Emisor / Receptor</th>
+                <th>Emisor</th>
+                <th>Receptor</th>
                 <th className="num" style={{ width: 120 }}>Total</th>
                 <th style={{ width: 55 }}>Cots.</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
               ) : facturas.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
               ) : facturas.map((f) => (
                 <tr key={f.id} className={sel === f.id ? 'sel' : ''} style={{ cursor: 'pointer' }}
-                    onClick={() => setSel(sel === f.id ? null : f.id)}>
+                    onClick={() => handleSelToggle(f.id)}>
                   <td>
                     <span style={{
                       fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 3,
@@ -100,9 +133,15 @@ export default function FacturaList() {
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 11.5 }}>{f.folio || '—'}</td>
                   <td style={{ fontSize: 12, color: 'var(--ink-500)' }}>{f.fecha ?? f.fecha_timbrado ?? '—'}</td>
                   <td>
-                    <div style={{ fontSize: 12.5 }}>{f.nombre_receptor ?? f.nombre_emisor ?? '—'}</div>
+                    <div style={{ fontSize: 12.5 }}>{f.nombre_emisor ?? '—'}</div>
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-400)' }}>
-                      {f.rfc_receptor ?? f.rfc_emisor ?? ''}
+                      {f.rfc_emisor ?? ''}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ fontSize: 12.5 }}>{f.nombre_receptor ?? '—'}</div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-400)' }}>
+                      {f.rfc_receptor ?? ''}
                     </div>
                   </td>
                   <td className="num" style={{ fontWeight: 500 }}>{f.total != null ? MXN.format(f.total) : '—'}</td>
@@ -124,7 +163,7 @@ export default function FacturaList() {
         </div>
 
         {sel && (
-          <div className="side-pre" style={{ padding: '18px 20px', overflowY: 'auto', maxHeight: '75vh' }}>
+          <div className="side-pre" style={{ padding: '18px 20px', overflowY: 'auto', maxHeight: '80vh' }}>
             {!factura ? (
               <div style={{ color: 'var(--ink-400)', fontSize: 12 }}>Cargando…</div>
             ) : (
@@ -159,9 +198,9 @@ export default function FacturaList() {
                   border: '1px solid var(--ink-200)', borderRadius: 4 }}>
                   {[
                     ['Subtotal', factura.subtotal != null ? MXN.format(factura.subtotal) : '—'],
-                    ['IVA', factura.iva != null ? MXN.format(factura.iva) : '—'],
-                    ['Total', factura.total != null ? MXN.format(factura.total) : '—'],
-                    ['Fecha', factura.fecha ?? '—'],
+                    ['IVA',      factura.iva     != null ? MXN.format(factura.iva)     : '—'],
+                    ['Total',    factura.total   != null ? MXN.format(factura.total)   : '—'],
+                    ['Fecha',    factura.fecha ?? '—'],
                   ].map(([k, v], i) => (
                     <div key={i} style={{
                       padding: '10px 12px',
@@ -195,6 +234,7 @@ export default function FacturaList() {
                   </>
                 )}
 
+                {/* Cotizaciones ya vinculadas */}
                 {cotizaciones.length > 0 && (
                   <>
                     <div className="eyebrow" style={{ marginTop: 14 }}>Cotizaciones vinculadas</div>
@@ -212,8 +252,84 @@ export default function FacturaList() {
                   </>
                 )}
 
-                <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
+                {/* Sugerencias Fuzzy Match (solo para facturas de ingreso sin vincular o con pocas vinculaciones) */}
+                {factura.tipo === 'I' && (
+                  <>
+                    <div className="eyebrow" style={{ marginTop: 14 }}>
+                      Sugerencias de vinculación
+                    </div>
+                    {sugerencias.length === 0 ? (
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-400)', padding: '8px 0' }}>
+                        Sin cotizaciones coincidentes por RFC y monto.
+                      </div>
+                    ) : (
+                      sugerencias.map((s) => (
+                        <div key={s.cot_id} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '7px 0', borderBottom: '1px solid var(--ink-100)', gap: 8,
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500 }}>
+                              <span className="folio">{s.folio}</span>
+                              <span style={{
+                                marginLeft: 6, fontSize: 10.5,
+                                color: s.diff_pct < 2 ? 'var(--accent)' : 'var(--warn)',
+                              }}>
+                                {s.diff_pct < 0.1 ? 'exacto' : `±${s.diff_pct}%`}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-500)', marginTop: 1 }}>
+                              {s.cliente} · {MXN.format(s.total)} · {s.estado}
+                            </div>
+                          </div>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            style={{ fontSize: 10.5, whiteSpace: 'nowrap' }}
+                            disabled={vinculando === s.cot_id}
+                            onClick={() => handleVincular(s.cot_id)}
+                          >
+                            {vinculando === s.cot_id ? '…' : 'Vincular'}
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </>
+                )}
+
+                <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
+                  {factura.tipo === 'E' && (
+                    factura.compra_id ? (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => navigate(`/compras/${factura.compra_id}`)}
+                      >
+                        Ver compra →
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => navigate('/compras/nueva', {
+                          state: {
+                            prefill: {
+                              factura_id: factura.id,
+                              fecha: factura.fecha ?? factura.fecha_timbrado,
+                              uuid: factura.uuid,
+                              rfc_emisor: factura.rfc_emisor,
+                              nombre_emisor: factura.nombre_emisor,
+                              conceptos: conceptos.map((c) => ({
+                                descripcion: c.descripcion,
+                                cantidad: c.cantidad,
+                                valor_unitario: c.valor_unitario,
+                              })),
+                            },
+                          },
+                        })}
+                      >
+                        Registrar compra →
+                      </button>
+                    )
+                  )}
                 </div>
               </>
             )}

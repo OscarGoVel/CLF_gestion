@@ -158,12 +158,12 @@ async def lifespan(app: FastAPI):
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
         if not db:
             continue
-        try:
-            with get_pool_empresa(db).conexion() as (_, cur):
-                for sql in _MIGRACIONES:
+        for sql in _MIGRACIONES:
+            try:
+                with get_pool_empresa(db).conexion() as (_, cur):
                     cur.execute(sql)
-        except Exception as e:
-            _log.warning(f"Migracion en {db}: {e}")
+            except Exception as e:
+                _log.warning(f"Migracion en {db}: {e}")
     yield
     # shutdown
     cerrar_todos_pools_empresa()

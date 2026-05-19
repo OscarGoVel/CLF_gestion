@@ -212,6 +212,38 @@ async def listar_categorias(user: dict = Depends(get_usuario_api)):
     return JSONResponse({"categorias": categorias, "subcategorias": subcategorias})
 
 
+@router.get("/generar-sku")
+async def generar_sku(
+    categoria_id: int = 0,
+    subcategoria_id: int = 0,
+    user: dict = Depends(get_usuario_api),
+):
+    if not categoria_id:
+        return JSONResponse({"sku": ""})
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT nombre FROM categorias WHERE id = %s", (categoria_id,))
+        row = cur.fetchone()
+        if not row:
+            return JSONResponse({"sku": ""})
+        prefix = row[0][:3].upper()
+        if subcategoria_id:
+            cur.execute("SELECT nombre FROM subcategorias WHERE id = %s", (subcategoria_id,))
+            sub_row = cur.fetchone()
+            prefix += sub_row[0][:3].upper() if sub_row else "GEN"
+        else:
+            prefix += "GEN"
+        cur.execute(
+            "SELECT codigo FROM productos WHERE codigo LIKE %s ORDER BY codigo DESC LIMIT 1",
+            (f"{prefix}%",)
+        )
+        ultimo = cur.fetchone()
+        try:
+            num = int(ultimo[0][len(prefix):]) + 1 if ultimo else 1
+        except Exception:
+            num = 1
+    return JSONResponse({"sku": f"{prefix}{num:04d}"})
+
+
 # ── Proveedores ───────────────────────────────────────────────────────────────
 
 @router.get("/proveedores")
@@ -330,16 +362,57 @@ async def crear_producto_rapido(request: Request, user: dict = Depends(get_usuar
         raise HTTPException(status_code=422, detail="nombre requerido")
 
     codigo = (body.get("codigo") or "").strip() or None
+    categoria_id = body.get("categoria_id") or None
+    subcategoria_id = body.get("subcategoria_id") or None
+    try:
+        precio_base = float(body.get("precio_base") or 0)
+    except (TypeError, ValueError):
+        precio_base = 0.0
+    aplica_iva = 1 if body.get("aplica_iva", True) else 0
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        if not codigo:
+            if categoria_id:
+                cur.execute("SELECT nombre FROM categorias WHERE id = %s", (categoria_id,))
+                row = cur.fetchone()
+                prefix = row[0][:3].upper() if row else "GEN"
+                if subcategoria_id:
+                    cur.execute("SELECT nombre FROM subcategorias WHERE id = %s", (subcategoria_id,))
+                    sub_row = cur.fetchone()
+                    prefix += sub_row[0][:3].upper() if sub_row else "GEN"
+                else:
+                    prefix += "GEN"
+            else:
+                prefix = "GENGEN"
+            cur.execute(
+                "SELECT codigo FROM productos WHERE codigo LIKE %s ORDER BY codigo DESC LIMIT 1",
+                (f"{prefix}%",)
+            )
+            ultimo = cur.fetchone()
+            try:
+                num = int(ultimo[0][len(prefix):]) + 1 if ultimo else 1
+            except Exception:
+                num = 1
+            codigo = f"{prefix}{num:04d}"
+
         cur.execute(
-            "INSERT INTO productos (nombre, codigo, stock_actual, aplica_iva) VALUES (%s, %s, 0, FALSE) RETURNING id",
-            (nombre, codigo),
+            """INSERT INTO productos (nombre, codigo, precio_base, stock_actual, aplica_iva,
+                                      precio_base_fecha, categoria_id, subcategoria_id)
+               VALUES (%s, %s, %s, 0, %s, CURRENT_DATE::TEXT, %s, %s)
+               RETURNING id""",
+            (nombre, codigo, precio_base, aplica_iva, categoria_id, subcategoria_id),
         )
         new_id = cur.fetchone()[0]
         conn.commit()
 
-    return JSONResponse({"id": new_id, "nombre": nombre, "codigo": codigo}, status_code=201)
+    return JSONResponse({
+        "id": new_id, "nombre": nombre, "codigo": codigo,
+        "precio": precio_base, "aplica_iva": bool(aplica_iva),
+        "costo_promedio": precio_base,
+        "precio_desactualizado": False,
+        "tiene_historial_compras": False,
+        "dias_sin_actualizar": None,
+    }, status_code=201)
 
 
 @router.post("/productos", status_code=201)

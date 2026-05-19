@@ -10,7 +10,7 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "clf-api",
+          "serviceId": "clfgestion",
           "region": "us-central1"
         }
       },

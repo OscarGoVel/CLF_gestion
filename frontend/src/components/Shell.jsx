@@ -1,29 +1,35 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { MobileNav } from './MobileNav';
+import { ToastContainer } from './ToastContainer';
 
 export const NAV_BY_ROLE = {
   admin: [
-    { id: 'inicio',    label: 'Inicio',       path: '/dashboard',   paths: ['/dashboard'] },
-    { id: 'comercial', label: 'Comercial',    path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
-    { id: 'operacion', label: 'Operación',    path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/catalogos/productos', '/catalogos/proveedores'] },
-    { id: 'cobranza',  label: 'Cobranza',     path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
-    { id: 'analisis',  label: 'Análisis',     path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
-    { id: 'config',    label: 'Configuración', path: '/ajustes',     paths: ['/ajustes', '/admin'] },
+    { id: 'inicio',    label: 'Inicio',        path: '/dashboard',   paths: ['/dashboard'] },
+    { id: 'comercial', label: 'Comercial',      path: '/cotizaciones', paths: ['/cotizaciones'] },
+    { id: 'operacion', label: 'Operación',      path: '/compras',      paths: ['/compras', '/stock', '/preinventario'] },
+    { id: 'cobranza',  label: 'Cobranza',       path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
+    { id: 'catalogos', label: 'Catálogos',      path: '/catalogos',    paths: ['/catalogos'] },
+    { id: 'analisis',  label: 'Análisis',       path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
+    { id: 'config',    label: 'Configuración',  path: '/ajustes',      paths: ['/ajustes', '/admin'] },
   ],
   operador: [
     { id: 'inicio',    label: 'Inicio',    path: '/dashboard',   paths: ['/dashboard'] },
-    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
-    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/catalogos/productos'] },
+    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones'] },
+    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario'] },
     { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
+    { id: 'catalogos', label: 'Catálogos', path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',  path: '/analisis',     paths: ['/analisis'] },
   ],
   almacenista: [
-    { id: 'inicio',    label: 'Inicio',    path: '/dashboard', paths: ['/dashboard'] },
-    { id: 'operacion', label: 'Operación', path: '/stock',     paths: ['/stock', '/preinventario', '/catalogos/productos'] },
+    { id: 'inicio',        label: 'Inicio',        path: '/dashboard',    paths: ['/dashboard'] },
+    { id: 'stock',         label: 'Stock',          path: '/stock',        paths: ['/stock'] },
+    { id: 'preinventario', label: 'Pre-inventario', mobileLabel: 'Pre-inv', path: '/preinventario', paths: ['/preinventario'] },
+    { id: 'catalogos',     label: 'Catálogos',      path: '/catalogos',    paths: ['/catalogos'] },
   ],
   lectura: [
     { id: 'inicio',    label: 'Inicio',    path: '/dashboard',    paths: ['/dashboard'] },
-    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones', '/catalogos/clientes'] },
+    { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones'] },
     { id: 'analisis',  label: 'Reportes',  path: '/analisis',     paths: ['/analisis'] },
   ],
 };
@@ -32,18 +38,20 @@ const SUBNAV_BY_ROLE = {
   admin: {
     comercial: [
       { label: 'Cotizaciones', path: '/cotizaciones' },
-      { label: 'Clientes',     path: '/catalogos/clientes' },
     ],
     operacion: [
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
-      { label: 'Productos',      path: '/catalogos/productos' },
-      { label: 'Proveedores',    path: '/catalogos/proveedores' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },
       { label: 'Estado de Cuenta', path: '/estado-cuenta' },
+    ],
+    catalogos: [
+      { label: 'Clientes',    path: '/catalogos/clientes' },
+      { label: 'Productos',   path: '/catalogos/productos' },
+      { label: 'Proveedores', path: '/catalogos/proveedores' },
     ],
     analisis: [
       { label: 'Análisis',           path: '/analisis' },
@@ -61,30 +69,29 @@ const SUBNAV_BY_ROLE = {
   operador: {
     comercial: [
       { label: 'Cotizaciones', path: '/cotizaciones' },
-      { label: 'Clientes',     path: '/catalogos/clientes' },
     ],
     operacion: [
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
-      { label: 'Productos',      path: '/catalogos/productos' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },
       { label: 'Estado de Cuenta', path: '/estado-cuenta' },
     ],
+    catalogos: [
+      { label: 'Clientes',  path: '/catalogos/clientes' },
+      { label: 'Productos', path: '/catalogos/productos' },
+    ],
   },
   almacenista: {
-    operacion: [
-      { label: 'Stock',          path: '/stock' },
-      { label: 'Pre-inventario', path: '/preinventario' },
-      { label: 'Productos',      path: '/catalogos/productos' },
+    catalogos: [
+      { label: 'Productos', path: '/catalogos/productos' },
     ],
   },
   lectura: {
     comercial: [
       { label: 'Cotizaciones', path: '/cotizaciones' },
-      { label: 'Clientes',     path: '/catalogos/clientes' },
     ],
   },
 };
@@ -114,7 +121,7 @@ function activeId(items, pathname) {
   return best;
 }
 
-const ROLE_KEY = {
+export const ROLE_KEY = {
   'Administrador': 'admin',
   'Operador':      'operador',
   'Almacenista':   'almacenista',
@@ -177,9 +184,12 @@ export function Shell({ children }) {
         </div>
       )}
 
-      <div className="scroll" style={{ background: 'var(--paper)' }}>
+      <div className="scroll">
         {children}
       </div>
+
+      <MobileNav />
+      <ToastContainer />
     </div>
   );
 }

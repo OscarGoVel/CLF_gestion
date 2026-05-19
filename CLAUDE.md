@@ -43,7 +43,7 @@ C:\Users\oscar\OneDrive\Documentos\Obsidian Vault\ai\context\architecture-overvi
 ### React
 - Wireframe-first: HTML funcional con datos reales antes que estilos
 - Usar React Router v7: `<Link>`, `useNavigate()` — nunca `window.location`
-- Reutilizar: `Pill.jsx`, `Stepper.jsx`, `NextRibbon.jsx`
+- Reutilizar componentes existentes: `Pill.jsx`, `Stepper.jsx`, `NextRibbon.jsx`, `DataTable.jsx`, `SidePreview.jsx`, `FilterChips.jsx`, `KpiCard.jsx`, `Modal.jsx`, `TableStates.jsx`, `MobileNav.jsx`
 - No crear abstracciones sin necesidad explícita
 
 ### FastAPI
@@ -66,7 +66,7 @@ CLF_gestion/
 ├── frontend/
 │   └── src/
 │       ├── pages/          ← páginas React (una por módulo)
-│       ├── components/     ← Pill.jsx, Stepper.jsx, NextRibbon.jsx
+│       ├── components/     ← Pill, Stepper, NextRibbon, DataTable, SidePreview, FilterChips, KpiCard, Modal, TableStates, MobileNav
 │       └── App.jsx         ← rutas principales
 ├── web_app/
 │   ├── routers/
@@ -80,16 +80,19 @@ CLF_gestion/
 
 ---
 
-## Estado actual (Fase 2 — wireframe)
+## Estado actual (Fase 5 — Nuevos KPIs)
 
-Módulos pendientes de implementar en React:
-1. Pre-inventario → `CLF_Mod_PreInventario.md`
-2. Estado de Cuenta → `CLF_Mod_EstadoCuenta.md`
-3. Costos Fijos → `CLF_Mod_CostosFijos.md` (módulo completamente nuevo)
-4. Estudio de Mercado → `CLF_Mod_EstudioMercado.md` (React incompleto)
-5. Admin → `CLF_Mod_Admin.md`
+Todos los módulos React están en producción. Fases 1–4 completadas.
 
-Bug activo: JWT no pasa al endpoint de PDF → ver `decisions/ADR-004-jwt-pdf-fix.md` en el vault
+Pendiente de Fase 4: migrar validación de montos al cambiar estado de cotización a PATCH endpoint
+en `api_cotizaciones.py` (actualmente solo en router Jinja legacy `cotizaciones.py:782`).
+
+KPIs pendientes para Fase 5 (ver `CLF_Plan_Maestro.md`):
+1. Tasa de conversión (`resultado` + `motivo_perdida`) → requiere campo nuevo en `cotizaciones`
+2. DSO por cliente → `api_estado_cuenta.py`
+3. Días de inventario por producto → `api_stock.py`
+4. Aging de cartera global en Análisis
+5. Alertas de margen negativo (líneas con `costo_compra > costo_snapshot`)
 
 ---
 

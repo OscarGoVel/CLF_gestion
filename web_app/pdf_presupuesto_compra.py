@@ -98,7 +98,7 @@ def generar_pdf_presupuesto_compra(
                    p.nombre,
                    p.unidad_medida,
                    GREATEST(cd.cantidad - COALESCE(p.stock_actual, 0), 0) AS cantidad_faltante,
-                   COALESCE(max_h.costo_max, p.precio_base)               AS costo_max,
+                   GREATEST(max_h.costo_max, p.precio_base)               AS costo_max,
                    COALESCE(p.costo_promedio, p.precio_base)              AS costo_promedio
             FROM cotizacion_detalle cd
             JOIN cotizaciones c  ON c.id  = cd.cotizacion_id

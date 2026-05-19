@@ -189,25 +189,49 @@ async def detalle(compra_id: int, user: dict = Depends(get_usuario_api)):
         cols = [d[0] for d in cur.description]
         compra = {k: _serial(v) for k, v in zip(cols, row)}
 
-        # Líneas de la compra con cotizaciones vinculadas
+        # Líneas de la compra
         cur.execute("""
             SELECT cd.id, p.codigo, p.nombre, p.unidad_medida,
                    cd.cantidad, cd.costo_unitario,
-                   cd.cantidad * cd.costo_unitario AS importe,
-                   COALESCE(
-                       STRING_AGG(DISTINCT cot.folio, ', '),
-                       '—'
-                   ) AS cotizaciones
+                   cd.cantidad * cd.costo_unitario AS importe
             FROM compra_detalle cd
             LEFT JOIN productos p ON p.id = cd.producto_id
-            LEFT JOIN compra_detalle_cotizacion cdc ON cdc.compra_detalle_id = cd.id
-            LEFT JOIN cotizaciones cot ON cot.id = cdc.cotizacion_id
             WHERE cd.compra_id = %s
-            GROUP BY cd.id, p.codigo, p.nombre, p.unidad_medida,
-                     cd.cantidad, cd.costo_unitario
             ORDER BY cd.id
         """, (compra_id,))
         lineas = _rows(cur)
+
+        # Asignaciones por línea: qué cotización recibe cuántas unidades
+        if lineas:
+            cur.execute("""
+                SELECT cdc.compra_detalle_id,
+                       cot.id   AS cot_id,
+                       cot.folio,
+                       cot.estado,
+                       COALESCE(cl.nombre_comercial, '—') AS cliente,
+                       cdc.cantidad
+                FROM compra_detalle_cotizacion cdc
+                JOIN cotizaciones cot ON cot.id = cdc.cotizacion_id
+                LEFT JOIN clientes cl ON cl.id = cot.cliente_id
+                WHERE cdc.compra_detalle_id = ANY(%s)
+                ORDER BY cdc.compra_detalle_id, cot.id
+            """, ([l["id"] for l in lineas],))
+            asig_rows = _rows(cur)
+        else:
+            asig_rows = []
+
+        asig_by_linea: dict = {}
+        for a in asig_rows:
+            asig_by_linea.setdefault(a["compra_detalle_id"], []).append({
+                "cot_id":  a["cot_id"],
+                "folio":   a["folio"],
+                "estado":  a["estado"],
+                "cliente": a["cliente"],
+                "cantidad": _serial(a["cantidad"]),
+            })
+
+        for l in lineas:
+            l["asignaciones"] = asig_by_linea.get(l["id"], [])
 
     return JSONResponse({"compra": compra, "lineas": lineas})
 
@@ -273,32 +297,36 @@ async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
             ))
             detalle_id = cur.lastrowid
 
-            # Vincular a cotización si se proporcionó, si no va a stock general
-            cur.execute("""
-                INSERT INTO compra_detalle_cotizacion
-                  (compra_detalle_id, cotizacion_id, cantidad)
-                VALUES (%s, %s, %s)
-            """, (detalle_id, row["cotizacion_id"], float(row["cantidad"])))
+            # Vincular a cotización si se proporcionó
+            if row["cotizacion_id"] is not None:
+                cur.execute("""
+                    INSERT INTO compra_detalle_cotizacion
+                      (compra_detalle_id, cotizacion_id, cantidad)
+                    VALUES (%s, %s, %s)
+                """, (detalle_id, row["cotizacion_id"], float(row["cantidad"])))
 
-            # Stock y costo promedio ponderado
+            # Stock y costo promedio ponderado — actualización atómica (sin lectura previa)
+            cant  = float(row["cantidad"])
+            costo = float(row["costo_u"])
             cur.execute(
-                "SELECT COALESCE(stock_actual, 0), COALESCE(costo_promedio, 0) FROM productos WHERE id = %s",
+                "SELECT COALESCE(stock_actual, 0) FROM productos WHERE id = %s",
                 (row["producto_id"],),
             )
-            stock_antes, costo_prom_ant = cur.fetchone()
-            stock_antes = float(stock_antes)
-            costo_prom_ant = Decimal(str(costo_prom_ant))
-            stock_despues = stock_antes + float(row["cantidad"])
-
-            denom = Decimal(str(stock_antes)) + row["cantidad"]
-            nuevo_prom = (
-                (Decimal(str(stock_antes)) * costo_prom_ant + row["cantidad"] * row["costo_u"]) / denom
-            ) if denom > 0 else row["costo_u"]
-
-            cur.execute(
-                "UPDATE productos SET stock_actual = %s, costo_promedio = %s WHERE id = %s",
-                (stock_despues, float(nuevo_prom.quantize(Decimal("0.0001"))), row["producto_id"]),
-            )
+            stock_antes = float(cur.fetchone()[0])
+            cur.execute("""
+                UPDATE productos
+                SET stock_actual   = COALESCE(stock_actual, 0) + %s,
+                    costo_promedio = CASE
+                        WHEN COALESCE(stock_actual, 0) + %s > 0
+                        THEN (COALESCE(stock_actual, 0) * COALESCE(costo_promedio, 0) + %s * %s)
+                             / (COALESCE(stock_actual, 0) + %s)
+                        ELSE %s
+                    END
+                WHERE id = %s
+                RETURNING stock_actual, costo_promedio
+            """, (cant, cant, cant, costo, cant, costo, row["producto_id"]))
+            stock_despues, nuevo_prom_raw = cur.fetchone()
+            nuevo_prom = Decimal(str(nuevo_prom_raw or 0))
 
             # Verificar si precio_venta cubre el nuevo costo con margen mínimo (35%)
             _MARGEN_MIN = Decimal("0.35")

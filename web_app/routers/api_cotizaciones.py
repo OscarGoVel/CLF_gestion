@@ -75,7 +75,10 @@ class CotizacionIn(BaseModel):
 @router.get("")
 async def listar(
     estado: List[str] = Query([]),
+    cliente_id: List[int] = Query([]),
     q: str = Query(""),
+    fecha_desde: Optional[str] = Query(None),
+    fecha_hasta: Optional[str] = Query(None),
     pagina: int = Query(1, ge=1),
     user: dict = Depends(get_usuario_api),
 ):
@@ -88,6 +91,16 @@ async def listar(
         placeholders = ",".join(["%s"] * len(estado))
         clauses.append(f"c.estado IN ({placeholders})")
         params.extend(estado)
+    if cliente_id:
+        placeholders = ",".join(["%s"] * len(cliente_id))
+        clauses.append(f"c.cliente_id IN ({placeholders})")
+        params.extend(cliente_id)
+    if fecha_desde:
+        clauses.append("c.fecha >= %s")
+        params.append(fecha_desde)
+    if fecha_hasta:
+        clauses.append("c.fecha <= %s")
+        params.append(fecha_hasta)
     if q:
         clauses.append("(c.folio ILIKE %s OR COALESCE(cl.nombre_comercial,'') ILIKE %s)")
         params += [f"%{q}%", f"%{q}%"]
@@ -130,6 +143,14 @@ async def listar(
         cur.execute("SELECT estado, COUNT(*) FROM cotizaciones GROUP BY estado")
         conteo_estado = {r[0]: r[1] for r in cur.fetchall()}
 
+        cur.execute("""
+            SELECT DISTINCT cl.id, cl.nombre_comercial
+            FROM cotizaciones c
+            JOIN clientes cl ON cl.id = c.cliente_id
+            ORDER BY cl.nombre_comercial
+        """)
+        clientes_lista = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+
     total_pags = max(1, (total + POR_PAGINA - 1) // POR_PAGINA)
 
     return JSONResponse({
@@ -138,6 +159,7 @@ async def listar(
         "pagina": pagina,
         "total_pags": total_pags,
         "conteo_estado": conteo_estado,
+        "clientes": clientes_lista,
     })
 
 
@@ -547,7 +569,13 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
                        THEN (cd.precio_unitario - COALESCE(cd.costo_snapshot, 0))
                             / cd.precio_unitario * 100
                        ELSE NULL END
-                   )                                               AS margen_pct
+                   )                                               AS margen_pct,
+                   COALESCE((
+                       SELECT SUM(ep.cantidad_entregada)
+                       FROM entregas_parciales ep
+                       WHERE ep.cotizacion_id = cd.cotizacion_id
+                         AND ep.producto_id   = cd.producto_id
+                   ), 0)                                           AS ya_entregado
             FROM cotizacion_detalle cd
             LEFT JOIN productos p ON p.id = cd.producto_id
             WHERE cd.cotizacion_id = %s

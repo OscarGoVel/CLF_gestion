@@ -5,8 +5,10 @@ web_app/routers/api_stock.py
 """
 
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
@@ -27,7 +29,7 @@ def _rows(cur):
 @router.get("")
 async def inventario(
     q: str = Query(""),
-    categoria: str = Query(""),
+    categoria: List[str] = Query([]),
     bajo_minimo: str = Query(""),
     user: dict = Depends(get_usuario_api),
 ):
@@ -36,7 +38,9 @@ async def inventario(
         clauses.append("(p.nombre ILIKE %s OR p.codigo ILIKE %s)")
         params += [f"%{q}%"] * 2
     if categoria:
-        clauses.append("cat.nombre = %s"); params.append(categoria)
+        placeholders = ",".join(["%s"] * len(categoria))
+        clauses.append(f"cat.nombre IN ({placeholders})")
+        params.extend(categoria)
     if bajo_minimo == "1":
         clauses.append("p.stock_actual < p.stock_minimo AND p.stock_minimo > 0")
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
@@ -45,6 +49,7 @@ async def inventario(
         cur.execute(f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
                    p.stock_actual, p.stock_minimo, p.precio_base,
+                   p.precio_base_fecha,
                    cat.nombre  AS categoria,
                    sub.nombre  AS subcategoria,
                    COALESCE(AVG(cd.costo_unitario), p.precio_base, 0) AS costo_prom,
@@ -61,11 +66,66 @@ async def inventario(
         """, params or None)
         productos = _rows(cur)
 
+        # Ventas últimos 30 días por producto (para días de inventario)
+        cur.execute("""
+            SELECT cd.producto_id, SUM(cd.cantidad) AS vendido_30d
+            FROM cotizacion_detalle cd
+            JOIN cotizaciones cot ON cot.id = cd.cotizacion_id
+            WHERE cot.estado IN ('Entregada','Facturada','Pagada')
+              AND cot.fecha_entrega >= CURRENT_DATE - INTERVAL '30 days'
+              AND cd.producto_id IS NOT NULL
+            GROUP BY cd.producto_id
+        """)
+        ventas_30d = {r[0]: float(r[1]) for r in cur.fetchall()}
+
         cur.execute("SELECT nombre FROM categorias ORDER BY nombre")
         categorias = [r[0] for r in cur.fetchall()]
 
-    total_valor   = sum((p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0) for p in productos)
+    from datetime import date as _date
+    hoy = _date.today()
+
+    for p in productos:
+        # Días de inventario
+        v30 = ventas_30d.get(p["id"], 0)
+        tasa_diaria = v30 / 30.0
+        stock = p.get("stock_actual") or 0
+        if tasa_diaria > 0 and stock > 0:
+            p["dias_inventario"] = round(stock / tasa_diaria)
+        elif stock <= 0:
+            p["dias_inventario"] = 0
+        else:
+            p["dias_inventario"] = None
+
+        # Edad del precio_base en días
+        pbf = p.get("precio_base_fecha")
+        if pbf:
+            try:
+                fecha_pb = _date.fromisoformat(str(pbf)[:10])
+                p["precio_base_dias"] = (hoy - fecha_pb).days
+            except (ValueError, TypeError):
+                p["precio_base_dias"] = None
+        else:
+            p["precio_base_dias"] = None
+
+    # Clasificación ABC por valor de inventario (acumulado: A=0-80%, B=80-95%, C=95-100%)
+    total_valor = sum((p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0) for p in productos)
+    if total_valor > 0:
+        sorted_by_valor = sorted(
+            productos,
+            key=lambda p: (p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0),
+            reverse=True,
+        )
+        acum = 0.0
+        for p in sorted_by_valor:
+            v = (p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0)
+            acum += v
+            pct = acum / total_valor * 100
+            p["abc"] = "A" if pct <= 80 else ("B" if pct <= 95 else "C")
+    else:
+        for p in productos:
+            p["abc"] = "C"
     bajo_min_cnt  = sum(1 for p in productos if (p["stock_minimo"] or 0) > 0 and (p["stock_actual"] or 0) < (p["stock_minimo"] or 0))
+    precio_stale_cnt = sum(1 for p in productos if (p.get("precio_base_dias") or 0) > 30)
     negativo_cnt  = sum(1 for p in productos if (p["stock_actual"] or 0) < 0)
     sin_stock_cnt = sum(1 for p in productos if (p["stock_actual"] or 0) == 0)
 
@@ -73,13 +133,76 @@ async def inventario(
         "productos": productos,
         "categorias": categorias,
         "stats": {
-            "total_valor": round(total_valor, 2),
-            "bajo_minimo": bajo_min_cnt,
-            "negativo": negativo_cnt,
-            "sin_stock": sin_stock_cnt,
+            "total_valor":    round(total_valor, 2),
+            "bajo_minimo":    bajo_min_cnt,
+            "negativo":       negativo_cnt,
+            "sin_stock":      sin_stock_cnt,
             "total_productos": len(productos),
+            "precio_stale":   precio_stale_cnt,
         },
     })
+
+
+MOTIVOS_AJUSTE = ("Conteo físico", "Merma", "Corrección sistema", "Donación", "Robo/pérdida", "Otro")
+
+
+class AjusteBody(BaseModel):
+    producto_id: int
+    stock_nuevo: float
+    motivo: str
+    notas: Optional[str] = None
+    referencia: Optional[str] = None
+
+
+@router.post("/ajuste")
+async def ajustar_stock(
+    body: AjusteBody,
+    user: dict = Depends(get_usuario_api),
+):
+    if user.get("rol") != "Administrador":
+        raise HTTPException(403, "Solo el Administrador puede registrar ajustes de stock")
+    if body.motivo not in MOTIVOS_AJUSTE:
+        raise HTTPException(422, f"Motivo inválido. Opciones: {', '.join(MOTIVOS_AJUSTE)}")
+    if body.motivo == "Otro" and not body.notas:
+        raise HTTPException(422, "Las notas son obligatorias cuando el motivo es 'Otro'")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "SELECT id, nombre, stock_actual FROM productos WHERE id = %s",
+            (body.producto_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Producto no encontrado")
+        pid, nombre, stock_antes = row[0], row[1], float(row[2] or 0)
+
+        stock_despues = body.stock_nuevo
+        diferencia = stock_despues - stock_antes
+
+        cur.execute(
+            "UPDATE productos SET stock_actual = %s WHERE id = %s",
+            (stock_despues, pid),
+        )
+        cur.execute("""
+            INSERT INTO movimientos_stock
+                (producto_id, tipo, motivo, cantidad,
+                 stock_antes, stock_despues, referencia, notas, usuario)
+            VALUES (%s, 'ajuste', %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            pid, body.motivo, abs(diferencia),
+            stock_antes, stock_despues,
+            body.referencia or None,
+            body.notas or None,
+            user["nombre"],
+        ))
+
+    return {
+        "ok": True,
+        "producto": nombre,
+        "stock_antes": stock_antes,
+        "stock_despues": stock_despues,
+        "diferencia": diferencia,
+    }
 
 
 @router.get("/movimientos")

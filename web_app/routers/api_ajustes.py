@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from web_app.auth import hash_password, verificar_password
-from web_app.database import pool_usuarios
+from web_app.database import pool_usuarios, get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
 router = APIRouter(prefix="/api/ajustes", tags=["api"])
@@ -194,3 +194,56 @@ async def toggle_activo(uid: int, user: dict = Depends(get_usuario_api)):
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
         conn.commit()
     return JSONResponse({"activo": bool(row[0])})
+
+
+# ── Auditoría (admin) ─────────────────────────────────────────────────────────
+
+@router.get("/audit")
+async def get_audit(user: dict = Depends(get_usuario_api)):
+    _require_admin(user)
+    from web_app import audit
+    eventos = audit.obtener_ultimos(200)
+    for ev in eventos:
+        if ev.get("ts") and hasattr(ev["ts"], "isoformat"):
+            ev["ts"] = ev["ts"].isoformat()
+    return JSONResponse({"eventos": eventos})
+
+
+# ── Ubicaciones / Sucursales (admin) ──────────────────────────────────────────
+
+def _cargar_sucursales(cur) -> list:
+    cur.execute("SELECT id, nombre, descripcion FROM sucursales ORDER BY nombre")
+    sucursales = [{"id": r[0], "nombre": r[1], "descripcion": r[2], "areas": []} for r in cur.fetchall()]
+    for suc in sucursales:
+        cur.execute("SELECT id, nombre FROM areas WHERE sucursal_id = %s ORDER BY nombre", (suc["id"],))
+        suc["areas"] = [{"id": r[0], "nombre": r[1]} for r in cur.fetchall()]
+    return sucursales
+
+
+@router.get("/ubicaciones")
+async def get_ubicaciones(user: dict = Depends(get_usuario_api)):
+    _require_admin(user)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        sucursales = _cargar_sucursales(cur)
+    return JSONResponse({"sucursales": sucursales})
+
+
+class SucursalIn(BaseModel):
+    nombre: str
+    descripcion: Optional[str] = None
+
+
+@router.post("/ubicaciones", status_code=201)
+async def crear_sucursal(body: SucursalIn, user: dict = Depends(get_usuario_api)):
+    _require_admin(user)
+    nombre = body.nombre.strip()
+    if not nombre:
+        raise HTTPException(status_code=422, detail="nombre requerido")
+    with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        cur.execute(
+            "INSERT INTO sucursales (nombre, descripcion) VALUES (%s, %s) RETURNING id",
+            (nombre, body.descripcion or None),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+    return JSONResponse({"id": new_id}, status_code=201)

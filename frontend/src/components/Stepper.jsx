@@ -1,71 +1,81 @@
-/**
- * Stepper de proceso para cotizaciones.
- * steps: [{ label, value, state }]  state: 'done' | 'current' | 'todo'
- */
 export function Stepper({ steps }) {
   return (
     <div className="stepper">
-      {steps.map((s, i) => (
-        <div key={i} className={`step ${s.state}`}>
-          <div className="s-label">{s.label}</div>
-          <div className="s-val">{s.value ?? '—'}</div>
-        </div>
-      ))}
+      {steps.map((s, i) => {
+        const leftDone  = i > 0 && steps[i - 1].state === 'done';
+        const rightDone = s.state === 'done';
+        return (
+          <div key={i} className="stepper-step">
+            <div className="stepper-track">
+              <div className={`stepper-line ${i === 0 ? 'hidden' : leftDone ? 'done' : ''}`} />
+              <div className={`stepper-node ${s.state}`}>
+                {s.state === 'done'
+                  ? '✓'
+                  : s.state === 'warn'
+                  ? '⚠'
+                  : i + 1}
+              </div>
+              <div className={`stepper-line ${i === steps.length - 1 ? 'hidden' : rightDone ? 'done' : ''}`} />
+            </div>
+            <div className="stepper-meta">
+              <span className={`stepper-label ${s.state === 'todo' ? 'muted' : ''}`}>{s.label}</span>
+              {s.value && <span className="stepper-val">{s.value}</span>}
+              {s.badge && (
+                <span className={`stepper-badge ${s.badgeType ?? 'neutral'}`}>{s.badge}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-/**
- * Builds stepper steps from a cotizacion object.
- * cotizacion: { estado, fecha_cotizacion, orden_compra, stock_ok, fecha_entrega, factura_id, pago_recibido }
- */
 export function buildSteps(cot) {
-  const estado = cot?.estado ?? '';
+  const estado  = cot?.estado ?? '';
   const ordered = ['Pendiente', 'Programada', 'Entregada', 'Facturada', 'Pagada'];
-  const idx = ordered.indexOf(estado);
+  const idx     = ordered.indexOf(estado);
 
-  const steps = [
+  return [
     {
       label: 'Cotizada',
-      value: cot?.fecha_cotizacion ?? '—',
+      value: cot?.fecha_cotizacion ?? null,
       state: 'done',
     },
     {
       label: 'OC recibida',
-      value: cot?.orden_compra ?? '—',
+      value: cot?.orden_compra ?? null,
       state: cot?.orden_compra ? 'done' : idx >= 1 ? 'current' : 'todo',
     },
     {
       label: 'Stock',
-      value: cot?.stock_ok === false
-        ? `${cot?.faltantes ?? '?'} faltantes`
-        : cot?.stock_ok
-          ? 'Completo'
-          : '—',
+      value: cot?.stock_ok === true ? 'Completo' : null,
       state: cot?.stock_ok === true
         ? 'done'
         : cot?.stock_ok === false
-          ? 'current'
+          ? 'warn'
           : idx >= 2 ? 'done' : 'todo',
+      badge:     cot?.stock_ok === false ? `⚠ ${cot?.faltantes ?? '?'} faltantes` : null,
+      badgeType: 'warn',
     },
     {
       label: 'Entrega',
-      value: cot?.fecha_entrega ?? (estado === 'Entregada' ? 'Entregada' : '—'),
+      value: cot?.fecha_entrega ?? null,
       state: estado === 'Entregada' || estado === 'Facturada' || estado === 'Pagada'
         ? 'done'
         : idx === 2 ? 'current' : 'todo',
     },
     {
       label: 'Factura',
-      value: cot?.folio_factura ?? (estado === 'Facturada' || estado === 'Pagada' ? '✓' : '—'),
+      value: cot?.folio_factura ?? null,
       state: estado === 'Facturada' || estado === 'Pagada' ? 'done' : idx === 3 ? 'current' : 'todo',
+      badge:     (estado !== 'Facturada' && estado !== 'Pagada' && idx === 3) ? 'Pendiente' : null,
+      badgeType: 'info',
     },
     {
       label: 'Pago',
-      value: estado === 'Pagada' ? '✓' : '—',
+      value: estado === 'Pagada' ? cot?.fecha_pago ?? 'Pagada' : null,
       state: estado === 'Pagada' ? 'done' : idx === 4 ? 'current' : 'todo',
     },
   ];
-
-  return steps;
 }

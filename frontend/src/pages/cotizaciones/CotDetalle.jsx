@@ -44,6 +44,7 @@ export default function CotDetalle() {
   const [pagoFecha,      setPagoFecha]      = useState('');
   const [guardandoEst,   setGuardandoEst]   = useState(false);
   const [confirmCancelar, setConfirmCancelar] = useState(false);
+  const [docsOpen,        setDocsOpen]        = useState(false);
 
   const LABELS_ESTADO = {
     Programada: 'OC registrada — cotización programada',
@@ -155,15 +156,29 @@ export default function CotDetalle() {
             {cot.orden_compra && ` · OC: ${cot.orden_compra}`}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={handlePdf}>PDF</button>
-          <button className="btn" onClick={handleNotaRemision}>Nota de Remisión</button>
-          <button className="btn" onClick={() => navigate(`/cotizaciones/${id}/expediente`)}>Expediente</button>
-          <button className="btn" onClick={() => navigate(`/cotizaciones/${id}/editar`)}>Editar</button>
-          {!['Cancelada', 'Pagada'].includes(cot.estado) && (
-            <button className="btn btn-danger" onClick={() => setConfirmCancelar(true)}>
-              Cancelar
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="dropdown">
+            <button className="btn btn-sm" onClick={() => setDocsOpen(v => !v)}>
+              Documentos ▾
             </button>
+            {docsOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 19 }} onClick={() => setDocsOpen(false)} />
+                <div className="dropdown-menu">
+                  <button className="dropdown-item" onClick={() => { handlePdf(); setDocsOpen(false); }}>
+                    PDF cotización
+                  </button>
+                  <button className="dropdown-item" onClick={() => { handleNotaRemision(); setDocsOpen(false); }}>
+                    Nota de Remisión
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/cotizaciones/${id}/expediente`)}>Expediente</button>
+          <button className="btn btn-sm" onClick={() => navigate(`/cotizaciones/${id}/editar`)}>Editar</button>
+          {!['Cancelada', 'Pagada'].includes(cot.estado) && (
+            <button className="btn-link-danger" onClick={() => setConfirmCancelar(true)}>cancelar</button>
           )}
         </div>
       </div>
