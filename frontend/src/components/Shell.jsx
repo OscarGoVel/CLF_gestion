@@ -11,6 +11,7 @@ export const NAV_BY_ROLE = {
     { id: 'cobranza',  label: 'Cobranza',       path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos',      path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',       path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
+    { id: 'crm',       label: 'CRM',            path: '/crm',          paths: ['/crm'] },
     { id: 'config',    label: 'Configuración',  path: '/ajustes',      paths: ['/ajustes', '/admin'] },
   ],
   operador: [
@@ -20,6 +21,7 @@ export const NAV_BY_ROLE = {
     { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos', path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',  path: '/analisis',     paths: ['/analisis'] },
+    { id: 'crm',       label: 'CRM',       path: '/crm',          paths: ['/crm'] },
   ],
   almacenista: [
     { id: 'inicio',        label: 'Inicio',        path: '/dashboard',    paths: ['/dashboard'] },
@@ -58,6 +60,15 @@ const SUBNAV_BY_ROLE = {
       { label: 'Costos Fijos',       path: '/costos-fijos' },
       { label: 'Estudio de Mercado', path: '/estudio-mercado' },
     ],
+    crm: [
+      { label: 'Dashboard',  path: '/crm' },
+      { label: 'Campañas',   path: '/crm/campanas' },
+      { label: 'Plantillas', path: '/crm/plantillas' },
+      { label: 'Contactos',  path: '/crm/contactos' },
+      { label: 'Secuencias', path: '/crm/secuencias' },
+      { label: 'Segmentos',  path: '/crm/segmentos' },
+      { label: 'RFM',        path: '/crm/rfm' },
+    ],
     config: [
       { label: 'Ajustes',     path: '/ajustes' },
       { label: 'Usuarios',    path: '/admin/usuarios' },
@@ -82,6 +93,13 @@ const SUBNAV_BY_ROLE = {
     catalogos: [
       { label: 'Clientes',  path: '/catalogos/clientes' },
       { label: 'Productos', path: '/catalogos/productos' },
+    ],
+    crm: [
+      { label: 'Dashboard',  path: '/crm' },
+      { label: 'Campañas',   path: '/crm/campanas' },
+      { label: 'Plantillas', path: '/crm/plantillas' },
+      { label: 'Contactos',  path: '/crm/contactos' },
+      { label: 'Secuencias', path: '/crm/secuencias' },
     ],
   },
   almacenista: {

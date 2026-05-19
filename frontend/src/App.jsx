@@ -39,6 +39,15 @@ import CostosFijosEditar from './pages/costos-fijos/CostosFijosEditar';
 import MercadoList   from './pages/estudio-mercado/MercadoList';
 import MercadoDetalle from './pages/estudio-mercado/MercadoDetalle';
 
+// CRM
+import CrmDashboard from './pages/crm/CrmDashboard';
+import Campanas     from './pages/crm/Campanas';
+import Plantillas   from './pages/crm/Plantillas';
+import Contactos    from './pages/crm/Contactos';
+import Secuencias   from './pages/crm/Secuencias';
+import Segmentos    from './pages/crm/Segmentos';
+import RfmView      from './pages/crm/RfmView';
+
 // Admin
 import AdminUsuarios   from './pages/admin/AdminUsuarios';
 import AdminPermisos   from './pages/admin/AdminPermisos';
@@ -119,6 +128,15 @@ export default function App() {
                     <Route path="/catalogos/productos/nuevo" element={<ProductoNuevo />} />
                     <Route path="/catalogos/proveedores" element={<ProveedorList />} />
                     <Route path="/catalogos/*"           element={<Placeholder title="Catálogos" />} />
+
+                    {/* CRM */}
+                    <Route path="/crm"              element={<CrmDashboard />} />
+                    <Route path="/crm/campanas"     element={<Campanas />} />
+                    <Route path="/crm/plantillas"   element={<Plantillas />} />
+                    <Route path="/crm/contactos"    element={<Contactos />} />
+                    <Route path="/crm/secuencias"   element={<Secuencias />} />
+                    <Route path="/crm/segmentos"    element={<Segmentos />} />
+                    <Route path="/crm/rfm"          element={<RfmView />} />
 
                     {/* Ajustes */}
                     <Route path="/ajustes" element={<Ajustes />} />

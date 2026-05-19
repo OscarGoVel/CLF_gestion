@@ -53,6 +53,7 @@ from web_app.routers import api_estado_cuenta as api_estado_cuenta_router
 from web_app.routers import api_preinventario as api_preinventario_router
 from web_app.routers import api_costos_fijos as api_costos_fijos_router
 from web_app.routers import api_estudio_mercado as api_estudio_mercado_router
+from web_app.routers import api_crm as api_crm_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -164,8 +165,24 @@ async def lifespan(app: FastAPI):
                     cur.execute(sql)
             except Exception as e:
                 _log.warning(f"Migracion en {db}: {e}")
+    # Scheduler CRM (solo si APScheduler instalado y módulo disponible)
+    _crm_scheduler = None
+    try:
+        import importlib
+        if importlib.util.find_spec("apscheduler"):
+            from core.crm.scheduler import iniciar as crm_iniciar
+            _crm_scheduler = crm_iniciar(get_pool_empresa, get_empresas)
+    except Exception as e:
+        _log.warning(f"CRM scheduler no iniciado: {e}")
+
     yield
     # shutdown
+    if _crm_scheduler:
+        try:
+            from core.crm.scheduler import detener as crm_detener
+            crm_detener()
+        except Exception:
+            pass
     cerrar_todos_pools_empresa()
     pool_usuarios.cerrar()
     logger.get("clf.startup").info("Servidor detenido. Pools cerrados.")
@@ -281,6 +298,7 @@ app.include_router(api_estado_cuenta_router.router)
 app.include_router(api_preinventario_router.router)
 app.include_router(api_costos_fijos_router.router)
 app.include_router(api_estudio_mercado_router.router)
+app.include_router(api_crm_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
