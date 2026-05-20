@@ -9,6 +9,7 @@ import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview } from '../../components/SidePreview';
+import { ConfirmModal } from '../../components/ConfirmModal';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -42,6 +43,8 @@ export default function CotList() {
   const [buscar, setBuscar]         = useState('');
   const [selected, setSelected]     = useState(null);
   const [pagina, setPagina]         = useState(1);
+  const [confirmCancelarId, setConfirmCancelarId] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
 
   const params = new URLSearchParams({ pagina });
   filtros.forEach((e) => params.append('estado', e));
@@ -71,6 +74,35 @@ export default function CotList() {
   function handleBuscar(e) { setBuscar(e.target.value); setPagina(1); }
   async function handlePdf(cotId, folio) {
     await api.download(`/api/cotizaciones/${cotId}/pdf`, `Cotizacion_${folio ?? cotId}.pdf`);
+  }
+
+  async function handleCancelarCot() {
+    setCancelando(true);
+    try {
+      await api.patch(`/api/cotizaciones/${confirmCancelarId}/cancelar`, {});
+      setConfirmCancelarId(null);
+      if (selected === confirmCancelarId) setSelected(null);
+    } finally {
+      setCancelando(false);
+    }
+  }
+
+  function getContextMenuItems(cot) {
+    const ids = cotizaciones.map((c) => c.id);
+    const bloqueada = ['Cancelada', 'Pagada'].includes(cot.estado);
+    return [
+      { type: 'item', label: 'Abrir detalle',
+        onClick: () => navigate(`/cotizaciones/${cot.id}`, { state: { ids } }) },
+      { type: 'item', label: 'Editar',
+        disabled: bloqueada,
+        onClick: () => navigate(`/cotizaciones/${cot.id}/editar`) },
+      { type: 'item', label: 'Descargar PDF',
+        onClick: () => handlePdf(cot.id, cot.folio) },
+      { type: 'divider' },
+      { type: 'item', label: 'Cancelar cotización', danger: true,
+        disabled: bloqueada,
+        onClick: () => setConfirmCancelarId(cot.id) },
+    ];
   }
 
   async function handleExportCsv() {
@@ -162,6 +194,7 @@ export default function CotList() {
             loading={loading}
             selectedId={selected}
             onRowClick={(row) => setSelected(selected === row.id ? null : row.id)}
+            getContextMenuItems={getContextMenuItems}
             footer={
               <>
                 <span>Mostrando {cotizaciones.length} de {total}</span>
@@ -258,6 +291,17 @@ export default function CotList() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!confirmCancelarId}
+        onClose={() => setConfirmCancelarId(null)}
+        onConfirm={handleCancelarCot}
+        title="¿Cancelar cotización?"
+        description="Esta acción no se puede deshacer. La cotización quedará marcada como Cancelada."
+        confirmLabel="Sí, cancelar"
+        loading={cancelando}
+        danger
+      />
     </div>
   );
 }

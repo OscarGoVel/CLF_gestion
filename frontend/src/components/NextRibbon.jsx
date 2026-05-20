@@ -38,7 +38,7 @@ export function NextRibbon({ action, warn }) {
  */
 export function buildNextAction(cot, handlers = {}) {
   if (!cot) return null;
-  const { estado, stock_ok, faltantes, orden_compra, folio_factura } = cot;
+  const { estado, stock_ok, faltantes, orden_compra, folio_factura, numero_factura } = cot;
 
   if (estado === 'Pagada') return null;
 
@@ -90,7 +90,13 @@ export function buildNextAction(cot, handlers = {}) {
     };
   }
 
-  if (estado === 'Entregada' && !folio_factura) {
+  if (estado === 'Entregada') {
+    if (folio_factura || numero_factura) {
+      return {
+        message: 'Entregada y facturada. Pendiente de pago.',
+        buttons: [{ label: 'Registrar pago', onClick: handlers.onPago, primary: true }],
+      };
+    }
     return {
       message: 'Entregada. Pendiente de facturar.',
       detail: 'Vincula el CFDI o registra el número de factura manualmente.',

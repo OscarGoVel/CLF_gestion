@@ -4,9 +4,12 @@ web_app/routers/api_analisis.py
 GET /api/analisis — KPIs, tendencia mensual, rankings para el SPA React.
 """
 
+import csv
+import io
+from datetime import date as _date
 from decimal import Decimal
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
@@ -307,3 +310,155 @@ async def get_analisis(user: dict = Depends(get_usuario_api)):
         "discriminacion":  discriminacion,
         "alertas_margen":  alertas_margen,
     })
+
+
+# ── GET /api/analisis/pnl-mensual ─────────────────────────────────────────────
+
+@router.get("/pnl-mensual")
+async def pnl_mensual(user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', cot.fecha), 'YYYY-MM') AS periodo,
+                TO_CHAR(DATE_TRUNC('month', cot.fecha), 'Mon YY')  AS mes_label,
+                DATE_TRUNC('month', cot.fecha)                      AS mes_ord,
+                COALESCE(SUM(cot.total), 0)                         AS revenue,
+                COALESCE(SUM(COALESCE(cd.costo_snapshot, 0) * cd.cantidad), 0) AS cogs
+            FROM cotizaciones cot
+            JOIN cotizacion_detalle cd ON cd.cotizacion_id = cot.id
+            WHERE cot.estado IN %s
+              AND cot.fecha >= NOW() - INTERVAL '12 months'
+            GROUP BY periodo, mes_label, mes_ord
+            ORDER BY mes_ord
+        """, (ESTADOS_VENTA,))
+        meses_raw = {}
+        for r in cur.fetchall():
+            meses_raw[r[0]] = {"periodo": r[0], "label": r[1], "revenue": _f(r[3]), "cogs": _f(r[4])}
+
+        cur.execute("SELECT periodo, COALESCE(SUM(monto), 0) FROM costos_fijos GROUP BY periodo")
+        fijos_por_periodo = {r[0]: _f(r[1]) for r in cur.fetchall()}
+
+    result = []
+    for periodo in sorted(meses_raw):
+        mes   = meses_raw[periodo]
+        fijos = fijos_por_periodo.get(periodo, 0.0)
+        gp    = mes["revenue"] - mes["cogs"]
+        np_   = gp - fijos
+        result.append({
+            "periodo":      periodo,
+            "label":        mes["label"],
+            "revenue":      round(mes["revenue"], 2),
+            "cogs":         round(mes["cogs"], 2),
+            "gp":           round(gp, 2),
+            "gp_pct":       round(gp / mes["revenue"] * 100, 1) if mes["revenue"] else 0,
+            "costos_fijos": round(fijos, 2),
+            "np":           round(np_, 2),
+            "np_pct":       round(np_ / mes["revenue"] * 100, 1) if mes["revenue"] else 0,
+        })
+
+    totales = {
+        "revenue":      sum(m["revenue"]      for m in result),
+        "cogs":         sum(m["cogs"]         for m in result),
+        "gp":           sum(m["gp"]           for m in result),
+        "costos_fijos": sum(m["costos_fijos"] for m in result),
+        "np":           sum(m["np"]           for m in result),
+    }
+    return JSONResponse({"meses": result, "totales": totales})
+
+
+# ── GET /api/analisis/forecast ────────────────────────────────────────────────
+
+def _add_months(d, n):
+    month = d.month - 1 + n
+    year  = d.year + month // 12
+    month = month % 12 + 1
+    return d.replace(year=year, month=month, day=1)
+
+
+@router.get("/forecast")
+async def forecast(user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT
+                DATE_TRUNC('month', fecha)                         AS mes_ord,
+                TO_CHAR(DATE_TRUNC('month', fecha), 'Mon YY')      AS label,
+                COALESCE(SUM(total), 0)                            AS monto
+            FROM cotizaciones
+            WHERE estado IN %s
+              AND fecha >= NOW() - INTERVAL '6 months'
+            GROUP BY mes_ord, label
+            ORDER BY mes_ord
+        """, (ESTADOS_VENTA,))
+        historial = [{"label": r[1], "monto": _f(r[2])} for r in cur.fetchall()]
+
+    if len(historial) < 2:
+        return JSONResponse({"historial": historial, "proyeccion": [], "tendencia": None})
+
+    n      = len(historial)
+    xs     = list(range(1, n + 1))
+    ys     = [m["monto"] for m in historial]
+    sx     = sum(xs);  sy  = sum(ys)
+    sxy    = sum(x * y for x, y in zip(xs, ys))
+    sx2    = sum(x * x for x in xs)
+    denom  = n * sx2 - sx * sx
+    slope  = (n * sxy - sx * sy) / denom if denom else 0
+    intercept = (sy - slope * sx) / n
+
+    hoy = _date.today().replace(day=1)
+    MES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+    proyeccion = []
+    for i in range(1, 4):
+        val   = max(0.0, intercept + slope * (n + i))
+        fecha = _add_months(hoy, i)
+        label = f"{MES_ES[fecha.month - 1]} {str(fecha.year)[2:]}"
+        proyeccion.append({"label": label, "monto": round(val, 2)})
+
+    tendencia = "creciente" if slope > 0 else "decreciente" if slope < 0 else "estable"
+    return JSONResponse({
+        "historial":  historial,
+        "proyeccion": proyeccion,
+        "tendencia":  tendencia,
+        "slope":      round(slope, 2),
+    })
+
+
+# ── GET /api/analisis/aging-export ────────────────────────────────────────────
+
+@router.get("/aging-export")
+async def aging_export(user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    hoy = _date.today().isoformat()
+
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT
+                cot.folio,
+                COALESCE(cl.nombre_comercial, '—') AS cliente,
+                cot.estado,
+                cot.fecha::text,
+                COALESCE(cot.fecha_entrega::text, ''),
+                ROUND(cot.total - COALESCE(cot.monto_pagado, 0), 2) AS pendiente,
+                (%s::date - COALESCE(cot.fecha_entrega, cot.fecha)::date) AS dias
+            FROM cotizaciones cot
+            LEFT JOIN clientes cl ON cl.id = cot.cliente_id
+            WHERE cot.estado IN ('Programada','Parcialmente Entregada','Entregada','Facturada')
+              AND (cot.total - COALESCE(cot.monto_pagado, 0)) > 0.01
+            ORDER BY dias DESC NULLS LAST
+        """, (hoy,))
+        rows = cur.fetchall()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Folio", "Cliente", "Estado", "Fecha cot.", "Fecha entrega", "Pendiente MXN", "Días"])
+    for r in rows:
+        writer.writerow([v if v is not None else '' for v in r])
+
+    content = buf.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="aging_{hoy}.csv"'},
+    )

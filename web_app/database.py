@@ -74,7 +74,8 @@ def _pg_kwargs(dbname: str) -> dict:
 
 
 _TABLAS_SIN_ID = {'preferencias_usuario', 'producto_proveedor', 'seguimiento_etapas',
-                  'factura_cotizaciones', 'oc_cotizaciones', 'compra_detalle_cotizacion'}
+                  'factura_cotizaciones', 'oc_cotizaciones', 'compra_detalle_cotizacion',
+                  'crm_segmento_clientes'}
 
 
 def _sql_tiene_id(sql: str) -> bool:

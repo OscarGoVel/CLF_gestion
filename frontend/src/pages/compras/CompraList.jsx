@@ -238,6 +238,10 @@ export default function CompraList() {
               loading={loading}
               selectedId={sel}
               onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
+              getContextMenuItems={(compra) => [
+                { type: 'item', label: 'Abrir detalle',
+                  onClick: () => navigate(`/compras/${compra.id}`) },
+              ]}
               footer={
                 <>
                   <span>{compras.length} de {total}</span>

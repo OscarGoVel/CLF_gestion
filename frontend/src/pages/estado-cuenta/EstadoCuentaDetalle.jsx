@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
+import { Modal } from '../../components/Modal';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -27,7 +30,17 @@ export default function EstadoCuentaDetalle() {
   const { cliente_id } = useParams();
   const navigate       = useNavigate();
 
-  const { data, loading } = useFetch(`/api/estado-cuenta/${cliente_id}`);
+  const { data, loading, refetch } = useFetch(`/api/estado-cuenta/${cliente_id}`);
+
+  const [modalPago,   setModalPago]   = useState(false);
+  const [cotPagoId,   setCotPagoId]   = useState(null);
+  const [pagoMonto,   setPagoMonto]   = useState('');
+  const [pagoFecha,   setPagoFecha]   = useState('');
+  const [pagoMetodo,  setPagoMetodo]  = useState('');
+  const [pagoRef,     setPagoRef]     = useState('');
+  const [guardando,   setGuardando]   = useState(false);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const cliente     = data?.cliente     ?? {};
   const kpis        = data?.kpis        ?? {};
@@ -40,7 +53,36 @@ export default function EstadoCuentaDetalle() {
     try {
       await api.download(`/api/estado-cuenta/pdf`, `EstadoCuenta_${cliente.nombre_comercial}.pdf`);
     } catch (e) {
-      alert(e.message);
+      toast.error(e.message);
+    }
+  }
+
+  function abrirModalPago(cotId) {
+    setCotPagoId(cotId);
+    setPagoMonto('');
+    setPagoFecha(today);
+    setPagoMetodo('');
+    setPagoRef('');
+    setModalPago(true);
+  }
+
+  async function handleRegistrarPago() {
+    if (!pagoMonto || parseFloat(pagoMonto) <= 0) return;
+    setGuardando(true);
+    try {
+      const res = await api.post(`/api/estado-cuenta/${cotPagoId}/pago`, {
+        monto: parseFloat(pagoMonto),
+        fecha_pago: pagoFecha,
+        metodo: pagoMetodo || null,
+        referencia: pagoRef || null,
+      });
+      toast.success(res.pagada ? 'Pago registrado — cotización marcada como Pagada' : 'Pago registrado');
+      setModalPago(false);
+      refetch();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -49,6 +91,7 @@ export default function EstadoCuentaDetalle() {
   }
 
   return (
+    <>
     <div className="page">
       <div className="crumbs">
         <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
@@ -144,17 +187,15 @@ export default function EstadoCuentaDetalle() {
               <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>Pendiente</th>
               <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Estado</th>
               <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>Días</th>
+              <th style={{ padding: '10px 12px', width: 90 }}></th>
             </tr>
           </thead>
           <tbody>
             {cotizaciones.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Sin cotizaciones activas</td></tr>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Sin cotizaciones activas</td></tr>
             )}
             {cotizaciones.map(c => (
-              <tr
-                key={c.id}
-                style={{ borderBottom: '1px solid var(--ink-100)' }}
-              >
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
                 <td style={{ padding: '10px 12px' }}>
                   <Link to={`/cotizaciones/${c.id}`} style={{ fontWeight: 500 }}>{c.folio}</Link>
                 </td>
@@ -169,11 +210,60 @@ export default function EstadoCuentaDetalle() {
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>
                   {c.dias_desde_entrega != null ? `${Math.round(c.dias_desde_entrega)}d` : '—'}
                 </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                  {!['Cancelada', 'Pagada'].includes(c.estado) && (c.pendiente ?? 0) > 0.01 && (
+                    <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }}
+                      onClick={() => abrirModalPago(c.id)}>
+                      Registrar pago
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+
+    {/* Modal: Registrar pago */}
+    <Modal open={modalPago} onClose={() => setModalPago(false)} title="Registrar pago" width={420}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>MONTO (MXN)</div>
+          <input className="input" type="number" step="0.01" min="0.01"
+            value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value)}
+            placeholder="0.00" autoFocus />
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>FECHA DE PAGO</div>
+          <input className="input" type="date" value={pagoFecha}
+            onChange={(e) => setPagoFecha(e.target.value)} />
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>MÉTODO</div>
+          <select className="input" value={pagoMetodo} onChange={(e) => setPagoMetodo(e.target.value)}>
+            <option value="">— Seleccionar —</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="cheque">Cheque</option>
+            <option value="tarjeta">Tarjeta</option>
+          </select>
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>REFERENCIA / FOLIO</div>
+          <input className="input" value={pagoRef} onChange={(e) => setPagoRef(e.target.value)}
+            placeholder="Ej. TRF-20260520" />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalPago(false)}>Cancelar</button>
+          <button className="btn btn-primary"
+            disabled={!pagoMonto || parseFloat(pagoMonto) <= 0 || guardando}
+            onClick={handleRegistrarPago}>
+            {guardando ? 'Guardando…' : 'Confirmar pago'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }

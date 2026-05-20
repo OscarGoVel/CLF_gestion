@@ -80,7 +80,8 @@ async def listar(
                    f.subtotal, f.iva, f.total, f.tipo,
                    f.metodo_pago, f.moneda, f.uuid,
                    COUNT(fc.cotizacion_id)  AS num_cotizaciones,
-                   (SELECT id FROM compras WHERE factura_xml_id = f.id LIMIT 1) AS compra_id
+                   (SELECT id FROM compras WHERE factura_xml_id = f.id LIMIT 1) AS compra_id,
+                   COALESCE(f.cancelada, FALSE) AS cancelada
             FROM facturas f
             LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
             {filtro}
@@ -316,10 +317,14 @@ async def sugerencias_fuzzy(factura_id: int, user: dict = Depends(get_usuario_ap
 
 # ── POST /api/facturas/{id}/vincular ─────────────────────────────────────────
 
+from typing import Optional as _Opt
 from pydantic import BaseModel as _BM
 
 class VincularIn(_BM):
     cotizacion_id: int
+
+class CancelarIn(_BM):
+    motivo: _Opt[str] = None
 
 @router.post("/{factura_id}/vincular")
 async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_usuario_api)):
@@ -355,4 +360,24 @@ async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_u
             from web_app.cache import cache as _cache
             _cache.invalidar(f"dashboard:{empresa_db}")
 
+    return JSONResponse({"ok": True})
+
+
+# ── PATCH /api/facturas/{id}/cancelar ────────────────────────────────────────
+
+@router.patch("/{factura_id}/cancelar")
+async def cancelar(factura_id: int, body: CancelarIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede cancelar facturas")
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT id, cancelada FROM facturas WHERE id = %s", (factura_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        if row[1]:
+            raise HTTPException(status_code=422, detail="La factura ya está cancelada")
+        cur.execute("""
+            UPDATE facturas SET cancelada = TRUE, motivo_cancelacion = %s WHERE id = %s
+        """, (body.motivo or None, factura_id))
     return JSONResponse({"ok": True})

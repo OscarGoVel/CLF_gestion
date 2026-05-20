@@ -293,6 +293,36 @@ async def asignar_clientes(segmento_id: int, request: Request,
     return JSONResponse({"ok": True})
 
 
+@router.patch("/segmentos/{segmento_id}")
+async def editar_segmento(segmento_id: int, request: Request,
+                           user: dict = Depends(get_usuario_api)):
+    b      = await request.json()
+    nombre = (b.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(422, "nombre requerido")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            UPDATE crm_segmentos
+            SET nombre = %s, descripcion = %s, tipo = %s
+            WHERE id = %s
+        """, (nombre, b.get("descripcion"), b.get("tipo", "manual"), segmento_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "segmento no encontrado")
+
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/segmentos/{segmento_id}")
+async def eliminar_segmento(segmento_id: int, user: dict = Depends(get_usuario_api)):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("DELETE FROM crm_segmento_clientes WHERE segmento_id = %s", (segmento_id,))
+        cur.execute("DELETE FROM crm_segmentos WHERE id = %s", (segmento_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "segmento no encontrado")
+    return JSONResponse({"ok": True})
+
+
 @router.delete("/segmentos/{segmento_id}/clientes/{cliente_id}")
 async def quitar_cliente_segmento(segmento_id: int, cliente_id: int,
                                    user: dict = Depends(get_usuario_api)):
@@ -717,4 +747,112 @@ async def webhook_sendgrid(request: Request):
             except Exception:
                 continue
 
+    return JSONResponse({"ok": True})
+
+
+# ── Prospectos / Pipeline comercial ──────────────────────────────────────────
+
+_ETAPAS = ('nuevo', 'contactado', 'propuesta', 'negociacion', 'ganado', 'perdido')
+
+
+@router.get("/prospectos")
+async def listar_prospectos(user: dict = Depends(get_usuario_api)):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT p.id, p.nombre, p.etapa, p.valor_estimado, p.probabilidad,
+                   p.contacto_nombre, p.contacto_email, p.contacto_tel,
+                   p.notas, p.fecha_estimada_cierre, p.motivo_perdida,
+                   p.created_at, p.updated_at,
+                   cl.nombre_comercial AS cliente_nombre,
+                   u.nombre AS responsable
+            FROM prospectos p
+            LEFT JOIN clientes cl ON cl.id = p.cliente_id
+            LEFT JOIN usuarios u  ON u.id  = p.responsable_id
+            ORDER BY p.etapa, p.updated_at DESC
+        """)
+        rows = _rows(cur)
+
+    by_etapa = {e: [] for e in _ETAPAS}
+    for r in rows:
+        etapa = r.get("etapa", "nuevo")
+        if etapa not in by_etapa:
+            etapa = "nuevo"
+        by_etapa[etapa].append(r)
+
+    totales = {
+        e: {"count": len(by_etapa[e]),
+            "valor": sum(r.get("valor_estimado") or 0 for r in by_etapa[e])}
+        for e in _ETAPAS
+    }
+    return JSONResponse({"prospectos": rows, "by_etapa": by_etapa, "totales": totales})
+
+
+@router.post("/prospectos", status_code=201)
+async def crear_prospecto(request: Request, user: dict = Depends(get_usuario_api)):
+    b      = await request.json()
+    nombre = (b.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(422, "nombre requerido")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            INSERT INTO prospectos
+                (nombre, cliente_id, contacto_nombre, contacto_email, contacto_tel,
+                 etapa, valor_estimado, probabilidad, responsable_id,
+                 notas, fecha_estimada_cierre)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (nombre,
+              b.get("cliente_id"),
+              b.get("contacto_nombre"),
+              b.get("contacto_email"),
+              b.get("contacto_tel"),
+              b.get("etapa", "nuevo"),
+              b.get("valor_estimado"),
+              b.get("probabilidad", 0),
+              b.get("responsable_id"),
+              b.get("notas"),
+              b.get("fecha_estimada_cierre")))
+        nuevo_id = cur.fetchone()[0]
+
+    return JSONResponse({"id": nuevo_id}, status_code=201)
+
+
+@router.patch("/prospectos/{prospecto_id}")
+async def actualizar_prospecto(prospecto_id: int, request: Request,
+                                user: dict = Depends(get_usuario_api)):
+    b = await request.json()
+    campos = {}
+    for f in ("nombre", "cliente_id", "contacto_nombre", "contacto_email",
+              "contacto_tel", "etapa", "valor_estimado", "probabilidad",
+              "responsable_id", "notas", "fecha_estimada_cierre", "motivo_perdida"):
+        if f in b:
+            campos[f] = b[f]
+
+    if not campos:
+        raise HTTPException(422, "sin campos para actualizar")
+
+    sets = ["updated_at = NOW()"]
+    vals = []
+    for k, v in campos.items():
+        sets.append(f"{k} = %s")
+        vals.append(v)
+
+    vals.append(prospecto_id)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"UPDATE prospectos SET {', '.join(sets)} WHERE id = %s", vals)
+        if cur.rowcount == 0:
+            raise HTTPException(404, "prospecto no encontrado")
+
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/prospectos/{prospecto_id}")
+async def eliminar_prospecto(prospecto_id: int, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(403, "Sin permiso")
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("DELETE FROM prospectos WHERE id = %s", (prospecto_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "prospecto no encontrado")
     return JSONResponse({"ok": True})

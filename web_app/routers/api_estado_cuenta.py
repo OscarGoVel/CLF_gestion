@@ -6,9 +6,11 @@ web_app/routers/api_estado_cuenta.py
 
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
@@ -225,6 +227,85 @@ async def detalle(
         "aging": aging,
         "cotizaciones": cotizaciones,
     }
+
+
+# ── POST /api/estado-cuenta/{cotizacion_id}/pago ─────────────────────────────
+
+class PagoIn(BaseModel):
+    monto: float
+    fecha_pago: str
+    metodo: Optional[str] = None
+    referencia: Optional[str] = None
+
+
+@router.post("/{cotizacion_id}/pago")
+async def registrar_pago(cotizacion_id: int, body: PagoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if body.monto <= 0:
+        raise HTTPException(status_code=422, detail="El monto debe ser mayor a 0")
+
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT total, estado FROM cotizaciones WHERE id = %s", (cotizacion_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+        total_cot, estado_cot = float(row[0] or 0), row[1]
+
+        if estado_cot in ("Cancelada", "Pagada"):
+            raise HTTPException(status_code=422, detail=f"No se puede registrar pago en cotización {estado_cot}")
+
+        cur.execute("""
+            INSERT INTO pagos (cotizacion_id, monto, fecha_pago, metodo, referencia, registrado_por)
+            VALUES (%s, %s, %s::date, %s, %s, %s)
+        """, (cotizacion_id, body.monto, body.fecha_pago,
+              body.metodo or None, body.referencia or None, user.get("id")))
+
+        cur.execute("""
+            UPDATE cotizaciones
+               SET monto_pagado = (SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE cotizacion_id = %s)
+             WHERE id = %s
+        """, (cotizacion_id, cotizacion_id))
+
+        cur.execute("SELECT monto_pagado FROM cotizaciones WHERE id = %s", (cotizacion_id,))
+        nuevo_monto = float(cur.fetchone()[0] or 0)
+        pagada = nuevo_monto >= total_cot
+
+        if pagada:
+            cur.execute("""
+                UPDATE cotizaciones SET estado = 'Pagada', fecha_pago = %s::date WHERE id = %s
+            """, (body.fecha_pago, cotizacion_id))
+            cur.execute("""
+                INSERT INTO seguimiento_etapas (cotizacion_id, etapa, completada, fecha_etapa)
+                VALUES (%s, 'Pagada', 1, %s::date)
+                ON CONFLICT (cotizacion_id, etapa) DO UPDATE SET
+                    completada  = 1,
+                    fecha_etapa = COALESCE(EXCLUDED.fecha_etapa, seguimiento_etapas.fecha_etapa)
+            """, (cotizacion_id, body.fecha_pago))
+            from web_app.cache import cache as _cache
+            _cache.invalidar(f"dashboard:{empresa_db}")
+
+    return JSONResponse({"ok": True, "monto_pagado": nuevo_monto, "pagada": pagada})
+
+
+# ── GET /api/estado-cuenta/{cotizacion_id}/pagos ──────────────────────────────
+
+@router.get("/{cotizacion_id}/pagos")
+async def listar_pagos(cotizacion_id: int, user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT p.id, p.monto, p.fecha_pago, p.metodo, p.referencia, p.created_at,
+                   u.nombre AS registrado_por
+            FROM pagos p
+            LEFT JOIN usuarios u ON u.id = p.registrado_por
+            WHERE p.cotizacion_id = %s
+            ORDER BY p.fecha_pago, p.id
+        """, (cotizacion_id,))
+        cols = [d[0] for d in cur.description]
+        pagos = [{k: _s(v) for k, v in zip(cols, r)} for r in cur.fetchall()]
+    return JSONResponse({"pagos": pagos})
 
 
 # ── POST /api/estado-cuenta/pdf ───────────────────────────────────────────────

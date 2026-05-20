@@ -16,6 +16,9 @@ import ProveedorList  from './pages/catalogos/ProveedorList';
 import CompraList    from './pages/compras/CompraList';
 import CompraNueva   from './pages/compras/CompraNueva';
 import CompraDetalle from './pages/compras/CompraDetalle';
+import DevolucionesList   from './pages/devoluciones/DevolucionesList';
+import DevolucionNueva    from './pages/devoluciones/DevolucionNueva';
+import DevolucionDetalle  from './pages/devoluciones/DevolucionDetalle';
 import StockList   from './pages/stock/StockList';
 import FacturaList    from './pages/facturas/FacturaList';
 import FacturaImportar from './pages/facturas/FacturaImportar';
@@ -47,6 +50,7 @@ import Contactos    from './pages/crm/Contactos';
 import Secuencias   from './pages/crm/Secuencias';
 import Segmentos    from './pages/crm/Segmentos';
 import RfmView      from './pages/crm/RfmView';
+import Pipeline     from './pages/crm/Pipeline';
 
 // Admin
 import AdminUsuarios   from './pages/admin/AdminUsuarios';
@@ -105,6 +109,9 @@ export default function App() {
                     <Route path="/preinventario"     element={<PreInvList />} />
                     <Route path="/preinventario/nueva" element={<PreInvNueva />} />
                     <Route path="/preinventario/:id" element={<PreInvDetalle />} />
+                    <Route path="/devoluciones"      element={<DevolucionesList />} />
+                    <Route path="/devoluciones/nueva" element={<DevolucionNueva />} />
+                    <Route path="/devoluciones/:id"  element={<DevolucionDetalle />} />
 
                     {/* Cobranza */}
                     <Route path="/facturas"          element={<FacturaList />} />
@@ -137,6 +144,7 @@ export default function App() {
                     <Route path="/crm/secuencias"   element={<Secuencias />} />
                     <Route path="/crm/segmentos"    element={<Segmentos />} />
                     <Route path="/crm/rfm"          element={<RfmView />} />
+                    <Route path="/crm/pipeline"     element={<Pipeline />} />
 
                     {/* Ajustes */}
                     <Route path="/ajustes" element={<Ajustes />} />

@@ -176,6 +176,11 @@ export default function ProductoList() {
             selectedId={sel}
             onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
             footer={<span>{productos.length} productos</span>}
+            getContextMenuItems={(producto) => [
+              { type: 'item', label: 'Editar', onClick: () => openEdit(producto) },
+              { type: 'item', label: 'Ver en stock',
+                onClick: () => navigate(`/stock?q=${encodeURIComponent(producto.codigo ?? producto.nombre)}`) },
+            ]}
           />
         </div>
 

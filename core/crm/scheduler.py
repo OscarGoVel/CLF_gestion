@@ -40,6 +40,14 @@ def iniciar(pool_fn, empresas_fn) -> AsyncIOScheduler:
         args=[pool_fn, empresas_fn],
     )
 
+    _scheduler.add_job(
+        _recalcular_rfm,
+        'cron',
+        hour=3, minute=0,
+        id='crm_rfm_diario',
+        args=[pool_fn, empresas_fn],
+    )
+
     _scheduler.start()
     _log.info("CRM scheduler iniciado")
     return _scheduler
@@ -171,3 +179,74 @@ async def _avanzar_secuencias(pool_fn, empresas_fn):
 
         except Exception as exc:
             _log.error("Error avanzando secuencias de %s: %s", db, exc)
+
+
+async def _recalcular_rfm(pool_fn, empresas_fn):
+    """
+    Recalcula el snapshot RFM diariamente.
+    Detecta clientes que pasan a 'At Risk' e inscribe automáticamente
+    en la primera secuencia activa de tipo 'reactivacion'.
+    """
+    from core.crm.segmentacion import calcular_rfm, guardar_rfm_snapshot
+
+    for emp in empresas_fn():
+        db = emp.get('pg_database') or emp.get('empresa_db') or emp.get('db')
+        if not db:
+            continue
+        try:
+            with pool_fn(db).conexion() as (_, cur):
+                # Leer snapshot anterior
+                cur.execute("""
+                    SELECT cliente_id, segmento_rfm
+                    FROM crm_rfm_snapshot
+                """)
+                anterior = {r[0]: r[1] for r in cur.fetchall()}
+
+                # Calcular nuevo RFM
+                nuevos = calcular_rfm(cur)
+                guardar_rfm_snapshot(cur, nuevos)
+
+                # Detectar transiciones → At Risk
+                at_risk_nuevos = [
+                    r['cliente_id'] for r in nuevos
+                    if r['segmento_rfm'] == 'At Risk'
+                    and anterior.get(r['cliente_id']) not in ('At Risk', 'Lost')
+                ]
+
+                if not at_risk_nuevos:
+                    _log.info("RFM recalculado para %s — sin nuevos At Risk", db)
+                    continue
+
+                # Buscar secuencia de reactivación activa
+                cur.execute("""
+                    SELECT id FROM crm_secuencias
+                    WHERE tipo = 'reactivacion' AND activa = TRUE
+                    ORDER BY id LIMIT 1
+                """)
+                sec_row = cur.fetchone()
+                if not sec_row:
+                    _log.info("RFM: %d nuevos At Risk en %s, sin secuencia reactivacion", len(at_risk_nuevos), db)
+                    continue
+
+                sec_id = sec_row[0]
+                inscritos = 0
+                for cid in at_risk_nuevos:
+                    # No re-inscribir si ya está activo en esta secuencia
+                    cur.execute("""
+                        SELECT id FROM crm_secuencia_inscripciones
+                        WHERE secuencia_id = %s AND cliente_id = %s
+                          AND estado = 'activa'
+                    """, (sec_id, cid))
+                    if cur.fetchone():
+                        continue
+                    cur.execute("""
+                        INSERT INTO crm_secuencia_inscripciones
+                            (secuencia_id, cliente_id, origen)
+                        VALUES (%s, %s, 'rfm_at_risk')
+                    """, (sec_id, cid))
+                    inscritos += 1
+
+                _log.info("RFM %s: %d nuevos At Risk, %d inscritos en secuencia %d", db, len(at_risk_nuevos), inscritos, sec_id)
+
+        except Exception as exc:
+            _log.error("Error recalculando RFM de %s: %s", db, exc)

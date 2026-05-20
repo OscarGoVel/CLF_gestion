@@ -20,7 +20,7 @@ export const NAV_BY_ROLE = {
   admin: [
     { id: 'inicio',    label: 'Inicio',        path: '/dashboard',   paths: ['/dashboard'] },
     { id: 'comercial', label: 'Comercial',      path: '/cotizaciones', paths: ['/cotizaciones'] },
-    { id: 'operacion', label: 'Operación',      path: '/compras',      paths: ['/compras', '/stock', '/preinventario'] },
+    { id: 'operacion', label: 'Operación',      path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones'] },
     { id: 'cobranza',  label: 'Cobranza',       path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos',      path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',       path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
@@ -30,7 +30,7 @@ export const NAV_BY_ROLE = {
   operador: [
     { id: 'inicio',    label: 'Inicio',    path: '/dashboard',   paths: ['/dashboard'] },
     { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones'] },
-    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario'] },
+    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones'] },
     { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos', path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',  path: '/analisis',     paths: ['/analisis'] },
@@ -58,6 +58,7 @@ const SUBNAV_BY_ROLE = {
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
+      { label: 'Devoluciones',   path: '/devoluciones' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },
@@ -75,6 +76,7 @@ const SUBNAV_BY_ROLE = {
     ],
     crm: [
       { label: 'Dashboard',  path: '/crm' },
+      { label: 'Pipeline',   path: '/crm/pipeline' },
       { label: 'Campañas',   path: '/crm/campanas' },
       { label: 'Plantillas', path: '/crm/plantillas' },
       { label: 'Contactos',  path: '/crm/contactos' },
@@ -98,6 +100,7 @@ const SUBNAV_BY_ROLE = {
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
+      { label: 'Devoluciones',   path: '/devoluciones' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },
@@ -109,6 +112,7 @@ const SUBNAV_BY_ROLE = {
     ],
     crm: [
       { label: 'Dashboard',  path: '/crm' },
+      { label: 'Pipeline',   path: '/crm/pipeline' },
       { label: 'Campañas',   path: '/crm/campanas' },
       { label: 'Plantillas', path: '/crm/plantillas' },
       { label: 'Contactos',  path: '/crm/contactos' },

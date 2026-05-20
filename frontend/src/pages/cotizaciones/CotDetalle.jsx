@@ -29,6 +29,7 @@ export default function CotDetalle() {
     await api.download(`/api/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
   };
   const { data, loading, error, refetch } = useFetch(`/api/cotizaciones/${id}`);
+  const { data: trasladoData, refetch: refetchTraslado } = useFetch(`/api/cotizaciones/${id}/traslado`);
 
   const [resultado,      setResultado]      = useState(null);
   const [motivoPerdida,  setMotivoPerdida]  = useState('');
@@ -48,6 +49,14 @@ export default function CotDetalle() {
   const [modalSinCfdi,   setModalSinCfdi]   = useState(false);
   const [nroFactura,     setNroFactura]     = useState('');
   const [fechaFactura,   setFechaFactura]   = useState('');
+  const [modalTraslado,  setModalTraslado]  = useState(false);
+  const [tOrigen,        setTOrigen]        = useState('');
+  const [tDestino,       setTDestino]       = useState('');
+  const [tTransportista, setTTransportista] = useState('');
+  const [tPlacas,        setTPlacas]        = useState('');
+  const [tFecha,         setTFecha]         = useState('');
+  const [tNotas,         setTNotas]         = useState('');
+  const [guardandoTras,  setGuardandoTras]  = useState(false);
 
   const LABELS_ESTADO = {
     Programada: 'OC registrada — cotización programada',
@@ -78,7 +87,8 @@ export default function CotDetalle() {
   const facturas = data.facturas_vinculadas ?? [];
   const compras  = data.compras_vinculadas ?? [];
 
-  const estudios = data.estudios ?? [];
+  const estudios  = data.estudios ?? [];
+  const traslado  = trasladoData?.traslado ?? null;
 
   const resActual = resultado ?? cot.resultado;
   const motivoActual = motivoPerdida || cot.motivo_perdida || '';
@@ -119,7 +129,7 @@ export default function CotDetalle() {
     onNotaRemision:      handleNotaRemision,
     onRegistrarOC:       () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
     onEntregar:          () => { setFechaEntrega(today); setConfirmEntregar(true); },
-    onPago:              () => { setPagoMonto(''); setPagoFecha(today); setModalPago(true); },
+    onPago:              () => { setPagoMonto(cot.total != null ? String(cot.total) : ''); setPagoFecha(today); setModalPago(true); },
   });
 
   return (
@@ -414,6 +424,48 @@ export default function CotDetalle() {
             </>
           )}
 
+          {/* Traslado / carta porte */}
+          <div className="eyebrow">Traslado</div>
+          <div className="card" style={{ marginBottom: 14 }}>
+            {traslado ? (
+              <div style={{ padding: '10px 14px', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  ['Origen',       traslado.origen],
+                  ['Destino',      traslado.destino],
+                  ['Transportista',traslado.transportista],
+                  ['Placas',       traslado.placas],
+                  ['Fecha',        traslado.fecha_traslado],
+                ].map(([k, v]) => v ? (
+                  <div key={k}>
+                    <span style={{ color: 'var(--ink-400)', marginRight: 4 }}>{k}:</span>
+                    <span style={{ color: 'var(--ink-700)' }}>{v}</span>
+                  </div>
+                ) : null)}
+                {traslado.notas && (
+                  <div style={{ color: 'var(--ink-600)', fontSize: 11, marginTop: 2 }}>{traslado.notas}</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)' }}>
+                Sin datos de traslado
+              </div>
+            )}
+            <div style={{ padding: '8px 14px', borderTop: '1px solid var(--ink-100)' }}>
+              <button className="btn" style={{ width: '100%', fontSize: 11 }}
+                onClick={() => {
+                  setTOrigen(traslado?.origen ?? '');
+                  setTDestino(traslado?.destino ?? '');
+                  setTTransportista(traslado?.transportista ?? '');
+                  setTPlacas(traslado?.placas ?? '');
+                  setTFecha(traslado?.fecha_traslado ?? today);
+                  setTNotas(traslado?.notas ?? '');
+                  setModalTraslado(true);
+                }}>
+                {traslado ? 'Editar traslado' : '+ Registrar traslado'}
+              </button>
+            </div>
+          </div>
+
           {/* Resultado de la cotización */}
           <div className="eyebrow">Resultado</div>
           <div className="card" style={{ marginBottom: 14, padding: '10px 14px' }}>
@@ -592,6 +644,64 @@ export default function CotDetalle() {
               setModalPago(false);
             }}>
             {guardandoEst ? 'Guardando…' : 'Confirmar pago'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    {/* Modal: Traslado */}
+    <Modal open={modalTraslado} onClose={() => setModalTraslado(false)} title="Datos de traslado" width={440}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div className="note" style={{ marginBottom: 4 }}>ORIGEN</div>
+            <input className="input" value={tOrigen} onChange={(e) => setTOrigen(e.target.value)} placeholder="Ciudad origen" />
+          </div>
+          <div>
+            <div className="note" style={{ marginBottom: 4 }}>DESTINO</div>
+            <input className="input" value={tDestino} onChange={(e) => setTDestino(e.target.value)} placeholder="Ciudad destino" />
+          </div>
+          <div>
+            <div className="note" style={{ marginBottom: 4 }}>TRANSPORTISTA</div>
+            <input className="input" value={tTransportista} onChange={(e) => setTTransportista(e.target.value)} placeholder="Nombre transportista" />
+          </div>
+          <div>
+            <div className="note" style={{ marginBottom: 4 }}>PLACAS</div>
+            <input className="input" value={tPlacas} onChange={(e) => setTPlacas(e.target.value)} placeholder="ABC-123" />
+          </div>
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>FECHA DE TRASLADO</div>
+          <input className="input" type="date" value={tFecha} onChange={(e) => setTFecha(e.target.value)} />
+        </div>
+        <div>
+          <div className="note" style={{ marginBottom: 4 }}>NOTAS</div>
+          <textarea className="input" rows={2} value={tNotas} onChange={(e) => setTNotas(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button className="btn" onClick={() => setModalTraslado(false)}>Cancelar</button>
+          <button className="btn btn-primary" disabled={guardandoTras}
+            onClick={async () => {
+              setGuardandoTras(true);
+              try {
+                await api.post(`/api/cotizaciones/${id}/traslado`, {
+                  origen: tOrigen || null,
+                  destino: tDestino || null,
+                  transportista: tTransportista || null,
+                  placas: tPlacas || null,
+                  fecha_traslado: tFecha || null,
+                  notas: tNotas || null,
+                });
+                toast.success('Traslado registrado');
+                setModalTraslado(false);
+                refetchTraslado();
+              } catch (e) {
+                toast.error(e.message);
+              } finally {
+                setGuardandoTras(false);
+              }
+            }}>
+            {guardandoTras ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
       </div>

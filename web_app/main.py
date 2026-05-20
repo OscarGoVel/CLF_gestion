@@ -54,6 +54,7 @@ from web_app.routers import api_preinventario as api_preinventario_router
 from web_app.routers import api_costos_fijos as api_costos_fijos_router
 from web_app.routers import api_estudio_mercado as api_estudio_mercado_router
 from web_app.routers import api_crm as api_crm_router
+from web_app.routers import api_devoluciones as api_devoluciones_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -154,6 +155,103 @@ async def lifespan(app: FastAPI):
         # Fase 5: alerta de precio de venta desactualizado por aumento de costo de compra
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_desactualizado BOOLEAN DEFAULT FALSE",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta_fecha TIMESTAMPTZ",
+        # Fase 10: tabla de pagos (historial de cobros por cotización)
+        """
+        CREATE TABLE IF NOT EXISTS pagos (
+            id              SERIAL PRIMARY KEY,
+            cotizacion_id   INTEGER NOT NULL REFERENCES cotizaciones(id),
+            monto           NUMERIC(14,2) NOT NULL,
+            fecha_pago      DATE NOT NULL,
+            metodo          TEXT,
+            referencia      TEXT,
+            registrado_por  INTEGER REFERENCES usuarios(id),
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_pagos_cotizacion ON pagos(cotizacion_id)",
+        # Fase 10: cancelación de facturas CFDI
+        "ALTER TABLE facturas ADD COLUMN IF NOT EXISTS cancelada BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE facturas ADD COLUMN IF NOT EXISTS motivo_cancelacion TEXT",
+        # Fase 11: recepción física de compras
+        "ALTER TABLE compras ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'Creada'",
+        "ALTER TABLE compra_detalle ADD COLUMN IF NOT EXISTS cantidad_recibida NUMERIC(14,4) DEFAULT 0",
+        # Fase 11: devoluciones de cliente
+        """
+        CREATE TABLE IF NOT EXISTS devoluciones (
+            id              SERIAL PRIMARY KEY,
+            folio           TEXT NOT NULL,
+            cotizacion_id   INTEGER REFERENCES cotizaciones(id),
+            cliente_id      INTEGER REFERENCES clientes(id),
+            fecha           DATE NOT NULL,
+            motivo          TEXT,
+            estado          TEXT DEFAULT 'Abierta',
+            total           NUMERIC(14,2) DEFAULT 0,
+            notas           TEXT,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS devolucion_detalle (
+            id              SERIAL PRIMARY KEY,
+            devolucion_id   INTEGER NOT NULL REFERENCES devoluciones(id) ON DELETE CASCADE,
+            producto_id     INTEGER NOT NULL REFERENCES productos(id),
+            cantidad        NUMERIC(14,4) NOT NULL,
+            precio_unitario NUMERIC(14,4) NOT NULL,
+            total           NUMERIC(14,2) NOT NULL,
+            retorna_stock   BOOLEAN DEFAULT TRUE
+        )
+        """,
+        # Fase 11: lotes y vencimientos
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS maneja_lotes BOOLEAN DEFAULT FALSE",
+        """
+        CREATE TABLE IF NOT EXISTS lotes (
+            id                SERIAL PRIMARY KEY,
+            producto_id       INTEGER NOT NULL REFERENCES productos(id),
+            numero_lote       TEXT NOT NULL,
+            fecha_vencimiento DATE,
+            cantidad          NUMERIC(14,4) NOT NULL DEFAULT 0,
+            fecha_entrada     DATE,
+            notas             TEXT,
+            created_at        TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        # Fase 11: carta porte / traslados
+        """
+        CREATE TABLE IF NOT EXISTS traslados (
+            id              SERIAL PRIMARY KEY,
+            cotizacion_id   INTEGER NOT NULL REFERENCES cotizaciones(id),
+            origen          TEXT,
+            destino         TEXT,
+            transportista   TEXT,
+            placas          TEXT,
+            fecha_traslado  DATE,
+            notas           TEXT,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        # Fase 12-B: campo origen en inscripciones de secuencia (para rastrear trigger automático)
+        "ALTER TABLE crm_secuencia_inscripciones ADD COLUMN IF NOT EXISTS origen TEXT",
+        # Fase 13-CRM: pipeline comercial (prospectos / kanban)
+        """
+        CREATE TABLE IF NOT EXISTS prospectos (
+            id                     SERIAL PRIMARY KEY,
+            nombre                 TEXT NOT NULL,
+            cliente_id             INTEGER REFERENCES clientes(id),
+            contacto_nombre        TEXT,
+            contacto_email         TEXT,
+            contacto_tel           TEXT,
+            etapa                  TEXT NOT NULL DEFAULT 'nuevo',
+            valor_estimado         NUMERIC(14,2),
+            probabilidad           INTEGER DEFAULT 0,
+            responsable_id         INTEGER REFERENCES usuarios(id),
+            notas                  TEXT,
+            fecha_estimada_cierre  DATE,
+            motivo_perdida         TEXT,
+            created_at             TIMESTAMPTZ DEFAULT NOW(),
+            updated_at             TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_prospectos_etapa ON prospectos(etapa)",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -299,6 +397,7 @@ app.include_router(api_preinventario_router.router)
 app.include_router(api_costos_fijos_router.router)
 app.include_router(api_estudio_mercado_router.router)
 app.include_router(api_crm_router.router)
+app.include_router(api_devoluciones_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────

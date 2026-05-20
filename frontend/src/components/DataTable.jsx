@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { LoadingRow, EmptyRow } from './TableStates';
+import { ContextMenu } from './ContextMenu';
 
 export function DataTable({
   columns,
@@ -10,9 +11,27 @@ export function DataTable({
   keyField = 'id',
   footer,
   emptyLabel,
+  getContextMenuItems,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const longPressTimer = useRef(null);
+
+  function openCtxMenu(x, y, row) {
+    setCtxMenu({ x, y, row });
+  }
+
+  function startLongPress(e, row) {
+    const touch = e.touches[0];
+    longPressTimer.current = setTimeout(() => {
+      openCtxMenu(touch.clientX, touch.clientY, row);
+    }, 500);
+  }
+
+  function cancelLongPress() {
+    clearTimeout(longPressTimer.current);
+  }
 
   function handleSort(col) {
     if (!col.sortKey) return;
@@ -62,29 +81,50 @@ export function DataTable({
                 )}
               </th>
             ))}
+            {getContextMenuItems && <th className="ctx-col" />}
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <LoadingRow colSpan={columns.length} />
+            <LoadingRow colSpan={columns.length + (getContextMenuItems ? 1 : 0)} />
           ) : !sorted.length ? (
-            <EmptyRow colSpan={columns.length} label={emptyLabel} />
+            <EmptyRow colSpan={columns.length + (getContextMenuItems ? 1 : 0)} label={emptyLabel} />
           ) : sorted.map((row) => (
             <tr
               key={row[keyField]}
               className={selectedId === row[keyField] ? 'sel' : ''}
               style={{ cursor: onRowClick ? 'pointer' : 'default' }}
               onClick={() => onRowClick?.(row)}
+              onContextMenu={getContextMenuItems ? (e) => { e.preventDefault(); openCtxMenu(e.clientX, e.clientY, row); } : undefined}
+              onTouchStart={getContextMenuItems ? (e) => startLongPress(e, row) : undefined}
+              onTouchMove={getContextMenuItems ? cancelLongPress : undefined}
+              onTouchEnd={getContextMenuItems ? cancelLongPress : undefined}
             >
               {columns.map((col, i) => (
                 <td key={i} className={col.className} style={col.style}>
                   {col.render ? col.render(row) : (row[col.key] ?? '—')}
                 </td>
               ))}
+              {getContextMenuItems && (
+                <td
+                  className="ctx-col"
+                  onClick={(e) => { e.stopPropagation(); openCtxMenu(e.clientX, e.clientY, row); }}
+                >
+                  <button className="ctx-kebab" aria-label="Acciones">⋮</button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={getContextMenuItems(ctxMenu.row)}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
       {footer && (
         <div style={{
           padding: '10px 16px',

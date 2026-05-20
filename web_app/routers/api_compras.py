@@ -174,7 +174,7 @@ async def detalle(compra_id: int, user: dict = Depends(get_usuario_api)):
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute("""
             SELECT c.id, c.folio, c.fecha_compra, c.total, c.ticket_referencia,
-                   c.notas,
+                   c.notas, COALESCE(c.estado, 'Creada') AS estado,
                    COALESCE(p.nombre, '—') AS proveedor,
                    p.rfc AS proveedor_rfc,
                    f.serie, f.folio_factura, f.uuid, f.fecha AS fecha_factura
@@ -193,7 +193,8 @@ async def detalle(compra_id: int, user: dict = Depends(get_usuario_api)):
         cur.execute("""
             SELECT cd.id, p.codigo, p.nombre, p.unidad_medida,
                    cd.cantidad, cd.costo_unitario,
-                   cd.cantidad * cd.costo_unitario AS importe
+                   cd.cantidad * cd.costo_unitario AS importe,
+                   COALESCE(cd.cantidad_recibida, 0) AS cantidad_recibida
             FROM compra_detalle cd
             LEFT JOIN productos p ON p.id = cd.producto_id
             WHERE cd.compra_id = %s
@@ -364,3 +365,91 @@ async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
             ))
 
     return JSONResponse({"id": compra_id, "folio": folio}, status_code=201)
+
+
+# ── PATCH /api/compras/{id}/recibir ──────────────────────────────────────────
+
+class RecepcionLineaIn(BaseModel):
+    linea_id: int
+    cantidad_recibida: float
+
+
+class RecepcionIn(BaseModel):
+    lineas: List[RecepcionLineaIn]
+
+
+@router.patch("/{compra_id}/recibir")
+async def recibir(compra_id: int, body: RecepcionIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador", "Almacenista"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT folio, COALESCE(estado,'Creada') FROM compras WHERE id = %s", (compra_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Compra no encontrada")
+        folio_compra, estado_actual = row
+        if estado_actual == 'Recibida Completa':
+            raise HTTPException(status_code=422, detail="La compra ya fue completamente recibida")
+
+        for linea in body.lineas:
+            if linea.cantidad_recibida <= 0:
+                continue
+            cur.execute("""
+                SELECT cd.producto_id, cd.cantidad, cd.costo_unitario,
+                       COALESCE(cd.cantidad_recibida, 0)
+                FROM compra_detalle cd
+                WHERE cd.id = %s AND cd.compra_id = %s
+            """, (linea.linea_id, compra_id))
+            det = cur.fetchone()
+            if not det:
+                continue
+            prod_id, cant_ordenada, costo_unit, ya_recibido = det
+            max_recibir = float(cant_ordenada) - float(ya_recibido)
+            a_recibir = min(float(linea.cantidad_recibida), max_recibir)
+            if a_recibir <= 0:
+                continue
+
+            cur.execute("""
+                UPDATE compra_detalle
+                   SET cantidad_recibida = COALESCE(cantidad_recibida, 0) + %s
+                 WHERE id = %s
+            """, (a_recibir, linea.linea_id))
+
+            cur.execute("SELECT COALESCE(stock_actual, 0) FROM productos WHERE id = %s", (prod_id,))
+            stock_antes = float(cur.fetchone()[0])
+            costo = float(costo_unit)
+
+            cur.execute("""
+                UPDATE productos
+                   SET stock_actual   = COALESCE(stock_actual, 0) + %s,
+                       costo_promedio = CASE
+                           WHEN COALESCE(stock_actual, 0) + %s > 0
+                           THEN (COALESCE(stock_actual, 0) * COALESCE(costo_promedio, 0) + %s * %s)
+                                / (COALESCE(stock_actual, 0) + %s)
+                           ELSE %s
+                       END
+                 WHERE id = %s
+                RETURNING stock_actual
+            """, (a_recibir, a_recibir, a_recibir, costo, a_recibir, costo, prod_id))
+            stock_despues = float(cur.fetchone()[0])
+
+            cur.execute("""
+                INSERT INTO movimientos_stock
+                    (producto_id, tipo, motivo, cantidad,
+                     stock_antes, stock_despues, referencia, usuario)
+                VALUES (%s, 'entrada', 'recepcion_compra', %s, %s, %s, %s, %s)
+            """, (prod_id, a_recibir, stock_antes, stock_despues,
+                  folio_compra, user.get("username", "")))
+
+        # Determinar nuevo estado de la compra
+        cur.execute("""
+            SELECT COUNT(*) FILTER (WHERE COALESCE(cantidad_recibida,0) < cantidad) AS pendientes
+            FROM compra_detalle WHERE compra_id = %s
+        """, (compra_id,))
+        pendientes = cur.fetchone()[0]
+        nuevo_estado = 'Recibida Completa' if pendientes == 0 else 'Recibida Parcial'
+        cur.execute("UPDATE compras SET estado = %s WHERE id = %s", (nuevo_estado, compra_id))
+
+    return JSONResponse({"ok": True, "estado": nuevo_estado})

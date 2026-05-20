@@ -161,6 +161,11 @@ export default function ProveedorList() {
               selectedId={sel}
               onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
               footer={<span>{proveedores.length} proveedores</span>}
+              getContextMenuItems={(prov) => [
+                { type: 'item', label: 'Editar', onClick: () => openEdit(prov) },
+                { type: 'item', label: 'Ver compras',
+                  onClick: () => navigate(`/compras?q=${encodeURIComponent(prov.nombre)}`) },
+              ]}
             />
           </div>
 

@@ -1,4 +1,5 @@
 import { useFetch } from '../hooks/useFetch';
+import { api } from '../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 const PCT = (n) => `${n ?? 0}%`;
@@ -33,9 +34,16 @@ function BarRow({ label, value, max, color, sub }) {
 
 export default function Analisis() {
   const { data, loading, error } = useFetch('/api/analisis');
+  const { data: pnlData }         = useFetch('/api/analisis/pnl-mensual');
+  const { data: fcData }          = useFetch('/api/analisis/forecast');
 
   const kpis           = data?.kpis           ?? {};
   const meses          = data?.meses          ?? [];
+  const pnlMeses       = pnlData?.meses       ?? [];
+  const pnlTotales     = pnlData?.totales     ?? {};
+  const fcHistorial    = fcData?.historial    ?? [];
+  const fcProyeccion   = fcData?.proyeccion   ?? [];
+  const fcTendencia    = fcData?.tendencia    ?? null;
   const porEstado      = data?.por_estado     ?? [];
   const topClientes    = data?.top_clientes   ?? [];
   const topProductos   = data?.top_productos  ?? [];
@@ -378,6 +386,141 @@ export default function Analisis() {
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* Aging export */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button className="btn btn-sm" onClick={() => api.download('/api/analisis/aging-export', `aging_${new Date().toISOString().slice(0,10)}.csv`)}>
+          Exportar cartera CSV
+        </button>
+      </div>
+
+      {/* P&L mensual + Forecast */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20, marginBottom: 20 }}>
+
+        {/* P&L */}
+        <div className="card" style={{ padding: 0 }}>
+          <div className="card-h">
+            <h3>P&amp;L mensual</h3>
+            <span className="meta">Ingresos · COGS · Costos fijos · Margen neto</span>
+          </div>
+          {pnlMeses.length === 0 ? (
+            <div style={{ padding: 24, color: 'var(--ink-400)', fontSize: 12 }}>Sin datos</div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>Mes</th>
+                  <th className="num">Ingresos</th>
+                  <th className="num">COGS</th>
+                  <th className="num">Margen B.</th>
+                  <th className="num" style={{ width: 60 }}>%</th>
+                  <th className="num">Costos F.</th>
+                  <th className="num">Neto</th>
+                  <th className="num" style={{ width: 60 }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pnlMeses.map((m, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 11, color: 'var(--ink-500)' }}>{m.label}</td>
+                    <td className="num" style={{ fontSize: 12 }}>{MXN.format(m.revenue)}</td>
+                    <td className="num" style={{ fontSize: 12, color: 'var(--ink-500)' }}>{MXN.format(m.cogs)}</td>
+                    <td className="num" style={{ fontSize: 12, fontWeight: 500 }}>{MXN.format(m.gp)}</td>
+                    <td className="num" style={{
+                      fontSize: 11,
+                      color: m.gp_pct < 10 ? 'var(--danger)' : m.gp_pct < 25 ? 'var(--warn)' : 'var(--accent)',
+                    }}>{m.gp_pct}%</td>
+                    <td className="num" style={{ fontSize: 12, color: 'var(--ink-400)' }}>
+                      {m.costos_fijos > 0 ? MXN.format(m.costos_fijos) : '—'}
+                    </td>
+                    <td className="num" style={{
+                      fontSize: 12, fontWeight: 600,
+                      color: m.np < 0 ? 'var(--danger)' : 'var(--ink-800)',
+                    }}>{MXN.format(m.np)}</td>
+                    <td className="num" style={{
+                      fontSize: 11,
+                      color: m.np_pct < 0 ? 'var(--danger)' : m.np_pct < 10 ? 'var(--warn)' : 'var(--accent)',
+                    }}>{m.np_pct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+              {pnlMeses.length > 1 && (
+                <tfoot>
+                  <tr style={{ background: 'var(--ink-50)', fontWeight: 600 }}>
+                    <td style={{ fontSize: 11, padding: '8px 14px' }}>Total</td>
+                    <td className="num" style={{ fontSize: 12 }}>{MXN.format(pnlTotales.revenue ?? 0)}</td>
+                    <td className="num" style={{ fontSize: 12 }}>{MXN.format(pnlTotales.cogs ?? 0)}</td>
+                    <td className="num" style={{ fontSize: 12 }}>{MXN.format(pnlTotales.gp ?? 0)}</td>
+                    <td className="num" style={{ fontSize: 11 }}>
+                      {pnlTotales.revenue > 0 ? `${((pnlTotales.gp / pnlTotales.revenue) * 100).toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="num" style={{ fontSize: 12 }}>{MXN.format(pnlTotales.costos_fijos ?? 0)}</td>
+                    <td className="num" style={{
+                      fontSize: 12,
+                      color: (pnlTotales.np ?? 0) < 0 ? 'var(--danger)' : 'var(--ink-800)',
+                    }}>{MXN.format(pnlTotales.np ?? 0)}</td>
+                    <td className="num" style={{ fontSize: 11 }}>
+                      {pnlTotales.revenue > 0 ? `${((pnlTotales.np / pnlTotales.revenue) * 100).toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+        </div>
+
+        {/* Forecast */}
+        <div className="card" style={{ padding: 0 }}>
+          <div className="card-h">
+            <h3>Forecast ventas</h3>
+            {fcTendencia && (
+              <span className="meta" style={{
+                color: fcTendencia === 'creciente' ? 'var(--accent)' : fcTendencia === 'decreciente' ? 'var(--danger)' : 'var(--ink-400)',
+              }}>
+                tendencia {fcTendencia}
+              </span>
+            )}
+          </div>
+          {fcHistorial.length < 2 ? (
+            <div style={{ padding: 24, color: 'var(--ink-400)', fontSize: 12 }}>Datos insuficientes</div>
+          ) : (() => {
+            const all = [
+              ...fcHistorial.map((m) => ({ ...m, tipo: 'real' })),
+              ...fcProyeccion.map((m) => ({ ...m, tipo: 'forecast' })),
+            ];
+            const maxVal = Math.max(...all.map((m) => m.monto), 1);
+            return (
+              <div style={{ padding: '0 0 4px' }}>
+                {all.map((m, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '7px 16px',
+                    borderBottom: i < all.length - 1 ? '1px solid var(--ink-100)' : 'none',
+                    opacity: m.tipo === 'forecast' ? 0.75 : 1,
+                  }}>
+                    <div style={{ width: 52, fontSize: 11, color: 'var(--ink-500)', flexShrink: 0 }}>
+                      {m.label}
+                    </div>
+                    <div style={{ flex: 1, height: 6, background: 'var(--ink-100)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 3,
+                        width: `${Math.max(2, Math.round(m.monto / maxVal * 100))}%`,
+                        background: m.tipo === 'forecast' ? 'var(--warn)' : 'var(--accent)',
+                      }} />
+                    </div>
+                    <div style={{ width: 100, textAlign: 'right', fontFamily: 'var(--serif)', fontSize: 12.5 }}>
+                      {MXN.format(m.monto)}
+                    </div>
+                    {m.tipo === 'forecast' && (
+                      <div style={{ width: 14, fontSize: 10, color: 'var(--warn)' }}>~</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

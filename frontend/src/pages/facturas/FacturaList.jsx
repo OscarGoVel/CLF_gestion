@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { ContextMenu } from '../../components/ContextMenu';
+import { toast } from '../../lib/toast';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -23,6 +26,9 @@ export default function FacturaList() {
   const [sel, setSel]         = useState(null);
   const [vinculando, setVinculando] = useState(null);
   const [sugKey, setSugKey]   = useState(0);
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const longPressTimer = useRef(null);
 
   const params = new URLSearchParams({ pagina });
   if (q) params.set('q', q);
@@ -61,7 +67,46 @@ export default function FacturaList() {
     setSel(sel === id ? null : id);
   }
 
+  function startLongPress(e, f) {
+    const touch = e.touches[0];
+    longPressTimer.current = setTimeout(() => setCtxMenu({ x: touch.clientX, y: touch.clientY, row: f }), 500);
+  }
+
+  function getCtxItems(f) {
+    const items = [];
+    if (f.tipo === 'E') {
+      if (f.compra_id) {
+        items.push({ type: 'item', label: 'Ver compra',
+          onClick: () => navigate(`/compras/${f.compra_id}`) });
+      } else {
+        items.push({ type: 'item', label: 'Registrar compra',
+          onClick: () => navigate('/compras/nueva', { state: { prefill: {
+            factura_id: f.id, fecha: f.fecha, rfc_emisor: f.rfc_emisor, nombre_emisor: f.nombre_emisor,
+          }}}) });
+      }
+    }
+    if (f.tipo === 'I' && !f.cancelada) {
+      if (items.length) items.push({ type: 'divider' });
+      items.push({ type: 'item', label: 'Cancelar factura', danger: true,
+        onClick: () => { setSel(f.id); setConfirmCancelar(true); } });
+    }
+    return items;
+  }
+
+  async function handleCancelar() {
+    try {
+      await api.patch(`/api/facturas/${sel}/cancelar`, {});
+      toast.success('Factura marcada como cancelada');
+      setConfirmCancelar(false);
+      refetchDet();
+      refetch();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  }
+
   return (
+    <>
     <div className="page">
       <div className="crumbs">
         <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
@@ -113,16 +158,22 @@ export default function FacturaList() {
                 <th>Receptor</th>
                 <th className="num" style={{ width: 120 }}>Total</th>
                 <th style={{ width: 55 }}>Cots.</th>
+                <th className="ctx-col" />
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
               ) : facturas.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
               ) : facturas.map((f) => (
                 <tr key={f.id} className={sel === f.id ? 'sel' : ''} style={{ cursor: 'pointer' }}
-                    onClick={() => handleSelToggle(f.id)}>
+                    onClick={() => handleSelToggle(f.id)}
+                    onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row: f }); }}
+                    onTouchStart={(e) => startLongPress(e, f)}
+                    onTouchMove={() => clearTimeout(longPressTimer.current)}
+                    onTouchEnd={() => clearTimeout(longPressTimer.current)}
+                >
                   <td>
                     <span style={{
                       fontSize: 10, fontWeight: 600, padding: '2px 5px', borderRadius: 3,
@@ -130,7 +181,15 @@ export default function FacturaList() {
                       color: TIPO_COLOR[f.tipo]?.color ?? '#374151',
                     }}>{f.tipo_label}</span>
                   </td>
-                  <td style={{ fontFamily: 'var(--mono)', fontSize: 11.5 }}>{f.folio || '—'}</td>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 11.5 }}>
+                    {f.folio || '—'}
+                    {f.cancelada && (
+                      <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, padding: '1px 4px',
+                        borderRadius: 3, background: '#fee2e2', color: '#991b1b' }}>
+                        CANCELADA
+                      </span>
+                    )}
+                  </td>
                   <td style={{ fontSize: 12, color: 'var(--ink-500)' }}>{f.fecha ?? f.fecha_timbrado ?? '—'}</td>
                   <td>
                     <div style={{ fontSize: 12.5 }}>{f.nombre_emisor ?? '—'}</div>
@@ -147,6 +206,9 @@ export default function FacturaList() {
                   <td className="num" style={{ fontWeight: 500 }}>{f.total != null ? MXN.format(f.total) : '—'}</td>
                   <td style={{ textAlign: 'center', color: f.num_cotizaciones > 0 ? 'var(--accent)' : 'var(--ink-300)' }}>
                     {f.num_cotizaciones}
+                  </td>
+                  <td className="ctx-col" onClick={(e) => { e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row: f }); }}>
+                    <button className="ctx-kebab" aria-label="Acciones">⋮</button>
                   </td>
                 </tr>
               ))}
@@ -298,6 +360,11 @@ export default function FacturaList() {
 
                 <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
+                  {factura.tipo === 'I' && !factura.cancelada && (
+                    <button className="btn btn-sm btn-danger" onClick={() => setConfirmCancelar(true)}>
+                      Cancelar factura
+                    </button>
+                  )}
                   {factura.tipo === 'E' && (
                     factura.compra_id ? (
                       <button
@@ -337,5 +404,24 @@ export default function FacturaList() {
         )}
       </div>
     </div>
+
+    <ConfirmModal
+      open={confirmCancelar}
+      onClose={() => setConfirmCancelar(false)}
+      onConfirm={handleCancelar}
+      title="¿Cancelar esta factura?"
+      description="Se marcará como cancelada. Esta acción no se puede deshacer."
+      confirmLabel="Cancelar factura"
+      danger
+    />
+    {ctxMenu && (
+      <ContextMenu
+        x={ctxMenu.x}
+        y={ctxMenu.y}
+        items={getCtxItems(ctxMenu.row)}
+        onClose={() => setCtxMenu(null)}
+      />
+    )}
+    </>
   );
 }

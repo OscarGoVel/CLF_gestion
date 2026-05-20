@@ -182,6 +182,12 @@ export default function ClienteList() {
               selectedId={sel}
               onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
               footer={<span>{clientes.length} clientes</span>}
+              getContextMenuItems={(cliente) => [
+                { type: 'item', label: 'Ver cotizaciones',
+                  onClick: () => navigate(`/cotizaciones?cliente=${cliente.id}`) },
+                { type: 'item', label: 'Editar',
+                  onClick: () => openEdit(cliente) },
+              ]}
             />
           </div>
 

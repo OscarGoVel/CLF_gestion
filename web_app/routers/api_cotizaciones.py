@@ -259,8 +259,26 @@ async def cambiar_estado(cot_id: int, body: EstadoIn, user: dict = Depends(get_u
                 WHERE cd.cotizacion_id = %s AND cd.producto_id IS NOT NULL
                 GROUP BY cd.producto_id, cd.cantidad
             """, (cot_id,))
+            lineas = cur.fetchall()
 
-            for prod_id, cant_total, ya_entregado in cur.fetchall():
+            faltantes = []
+            for prod_id, cant_total, ya_entregado in lineas:
+                pendiente = float(cant_total) - float(ya_entregado)
+                if pendiente <= 0:
+                    continue
+                cur.execute(
+                    "SELECT COALESCE(stock_actual,0), nombre FROM productos WHERE id=%s", (prod_id,)
+                )
+                stock_row = cur.fetchone()
+                if stock_row and float(stock_row[0]) < pendiente:
+                    faltantes.append(stock_row[1] or f"producto #{prod_id}")
+            if faltantes:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Stock insuficiente para: {', '.join(faltantes)}",
+                )
+
+            for prod_id, cant_total, ya_entregado in lineas:
                 pendiente = float(cant_total) - float(ya_entregado)
                 if pendiente <= 0:
                     continue
@@ -913,6 +931,50 @@ async def descargar_nota_remision(cot_id: int, user: dict = Depends(get_usuario_
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="NotaRemision_{folio}.pdf"'},
     )
+
+
+# ── POST /api/cotizaciones/{cot_id}/traslado ─────────────────────────────────
+
+class TrasladoIn(BaseModel):
+    origen: Optional[str] = None
+    destino: Optional[str] = None
+    transportista: Optional[str] = None
+    placas: Optional[str] = None
+    fecha_traslado: Optional[str] = None
+    notas: Optional[str] = None
+
+
+@router.post("/{cot_id}/traslado", status_code=201)
+async def crear_traslado(cot_id: int, body: TrasladoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT id FROM cotizaciones WHERE id = %s", (cot_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+        cur.execute("""
+            INSERT INTO traslados (cotizacion_id, origen, destino, transportista, placas, fecha_traslado, notas)
+            VALUES (%s, %s, %s, %s, %s, %s::date, %s)
+        """, (cot_id, body.origen, body.destino, body.transportista,
+              body.placas, body.fecha_traslado or None, body.notas))
+        traslado_id = cur.lastrowid
+    return JSONResponse({"id": traslado_id}, status_code=201)
+
+
+@router.get("/{cot_id}/traslado")
+async def get_traslado(cot_id: int, user: dict = Depends(get_usuario_api)):
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, origen, destino, transportista, placas, fecha_traslado, notas, created_at
+            FROM traslados WHERE cotizacion_id = %s ORDER BY id DESC LIMIT 1
+        """, (cot_id,))
+        row = cur.fetchone()
+        if not row:
+            return JSONResponse({"traslado": None})
+        cols = ["id", "origen", "destino", "transportista", "placas", "fecha_traslado", "notas", "created_at"]
+        return JSONResponse({"traslado": {k: _serial(v) for k, v in zip(cols, row)}})
 
 
 @router.get("/{cot_id}/estudios")

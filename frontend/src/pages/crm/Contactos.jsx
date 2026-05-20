@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
+import { ContextMenu } from '../../components/ContextMenu';
 
 export default function Contactos() {
   const navigate = useNavigate();
@@ -10,6 +11,8 @@ export default function Contactos() {
   const contactos = data?.contactos ?? [];
   const [showModal, setShowModal] = useState(false);
   const [q, setQ] = useState('');
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const longPressTimer = useRef(null);
 
   const filtrados = q
     ? contactos.filter(c =>
@@ -18,6 +21,14 @@ export default function Contactos() {
         c.nombre_comercial.toLowerCase().includes(q.toLowerCase())
       )
     : contactos;
+
+  function getCtxItems(c) {
+    return [
+      { type: 'item', label: c.opt_out ? 'Reactivar' : 'Registrar opt-out',
+        danger: !c.opt_out,
+        onClick: () => handleOptOut(c.id, c.opt_out) },
+    ];
+  }
 
   async function handleOptOut(id, actual) {
     try {
@@ -61,23 +72,29 @@ export default function Contactos() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--ink-100)' }}>
-              {['Nombre','Cargo','Email','Empresa','Principal','Opt-out','Acciones'].map(h => (
+              {['Nombre','Cargo','Email','Empresa','Principal','Opt-out','Acciones',''].map(h => (
                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12,
-                                    fontWeight: 600, color: 'var(--ink-400)' }}>{h}</th>
+                                    fontWeight: 600, color: 'var(--ink-400)' }}
+                    className={h === '' ? 'ctx-col' : ''}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
             )}
             {!loading && filtrados.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>
                 {q ? 'Sin resultados' : 'Sin contactos — agrega el primero'}
               </td></tr>
             )}
             {filtrados.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}
+                  onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row: c }); }}
+                  onTouchStart={(e) => { const t = e.touches[0]; longPressTimer.current = setTimeout(() => setCtxMenu({ x: t.clientX, y: t.clientY, row: c }), 500); }}
+                  onTouchMove={() => clearTimeout(longPressTimer.current)}
+                  onTouchEnd={() => clearTimeout(longPressTimer.current)}
+              >
                 <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>{c.nombre}</td>
                 <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-400)' }}>{c.cargo ?? '—'}</td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{c.email}</td>
@@ -99,6 +116,9 @@ export default function Contactos() {
                     {c.opt_out ? 'Reactivar' : 'Opt-out'}
                   </button>
                 </td>
+                <td className="ctx-col" onClick={(e) => { e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row: c }); }}>
+                  <button className="ctx-kebab" aria-label="Acciones">⋮</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -109,6 +129,14 @@ export default function Contactos() {
         <ContactoModal
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); refetch(); toast.success('Contacto agregado'); }}
+        />
+      )}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={getCtxItems(ctxMenu.row)}
+          onClose={() => setCtxMenu(null)}
         />
       )}
     </div>

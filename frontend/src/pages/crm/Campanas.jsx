@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
+import { ContextMenu } from '../../components/ContextMenu';
 
 const ESTADOS = ['borrador', 'revision', 'aprobada', 'enviando', 'completada'];
 
@@ -34,6 +35,26 @@ export default function Campanas() {
 
   const [showModal, setShowModal] = useState(false);
   const [enviando, setEnviando]   = useState(null);
+  const [ctxMenu, setCtxMenu]     = useState(null);
+  const longPressTimer = useRef(null);
+
+  function getCtxItems(c) {
+    const estadoSubmenu = [];
+    if (c.estado === 'borrador')   estadoSubmenu.push({ type: 'item', label: 'Aprobar', onClick: () => handleCambiarEstado(c.id, 'aprobada') });
+    if (c.estado === 'aprobada')   estadoSubmenu.push({ type: 'item', label: 'Revertir a borrador', onClick: () => handleCambiarEstado(c.id, 'borrador') });
+    if (c.estado === 'revision')   estadoSubmenu.push({ type: 'item', label: 'Aprobar', onClick: () => handleCambiarEstado(c.id, 'aprobada') });
+    if (c.estado === 'enviando')   estadoSubmenu.push({ type: 'item', label: 'Marcar completada', onClick: () => handleCambiarEstado(c.id, 'completada') });
+
+    const items = [];
+    if (c.estado === 'aprobada') {
+      items.push({ type: 'item', label: 'Enviar campaña', onClick: () => handleEnviar(c.id), disabled: enviando === c.id });
+    }
+    if (estadoSubmenu.length) {
+      if (items.length) items.push({ type: 'divider' });
+      items.push({ type: 'item', label: 'Cambiar estado', submenu: estadoSubmenu });
+    }
+    return items;
+  }
 
   async function handleEnviar(id) {
     if (!confirm('¿Generar envíos para esta campaña?')) return;
@@ -81,17 +102,18 @@ export default function Campanas() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--ink-100)' }}>
-              {['Campaña','Segmento','Plantilla','Estado','Programada','Envíos','Apertura','Acciones'].map(h => (
-                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--ink-400)' }}>{h}</th>
+              {['Campaña','Segmento','Plantilla','Estado','Programada','Envíos','Apertura','Acciones',''].map(h => (
+                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--ink-400)' }}
+                    className={h === '' ? 'ctx-col' : ''}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
             )}
             {!loading && campanas.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>
                 Sin campañas — crea la primera
               </td></tr>
             )}
@@ -99,7 +121,12 @@ export default function Campanas() {
               const tasaApertura = c.enviados > 0
                 ? Math.round(c.aperturas / c.enviados * 100) : 0;
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}
+                    onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, row: c }); }}
+                    onTouchStart={(e) => { const t = e.touches[0]; longPressTimer.current = setTimeout(() => setCtxMenu({ x: t.clientX, y: t.clientY, row: c }), 500); }}
+                    onTouchMove={() => clearTimeout(longPressTimer.current)}
+                    onTouchEnd={() => clearTimeout(longPressTimer.current)}
+                >
                   <td style={{ padding: '10px 12px', fontWeight: 500, fontSize: 13 }}>{c.nombre}</td>
                   <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-400)' }}>
                     {c.segmento_nombre ?? '—'}
@@ -126,6 +153,9 @@ export default function Campanas() {
                       enviando={enviando === c.id}
                     />
                   </td>
+                  <td className="ctx-col" onClick={(e) => { e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row: c }); }}>
+                    <button className="ctx-kebab" aria-label="Acciones">⋮</button>
+                  </td>
                 </tr>
               );
             })}
@@ -137,6 +167,14 @@ export default function Campanas() {
         <CampanaModal
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); refetch(); toast.success('Campaña creada'); }}
+        />
+      )}
+      {ctxMenu && getCtxItems(ctxMenu.row).length > 0 && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={getCtxItems(ctxMenu.row)}
+          onClose={() => setCtxMenu(null)}
         />
       )}
     </div>
