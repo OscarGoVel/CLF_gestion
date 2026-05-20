@@ -20,7 +20,7 @@ export const NAV_BY_ROLE = {
   admin: [
     { id: 'inicio',    label: 'Inicio',        path: '/dashboard',   paths: ['/dashboard'] },
     { id: 'comercial', label: 'Comercial',      path: '/cotizaciones', paths: ['/cotizaciones'] },
-    { id: 'operacion', label: 'Operación',      path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones'] },
+    { id: 'operacion', label: 'Operación',      path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones', '/cuentas-pagar'] },
     { id: 'cobranza',  label: 'Cobranza',       path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos',      path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',       path: '/analisis',     paths: ['/analisis', '/costos-fijos', '/estudio-mercado'] },
@@ -30,7 +30,7 @@ export const NAV_BY_ROLE = {
   operador: [
     { id: 'inicio',    label: 'Inicio',    path: '/dashboard',   paths: ['/dashboard'] },
     { id: 'comercial', label: 'Comercial', path: '/cotizaciones', paths: ['/cotizaciones'] },
-    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones'] },
+    { id: 'operacion', label: 'Operación', path: '/compras',      paths: ['/compras', '/stock', '/preinventario', '/devoluciones', '/cuentas-pagar'] },
     { id: 'cobranza',  label: 'Cobranza',  path: '/facturas',     paths: ['/facturas', '/estado-cuenta'] },
     { id: 'catalogos', label: 'Catálogos', path: '/catalogos',    paths: ['/catalogos'] },
     { id: 'analisis',  label: 'Análisis',  path: '/analisis',     paths: ['/analisis'] },
@@ -58,7 +58,8 @@ const SUBNAV_BY_ROLE = {
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
-      { label: 'Devoluciones',   path: '/devoluciones' },
+      { label: 'Devoluciones',      path: '/devoluciones' },
+      { label: 'Cuentas por Pagar', path: '/cuentas-pagar' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },
@@ -100,7 +101,8 @@ const SUBNAV_BY_ROLE = {
       { label: 'Compras',        path: '/compras' },
       { label: 'Stock',          path: '/stock' },
       { label: 'Pre-inventario', path: '/preinventario' },
-      { label: 'Devoluciones',   path: '/devoluciones' },
+      { label: 'Devoluciones',      path: '/devoluciones' },
+      { label: 'Cuentas por Pagar', path: '/cuentas-pagar' },
     ],
     cobranza: [
       { label: 'Facturas',         path: '/facturas' },

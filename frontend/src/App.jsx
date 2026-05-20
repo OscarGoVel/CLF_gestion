@@ -52,6 +52,9 @@ import Segmentos    from './pages/crm/Segmentos';
 import RfmView      from './pages/crm/RfmView';
 import Pipeline     from './pages/crm/Pipeline';
 
+// Cuentas por Pagar
+import CuentasPagarList from './pages/cuentas-pagar/CuentasPagarList';
+
 // Admin
 import AdminUsuarios   from './pages/admin/AdminUsuarios';
 import AdminPermisos   from './pages/admin/AdminPermisos';
@@ -112,6 +115,7 @@ export default function App() {
                     <Route path="/devoluciones"      element={<DevolucionesList />} />
                     <Route path="/devoluciones/nueva" element={<DevolucionNueva />} />
                     <Route path="/devoluciones/:id"  element={<DevolucionDetalle />} />
+                    <Route path="/cuentas-pagar"     element={<CuentasPagarList />} />
 
                     {/* Cobranza */}
                     <Route path="/facturas"          element={<FacturaList />} />

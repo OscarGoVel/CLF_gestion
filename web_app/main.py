@@ -55,6 +55,7 @@ from web_app.routers import api_costos_fijos as api_costos_fijos_router
 from web_app.routers import api_estudio_mercado as api_estudio_mercado_router
 from web_app.routers import api_crm as api_crm_router
 from web_app.routers import api_devoluciones as api_devoluciones_router
+from web_app.routers import api_cuentas_pagar as api_cuentas_pagar_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -252,6 +253,23 @@ async def lifespan(app: FastAPI):
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_prospectos_etapa ON prospectos(etapa)",
+        # Fase 10: cuentas por pagar a proveedores
+        """
+        CREATE TABLE IF NOT EXISTS cuentas_por_pagar (
+            id                SERIAL PRIMARY KEY,
+            compra_id         INTEGER REFERENCES compras(id),
+            proveedor_id      INTEGER NOT NULL REFERENCES proveedores(id),
+            monto_total       NUMERIC(14,2) NOT NULL,
+            monto_pagado      NUMERIC(14,2) DEFAULT 0,
+            fecha_vencimiento DATE,
+            estado            TEXT DEFAULT 'Pendiente',
+            referencia_pago   TEXT,
+            notas             TEXT,
+            created_at        TIMESTAMPTZ DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_cxp_proveedor ON cuentas_por_pagar(proveedor_id)",
+        "CREATE INDEX IF NOT EXISTS idx_cxp_estado ON cuentas_por_pagar(estado)",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
@@ -398,6 +416,7 @@ app.include_router(api_costos_fijos_router.router)
 app.include_router(api_estudio_mercado_router.router)
 app.include_router(api_crm_router.router)
 app.include_router(api_devoluciones_router.router)
+app.include_router(api_cuentas_pagar_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
