@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { exportCSV } from '../../lib/exportCSV';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
@@ -30,7 +30,7 @@ const COLUMNS = [
   { header: 'Cliente', key: 'cliente',       sortKey: 'cliente' },
   { header: 'Total',   className: 'num',     sortKey: 'total',
     render: (c) => c.total != null ? MXN.format(c.total) : '—' },
-  { header: 'Estado',  render: (c) => <Pill status={c.estado} /> },
+  { header: 'Estado',  render: (c) => <StatusBadge status={c.estado} /> },
   { header: 'Prods.',  key: 'num_productos', width: 80, style: { color: 'var(--ink-500)', textAlign: 'center' } },
 ];
 
@@ -63,7 +63,7 @@ export default function CotList() {
   const sel = selected != null ? cotizaciones.find((c) => c.id === selected) : null;
 
   const { data: selDetail, loading: loadingDetail } = useFetch(
-    selected != null ? `/api/cotizaciones/${selected}` : null
+    selected != null ? `/api/comercial/cotizaciones/${selected}` : null
   );
   const partidas = selDetail?.partidas ?? [];
 
@@ -73,13 +73,13 @@ export default function CotList() {
   function handleFechaHasta(e) { setFechaHasta(e.target.value); setPagina(1); }
   function handleBuscar(e) { setBuscar(e.target.value); setPagina(1); }
   async function handlePdf(cotId, folio) {
-    await api.download(`/api/cotizaciones/${cotId}/pdf`, `Cotizacion_${folio ?? cotId}.pdf`);
+    await api.download(`/api/comercial/cotizaciones/${cotId}/pdf`, `Cotizacion_${folio ?? cotId}.pdf`);
   }
 
   async function handleCancelarCot() {
     setCancelando(true);
     try {
-      await api.patch(`/api/cotizaciones/${confirmCancelarId}/cancelar`, {});
+      await api.patch(`/api/comercial/cotizaciones/${confirmCancelarId}/cancelar`, {});
       setConfirmCancelarId(null);
       if (selected === confirmCancelarId) setSelected(null);
     } finally {
@@ -92,10 +92,10 @@ export default function CotList() {
     const bloqueada = ['Cancelada', 'Pagada'].includes(cot.estado);
     return [
       { type: 'item', label: 'Abrir detalle',
-        onClick: () => navigate(`/cotizaciones/${cot.id}`, { state: { ids } }) },
+        onClick: () => navigate(`/comercial/cotizaciones/${cot.id}`, { state: { ids } }) },
       { type: 'item', label: 'Editar',
         disabled: bloqueada,
-        onClick: () => navigate(`/cotizaciones/${cot.id}/editar`) },
+        onClick: () => navigate(`/comercial/cotizaciones/${cot.id}/editar`) },
       { type: 'item', label: 'Descargar PDF',
         onClick: () => handlePdf(cot.id, cot.folio) },
       { type: 'divider' },
@@ -106,7 +106,7 @@ export default function CotList() {
   }
 
   async function handleExportCsv() {
-    const { cotizaciones: rows, totales } = await api.get('/api/cotizaciones/export');
+    const { cotizaciones: rows, totales } = await api.get('/api/comercial/cotizaciones/export');
     const filas = rows.map((c) => ({
       Folio:           c.folio          ?? '',
       Fecha:           c.fecha          ?? '',
@@ -128,7 +128,7 @@ export default function CotList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Cotizaciones</span>
       </div>
@@ -136,13 +136,13 @@ export default function CotList() {
       <div className="page-header">
         <div>
           <div className="page-title">Cotizaciones</div>
-          <div className="page-sub">{total} registros en total</div>
+          <div className="page-sub">{total} cotizacion{total !== 1 ? 'es' : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={handleExportCsv}>
             Exportar CSV
           </button>
-          <button className="btn btn-primary" onClick={() => navigate('/cotizaciones/nueva')}>
+          <button className="btn btn-primary" onClick={() => navigate('/comercial/cotizaciones/nueva')}>
             Nueva cotización
           </button>
         </div>
@@ -236,7 +236,7 @@ export default function CotList() {
                 </div>
                 <div>
                   <div className="note">ESTADO</div>
-                  <div style={{ marginTop: 4 }}><Pill status={sel.estado} /></div>
+                  <div style={{ marginTop: 4 }}><StatusBadge status={sel.estado} /></div>
                 </div>
                 <div>
                   <div className="note">PARTIDAS</div>
@@ -254,10 +254,10 @@ export default function CotList() {
               <div className="eyebrow" style={{ marginTop: 16 }}>Acciones</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
                 <button className="btn btn-sm btn-primary"
-                  onClick={() => navigate(`/cotizaciones/${sel.id}`, { state: { ids: cotizaciones.map((c) => c.id) } })}>
+                  onClick={() => navigate(`/comercial/cotizaciones/${sel.id}`, { state: { ids: cotizaciones.map((c) => c.id) } })}>
                   Abrir
                 </button>
-                <button className="btn btn-sm" onClick={() => navigate(`/cotizaciones/${sel.id}/editar`)}>
+                <button className="btn btn-sm" onClick={() => navigate(`/comercial/cotizaciones/${sel.id}/editar`)}>
                   Editar
                 </button>
                 <button className="btn btn-sm" onClick={() => handlePdf(sel.id, sel.folio)}>

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
@@ -59,7 +59,7 @@ function buildTimeline({ cot, etapas, compras, facturas }) {
         tipo:   'compra',
         titulo: 'Compra registrada',
         detalle: c.compra_folio || c.folio_factura || `#${c.id}`,
-        linkPath: `/compras/${c.id}`,
+        linkPath: `/abastecimiento/compras/${c.id}`,
       });
     }
   });
@@ -82,10 +82,10 @@ function buildTimeline({ cot, etapas, compras, facturas }) {
 export default function CotExpediente() {
   const { id }     = useParams();
   const navigate   = useNavigate();
-  const { data, loading, error } = useFetch(`/api/cotizaciones/${id}`);
+  const { data, loading, error } = useFetch(`/api/comercial/cotizaciones/${id}`);
 
-  const handlePdf = () => api.download(`/api/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
-  const handleNota = () => api.download(`/api/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
+  const handlePdf = () => api.download(`/api/comercial/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
+  const handleNota = () => api.download(`/api/comercial/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
 
   if (loading) return <div className="page"><div className="page-state">Cargando…</div></div>;
   if (error)   return <div className="page"><div className="page-state page-state--error">Error: {error}</div></div>;
@@ -115,9 +115,9 @@ export default function CotExpediente() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
+        <a onClick={() => navigate('/comercial/cotizaciones')}>Cotizaciones</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate(`/cotizaciones/${id}`)}>{cot.folio}</a>
+        <a onClick={() => navigate(`/comercial/cotizaciones/${id}`)}>{cot.folio}</a>
         <span className="sep">/</span>
         <span>Expediente</span>
       </div>
@@ -125,7 +125,7 @@ export default function CotExpediente() {
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-500)', display: 'flex', gap: 8, alignItems: 'center' }}>
-            {cot.folio} · <Pill status={cot.estado} />
+            {cot.folio} · <StatusBadge status={cot.estado} />
           </div>
           <div className="page-title" style={{ marginTop: 4 }}>Expediente Digital</div>
           <div className="page-sub">
@@ -138,7 +138,7 @@ export default function CotExpediente() {
           <button className="btn" onClick={handlePdf}>PDF</button>
           <button className="btn" onClick={handleNota}>Nota de Remisión</button>
           <button className="btn" onClick={() => window.print()}>Imprimir</button>
-          <button className="btn" onClick={() => navigate(`/cotizaciones/${id}`)}>← Volver</button>
+          <button className="btn" onClick={() => navigate(`/comercial/cotizaciones/${id}`)}>← Volver</button>
         </div>
       </div>
 
@@ -214,7 +214,7 @@ export default function CotExpediente() {
                 </thead>
                 <tbody>
                   {compras.map((c, i) => (
-                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/compras/${c.id}`)}>
+                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/abastecimiento/compras/${c.id}`)}>
                       <td className="folio">{c.compra_folio || `#${c.id}`}</td>
                       <td style={{ fontSize: 12 }}>{c.proveedor}</td>
                       <td style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>{c.fecha}</td>
@@ -335,7 +335,7 @@ export default function CotExpediente() {
                   Presupuesto {c.compra_folio || `#${c.id}`}
                 </span>
                 <button className="btn btn-sm"
-                  onClick={() => api.download(`/api/compras/${c.id}/pdf`, `Presupuesto_${c.id}.pdf`)}
+                  onClick={() => api.download(`/api/abastecimiento/compras/${c.id}/pdf`, `Presupuesto_${c.id}.pdf`)}
                   style={{ fontSize: 11 }}>
                   ↓ PDF
                 </button>

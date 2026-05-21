@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 
 export default function AdminUsuarios() {
   const navigate = useNavigate();
@@ -10,7 +10,7 @@ export default function AdminUsuarios() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Administración</span>
         <span className="sep">/</span>
@@ -45,9 +45,9 @@ export default function AdminUsuarios() {
               <tr key={u.id || u.username} style={{ borderBottom: '1px solid var(--ink-100)' }}>
                 <td style={{ padding: '10px 12px', fontSize: 13, fontFamily: 'monospace' }}>{u.username}</td>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{u.nombre}</td>
-                <td style={{ padding: '10px 12px' }}><Pill label={u.rol} /></td>
+                <td style={{ padding: '10px 12px' }}><StatusBadge status={u.rol} /></td>
                 <td style={{ padding: '10px 12px' }}>
-                  <Pill label={u.activo ? 'Activo' : 'Inactivo'} />
+                  <StatusBadge status={u.activo ? 'Activo' : 'Inactivo'} />
                 </td>
               </tr>
             ))}

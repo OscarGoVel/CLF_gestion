@@ -15,7 +15,7 @@ function PendientesSection({ titulo, items, urgencia, cta, navigate }) {
         </td>
       </tr>
       {items.map((p, i) => (
-        <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/cotizaciones/${p.id}`)}>
+        <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/comercial/cotizaciones/${p.id}`)}>
           <td>
             <span style={{ color: urgencia === 'alta' ? 'var(--danger)' : urgencia === 'media' ? 'var(--warn)' : 'var(--ink-700)', fontWeight: 500 }}>
               {cta}
@@ -35,7 +35,7 @@ function PendientesSection({ titulo, items, urgencia, cta, navigate }) {
 
 export default function Dashboard() {
   const { data, loading } = useFetch('/api/dashboard');
-  const { data: lotesData } = useFetch('/api/stock/lotes/alertas');
+  const { data: lotesData } = useFetch('/api/inventario/stock/lotes/alertas');
   const navigate = useNavigate();
   const lotesAlertas = lotesData?.alertas ?? [];
 
@@ -61,7 +61,7 @@ export default function Dashboard() {
             {hoy} · {pendientes.length} pendientes · CLF
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/cotizaciones/nueva')}>
+        <button className="btn btn-primary" onClick={() => navigate('/comercial/cotizaciones/nueva')}>
           Nueva cotización
         </button>
       </div>
@@ -73,7 +73,7 @@ export default function Dashboard() {
         { label: 'Pendientes de respuesta', value: kpis.num_pendientes ?? '—', foot: 'cotizaciones enviadas', color: '#f59e0b' },
         { label: 'Programadas para entrega', value: kpis.num_programadas ?? '—', foot: 'en proceso', color: '#8b5cf6' },
         { label: 'Sin costo real', value: kpis.sin_costo_real ?? '—', foot: 'entregadas sin compra asignada',
-          color: (kpis.sin_costo_real ?? 0) > 0 ? '#ef4444' : '#6b7280' },
+          color: (kpis.sin_costo_real ?? 0) > 0 ? 'var(--color-warning)' : 'var(--color-neutral)' },
       ]} />
 
       {/* Aging de cartera */}
@@ -126,7 +126,7 @@ export default function Dashboard() {
                 {lotesAlertas.map((lt) => {
                   const color = lt.alerta === 'vencido' ? 'var(--danger)' : 'var(--warn)';
                   return (
-                    <tr key={lt.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/stock')}>
+                    <tr key={lt.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/inventario/stock')}>
                       <td style={{ fontWeight: 500 }}>{lt.producto}</td>
                       <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{lt.numero_lote}</td>
                       <td style={{ color, fontWeight: 600, fontSize: 12 }}>{lt.fecha_vencimiento}</td>
@@ -173,7 +173,7 @@ export default function Dashboard() {
                                   :              `${dias}d`;
                   return (
                     <tr key={i} style={{ cursor: 'pointer' }}
-                        onClick={() => navigate(`/cotizaciones/${p.id}`)}>
+                        onClick={() => navigate(`/comercial/cotizaciones/${p.id}`)}>
                       <td className="folio">{p.folio}</td>
                       <td>{p.cliente}</td>
                       <td>
@@ -306,7 +306,7 @@ export default function Dashboard() {
               </div>
             ))}
             <div style={{ padding: '10px 16px' }}>
-              <a className="linkish" style={{ fontSize: 12 }} onClick={() => navigate('/compras')}>
+              <a className="linkish" style={{ fontSize: 12 }} onClick={() => navigate('/abastecimiento/compras')}>
                 Generar OC sugerida →
               </a>
             </div>

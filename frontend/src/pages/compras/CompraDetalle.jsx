@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
+import { StatusBadge } from '../../components/StatusBadge';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -11,16 +12,10 @@ function fmt(iso) {
   return new Date(iso).toLocaleDateString('es-MX');
 }
 
-const ESTADO_COLOR = {
-  'Creada':            { bg: '#f3f4f6', color: '#374151' },
-  'Recibida Parcial':  { bg: '#fef9c3', color: '#854d0e' },
-  'Recibida Completa': { bg: '#dcfce7', color: '#166534' },
-};
-
 export default function CompraDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch(`/api/compras/${id}`);
+  const { data, loading, refetch } = useFetch(`/api/abastecimiento/compras/${id}`);
   const [cantidades, setCantidades] = useState({});
   const [guardando, setGuardando] = useState(false);
 
@@ -41,7 +36,7 @@ export default function CompraDetalle() {
     }
     setGuardando(true);
     try {
-      const res = await api.patch(`/api/compras/${id}/recibir`, { lineas: lineasRecepcion });
+      const res = await api.patch(`/api/abastecimiento/compras/${id}/recibir`, { lineas: lineasRecepcion });
       toast.success(res.estado === 'Recibida Completa' ? 'Recepción completa registrada' : 'Recepción parcial registrada');
       setCantidades({});
       refetch();
@@ -73,9 +68,9 @@ export default function CompraDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/compras')}>Compras</a>
+        <a onClick={() => navigate('/abastecimiento/compras')}>Compras</a>
         <span className="sep">/</span>
         <span>{compra.folio}</span>
       </div>
@@ -84,17 +79,11 @@ export default function CompraDetalle() {
         <div>
           <div className="page-title" style={{ fontFamily: 'var(--mono)', display: 'flex', alignItems: 'center', gap: 10 }}>
             {compra.folio}
-            {compra.estado && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                background: ESTADO_COLOR[compra.estado]?.bg ?? '#f3f4f6',
-                color: ESTADO_COLOR[compra.estado]?.color ?? '#374151',
-              }}>{compra.estado}</span>
-            )}
+            {compra.estado && <StatusBadge status={compra.estado} />}
           </div>
           <div className="page-sub">{compra.proveedor} · {fmt(compra.fecha_compra)}</div>
         </div>
-        <button className="btn" onClick={() => navigate('/compras')}>← Volver</button>
+        <button className="btn" onClick={() => navigate('/abastecimiento/compras')}>← Volver</button>
       </div>
 
       {/* Encabezado */}
@@ -225,7 +214,7 @@ export default function CompraDetalle() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {l.asignaciones.map((a) => (
                         <div key={a.cot_id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Link to={`/cotizaciones/${a.cot_id}`}
+                          <Link to={`/comercial/cotizaciones/${a.cot_id}`}
                             style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }}>
                             {a.folio}
                           </Link>

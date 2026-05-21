@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 
 function fmt(iso) {
   if (!iso) return '—';
@@ -9,7 +9,7 @@ function fmt(iso) {
 
 export default function PreInvList() {
   const navigate = useNavigate();
-  const { data, loading } = useFetch('/api/preinventario/sesiones');
+  const { data, loading } = useFetch('/api/inventario/conteos/sesiones');
 
   const sesiones = data?.sesiones ?? [];
   const kpis     = data?.kpis     ?? {};
@@ -17,7 +17,7 @@ export default function PreInvList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Pre-inventario</span>
       </div>
@@ -27,7 +27,7 @@ export default function PreInvList() {
           <div className="page-title">Pre-inventario</div>
           <div className="page-sub">Sesiones de conteo físico</div>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/preinventario/nueva')}>
+        <button className="btn btn-primary" onClick={() => navigate('/inventario/conteos/nueva')}>
           Nueva sesión
         </button>
       </div>
@@ -73,13 +73,13 @@ export default function PreInvList() {
             {sesiones.map(s => (
               <tr
                 key={s.id}
-                onClick={() => navigate(`/preinventario/${s.id}`)}
+                onClick={() => navigate(`/inventario/conteos/${s.id}`)}
                 style={{ borderBottom: '1px solid var(--ink-100)', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--ink-50)'}
                 onMouseLeave={e => e.currentTarget.style.background = ''}
               >
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.nombre}</td>
-                <td style={{ padding: '10px 12px' }}><Pill label={s.estado} /></td>
+                <td style={{ padding: '10px 12px' }}><StatusBadge status={s.estado} /></td>
                 <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--ink-500)' }}>{s.tipo}</td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{s.creado_por}</td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{fmt(s.fecha_creacion)}</td>

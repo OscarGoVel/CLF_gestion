@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
+import { EmptyState } from '../../components/EmptyState';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { Modal } from '../../components/Modal';
@@ -22,14 +23,14 @@ export default function CotDetalle() {
   const nextId = currentIdx < ids.length - 1 ? ids[currentIdx + 1] : null;
 
   const handlePdf = async () => {
-    await api.download(`/api/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
+    await api.download(`/api/comercial/cotizaciones/${id}/pdf`, `Cotizacion_${id}.pdf`);
   };
 
   const handleNotaRemision = async () => {
-    await api.download(`/api/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
+    await api.download(`/api/comercial/cotizaciones/${id}/nota-remision/pdf`, `NotaRemision_${id}.pdf`);
   };
-  const { data, loading, error, refetch } = useFetch(`/api/cotizaciones/${id}`);
-  const { data: trasladoData, refetch: refetchTraslado } = useFetch(`/api/cotizaciones/${id}/traslado`);
+  const { data, loading, error, refetch } = useFetch(`/api/comercial/cotizaciones/${id}`);
+  const { data: trasladoData, refetch: refetchTraslado } = useFetch(`/api/comercial/cotizaciones/${id}/traslado`);
 
   const [resultado,      setResultado]      = useState(null);
   const [motivoPerdida,  setMotivoPerdida]  = useState('');
@@ -67,7 +68,7 @@ export default function CotDetalle() {
   const handleCambiarEstado = async (nuevoEstado, extras = {}) => {
     setGuardandoEst(true);
     try {
-      await api.patch(`/api/cotizaciones/${id}/estado`, { nuevo_estado: nuevoEstado, ...extras });
+      await api.patch(`/api/comercial/cotizaciones/${id}/estado`, { nuevo_estado: nuevoEstado, ...extras });
       await refetch();
       toast.success(LABELS_ESTADO[nuevoEstado] ?? 'Estado actualizado');
     } catch (e) {
@@ -97,7 +98,7 @@ export default function CotDetalle() {
     if (!resActual) return;
     setGuardandoRes(true);
     try {
-      await api.patch(`/api/cotizaciones/${id}/resultado`, {
+      await api.patch(`/api/comercial/cotizaciones/${id}/resultado`, {
         resultado: resActual,
         motivo_perdida: resActual === 'perdida' ? motivoActual : null,
       });
@@ -113,7 +114,7 @@ export default function CotDetalle() {
     // Usa form nativo para enviar con cookies de sesión (ruta Jinja)
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = `/estudio-mercado/desde-cotizacion/${id}`;
+    form.action = `/abastecimiento/estudios/desde-cotizacion/${id}`;
     document.body.appendChild(form);
     form.submit();
   };
@@ -123,8 +124,8 @@ export default function CotDetalle() {
   const steps     = buildSteps(cot);
   const nextAction = buildNextAction(cot, {
     onEnviar:            () => handleCambiarEstado('Pendiente'),
-    onGenerarOC:         () => navigate(`/compras/nueva?cot=${cot.id}`),
-    onFacturar:          () => navigate(`/facturas/importar`),
+    onGenerarOC:         () => navigate(`/abastecimiento/compras/nueva?cot=${cot.id}`),
+    onFacturar:          () => navigate(`/documentos/cfdi/importar`),
     onRegistrarSinCfdi:  () => { setNroFactura(''); setFechaFactura(today); setModalSinCfdi(true); },
     onNotaRemision:      handleNotaRemision,
     onRegistrarOC:       () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
@@ -135,66 +136,99 @@ export default function CotDetalle() {
   return (
     <>
     <div className="page">
-      <div className="crumbs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
-          <span className="sep">/</span>
-          <span>{cot.folio}</span>
-        </div>
-        {ids.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button className="btn btn-sm" disabled={!prevId}
-              onClick={() => navigate(`/cotizaciones/${prevId}`, { state: { ids } })}>
-              ←
-            </button>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-500)' }}>
-              {currentIdx + 1} / {ids.length}
-            </span>
-            <button className="btn btn-sm" disabled={!nextId}
-              onClick={() => navigate(`/cotizaciones/${nextId}`, { state: { ids } })}>
-              →
-            </button>
-          </div>
-        )}
+      {/* Breadcrumb */}
+      <div className="crumbs">
+        <a onClick={() => navigate('/comercial/cotizaciones')}>Cotizaciones</a>
+        <span className="sep">/</span>
+        <span>{cot.folio}</span>
       </div>
 
-      <div className="page-header">
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-500)', display: 'flex', gap: 8, alignItems: 'center' }}>
-            {cot.folio} · <Pill status={cot.estado} />
-            {cot.fecha && <span>· {cot.fecha}</span>}
-          </div>
-          <div className="page-title" style={{ marginTop: 4 }}>{cot.cliente}</div>
-          <div className="page-sub">
-            {partidas.length} partidas
-            {cot.total != null && ` · ${MXN.format(cot.total)}`}
-            {cot.orden_compra && ` · OC: ${cot.orden_compra}`}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div className="dropdown">
-            <button className="btn btn-sm" onClick={() => setDocsOpen(v => !v)}>
-              Documentos ▾
-            </button>
-            {docsOpen && (
-              <>
-                <div style={{ position: 'fixed', inset: 0, zIndex: 19 }} onClick={() => setDocsOpen(false)} />
-                <div className="dropdown-menu">
-                  <button className="dropdown-item" onClick={() => { handlePdf(); setDocsOpen(false); }}>
-                    PDF cotización
-                  </button>
-                  <button className="dropdown-item" onClick={() => { handleNotaRemision(); setDocsOpen(false); }}>
-                    Nota de Remisión
-                  </button>
+      {/* Hero */}
+      <div className="card" style={{ marginBottom: 20, padding: '20px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Folio + badge + fecha */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-400)' }}>{cot.folio}</span>
+              <StatusBadge status={cot.estado} />
+              {cot.fecha && <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>{cot.fecha}</span>}
+            </div>
+
+            {/* Cliente — protagonista */}
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 10 }}>
+              {cot.cliente}
+            </div>
+
+            {/* Métricas clave */}
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+              {cot.total != null && (
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total</div>
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: 20, letterSpacing: '-0.02em', color: 'var(--ink-900)' }}>
+                    {MXN.format(cot.total)}
+                  </div>
                 </div>
-              </>
+              )}
+              <div style={{ width: 1, height: 32, background: 'var(--ink-200)' }} />
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Partidas</div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>{partidas.length}</div>
+              </div>
+              {cot.orden_compra && (
+                <>
+                  <div style={{ width: 1, height: 32, background: 'var(--ink-200)' }} />
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>OC</div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{cot.orden_compra}</div>
+                  </div>
+                </>
+              )}
+              {cot.fecha_entrega && (
+                <>
+                  <div style={{ width: 1, height: 32, background: 'var(--ink-200)' }} />
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Entrega</div>
+                    <div style={{ fontSize: 13 }}>{cot.fecha_entrega}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Acciones + navegación */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {ids.length > 0 && (
+                <>
+                  <button className="btn btn-sm" disabled={!prevId}
+                    onClick={() => navigate(`/comercial/cotizaciones/${prevId}`, { state: { ids } })}>←</button>
+                  <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>{currentIdx + 1} / {ids.length}</span>
+                  <button className="btn btn-sm" disabled={!nextId}
+                    onClick={() => navigate(`/comercial/cotizaciones/${nextId}`, { state: { ids } })}>→</button>
+                  <div style={{ width: 1, height: 20, background: 'var(--ink-200)', margin: '0 4px' }} />
+                </>
+              )}
+              <div className="dropdown">
+                <button className="btn btn-sm" onClick={() => setDocsOpen(v => !v)}>Documentos ▾</button>
+                {docsOpen && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 19 }} onClick={() => setDocsOpen(false)} />
+                    <div className="dropdown-menu">
+                      <button className="dropdown-item" onClick={() => { handlePdf(); setDocsOpen(false); }}>PDF cotización</button>
+                      <button className="dropdown-item" onClick={() => { handleNotaRemision(); setDocsOpen(false); }}>Nota de Remisión</button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/comercial/cotizaciones/${id}/expediente`)}>Expediente</button>
+              <button className="btn btn-sm" onClick={() => navigate(`/comercial/cotizaciones/${id}/editar`)}>Editar</button>
+            </div>
+            {!['Cancelada', 'Pagada'].includes(cot.estado) && (
+              <button className="btn-link-danger" style={{ fontSize: 11 }} onClick={() => setConfirmCancelar(true)}>
+                cancelar cotización
+              </button>
             )}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/cotizaciones/${id}/expediente`)}>Expediente</button>
-          <button className="btn btn-sm" onClick={() => navigate(`/cotizaciones/${id}/editar`)}>Editar</button>
-          {!['Cancelada', 'Pagada'].includes(cot.estado) && (
-            <button className="btn-link-danger" onClick={() => setConfirmCancelar(true)}>cancelar</button>
-          )}
         </div>
       </div>
 
@@ -364,7 +398,9 @@ export default function CotDetalle() {
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--ink-100)' }}>
               <div className="note">COMPRAS</div>
               {compras.length === 0 ? (
-                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--ink-400)' }}>Sin compra vinculada</div>
+                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--ink-400)', fontStyle: 'italic' }}>
+                  Aún no hay compra vinculada.
+                </div>
               ) : compras.map((c, i) => (
                 <div key={i} style={{ fontSize: 12, marginTop: 4 }}>
                   {c.compra_folio ?? c.folio_factura ?? `Compra #${c.id}`}
@@ -375,7 +411,9 @@ export default function CotDetalle() {
             <div style={{ padding: '10px 14px' }}>
               <div className="note">FACTURAS DE VENTA</div>
               {facturas.length === 0 ? (
-                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--ink-400)' }}>Sin factura vinculada</div>
+                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--ink-400)', fontStyle: 'italic' }}>
+                  Aún no hay factura vinculada.
+                </div>
               ) : facturas.map((f, i) => (
                 <div key={i} style={{ fontSize: 12, marginTop: 4 }}>
                   {f.serie}{f.folio_factura}
@@ -446,8 +484,8 @@ export default function CotDetalle() {
                 )}
               </div>
             ) : (
-              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)' }}>
-                Sin datos de traslado
+              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)', fontStyle: 'italic' }}>
+                Sin datos de traslado registrados.
               </div>
             )}
             <div style={{ padding: '8px 14px', borderTop: '1px solid var(--ink-100)' }}>
@@ -512,8 +550,8 @@ export default function CotDetalle() {
           <div className="eyebrow">Estudios de mercado</div>
           <div className="card" style={{ marginBottom: 14 }}>
             {estudios.length === 0 ? (
-              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)' }}>
-                Sin estudios vinculados
+              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-400)', fontStyle: 'italic' }}>
+                Aún no hay estudios de mercado vinculados.
               </div>
             ) : estudios.map((e, i) => {
               const esActivo = e.estado === 'abierto';
@@ -533,7 +571,7 @@ export default function CotDetalle() {
                       </span>
                     </div>
                   </div>
-                  <a href={`/estudio-mercado/${e.id}`}
+                  <a href={`/abastecimiento/estudios/${e.id}`}
                      style={{ fontSize: 11, color: 'var(--primary)', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     Ver →
                   </a>
@@ -684,7 +722,7 @@ export default function CotDetalle() {
             onClick={async () => {
               setGuardandoTras(true);
               try {
-                await api.post(`/api/cotizaciones/${id}/traslado`, {
+                await api.post(`/api/comercial/cotizaciones/${id}/traslado`, {
                   origen: tOrigen || null,
                   destino: tDestino || null,
                   transportista: tTransportista || null,

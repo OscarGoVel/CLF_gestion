@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../lib/apiClient';
 
 function fmt(iso) {
@@ -22,7 +22,7 @@ export default function MercadoList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Estudio de Mercado</span>
       </div>
@@ -77,7 +77,7 @@ export default function MercadoList() {
             {estudios.map(e => (
               <tr
                 key={e.id}
-                onClick={() => navigate(`/estudio-mercado/${e.id}`)}
+                onClick={() => navigate(`/abastecimiento/estudios/${e.id}`)}
                 style={{ borderBottom: '1px solid var(--ink-100)', cursor: 'pointer' }}
                 onMouseEnter={ev => ev.currentTarget.style.background = 'var(--ink-50)'}
                 onMouseLeave={ev => ev.currentTarget.style.background = ''}
@@ -89,7 +89,7 @@ export default function MercadoList() {
                   )}
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{fmt(e.fecha)}</td>
-                <td style={{ padding: '10px 12px' }}><Pill label={e.estado} /></td>
+                <td style={{ padding: '10px 12px' }}><StatusBadge status={e.estado} /></td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>{e.total_items ?? 0}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>{e.total_cotizaciones ?? 0}</td>
               </tr>
@@ -102,7 +102,7 @@ export default function MercadoList() {
       {showNuevo && (
         <NuevoEstudioModal
           onClose={() => setShowNuevo(false)}
-          onSaved={id => { setShowNuevo(false); navigate(`/estudio-mercado/${id}`); }}
+          onSaved={id => { setShowNuevo(false); navigate(`/abastecimiento/estudios/${id}`); }}
         />
       )}
     </div>

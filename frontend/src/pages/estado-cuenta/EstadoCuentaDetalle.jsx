@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { Modal } from '../../components/Modal';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
@@ -30,7 +30,7 @@ export default function EstadoCuentaDetalle() {
   const { cliente_id } = useParams();
   const navigate       = useNavigate();
 
-  const { data, loading, refetch } = useFetch(`/api/estado-cuenta/${cliente_id}`);
+  const { data, loading, refetch } = useFetch(`/api/finanzas/cobranza/${cliente_id}`);
 
   const [modalPago,   setModalPago]   = useState(false);
   const [cotPagoId,   setCotPagoId]   = useState(null);
@@ -51,7 +51,7 @@ export default function EstadoCuentaDetalle() {
 
   async function handlePdf() {
     try {
-      await api.download(`/api/estado-cuenta/pdf`, `EstadoCuenta_${cliente.nombre_comercial}.pdf`);
+      await api.download(`/api/finanzas/cobranza/pdf`, `EstadoCuenta_${cliente.nombre_comercial}.pdf`);
     } catch (e) {
       toast.error(e.message);
     }
@@ -70,7 +70,7 @@ export default function EstadoCuentaDetalle() {
     if (!pagoMonto || parseFloat(pagoMonto) <= 0) return;
     setGuardando(true);
     try {
-      const res = await api.post(`/api/estado-cuenta/${cotPagoId}/pago`, {
+      const res = await api.post(`/api/finanzas/cobranza/${cotPagoId}/pago`, {
         monto: parseFloat(pagoMonto),
         fecha_pago: pagoFecha,
         metodo: pagoMetodo || null,
@@ -94,9 +94,9 @@ export default function EstadoCuentaDetalle() {
     <>
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/estado-cuenta')}>Estado de Cuenta</a>
+        <a onClick={() => navigate('/finanzas/cobranza')}>Estado de Cuenta</a>
         <span className="sep">/</span>
         <span>{cliente.nombre_comercial}</span>
       </div>
@@ -107,7 +107,7 @@ export default function EstadoCuentaDetalle() {
           <div className="page-title">{cliente.nombre_comercial}</div>
           <div className="page-sub" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             {cliente.rfc && <span>RFC: {cliente.rfc}</span>}
-            {cliente.tipo && <Pill label={cliente.tipo} />}
+            {cliente.tipo && <StatusBadge status={cliente.tipo} />}
             {cliente.corporativo && <span style={{ color: 'var(--ink-400)' }}>{cliente.corporativo}</span>}
           </div>
         </div>
@@ -197,7 +197,7 @@ export default function EstadoCuentaDetalle() {
             {cotizaciones.map(c => (
               <tr key={c.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
                 <td style={{ padding: '10px 12px' }}>
-                  <Link to={`/cotizaciones/${c.id}`} style={{ fontWeight: 500 }}>{c.folio}</Link>
+                  <Link to={`/comercial/cotizaciones/${c.id}`} style={{ fontWeight: 500 }}>{c.folio}</Link>
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{fmt(c.fecha_entrega)}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>{MXN.format(c.total ?? 0)}</td>
@@ -206,7 +206,7 @@ export default function EstadoCuentaDetalle() {
                              color: (c.pendiente ?? 0) > 0.01 ? 'var(--red-600, #dc2626)' : '' }}>
                   {MXN.format(c.pendiente ?? 0)}
                 </td>
-                <td style={{ padding: '10px 12px' }}><Pill label={c.estado} /></td>
+                <td style={{ padding: '10px 12px' }}><StatusBadge status={c.estado} /></td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>
                   {c.dias_desde_entrega != null ? `${Math.round(c.dias_desde_entrega)}d` : '—'}
                 </td>
