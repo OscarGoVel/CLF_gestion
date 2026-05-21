@@ -49,11 +49,22 @@ export default function Campanas() {
     if (c.estado === 'aprobada') {
       items.push({ type: 'item', label: 'Enviar campaña', onClick: () => handleEnviar(c.id), disabled: enviando === c.id });
     }
+    if (c.estado === 'completada') {
+      items.push({ type: 'item', label: 'Calcular ROI', onClick: () => handleAtribuir(c.id) });
+    }
     if (estadoSubmenu.length) {
       if (items.length) items.push({ type: 'divider' });
       items.push({ type: 'item', label: 'Cambiar estado', submenu: estadoSubmenu });
     }
     return items;
+  }
+
+  async function handleAtribuir(id) {
+    try {
+      const r = await api.post(`/api/crm/campanas/${id}/atribuir`, {});
+      toast.success(`ROI calculado: ${r.insertados} ventas — $${r.total_atribuido.toLocaleString('es-MX')}`);
+      refetch();
+    } catch (e) { toast.error(e.message); }
   }
 
   async function handleEnviar(id) {
@@ -102,7 +113,7 @@ export default function Campanas() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--ink-100)' }}>
-              {['Campaña','Segmento','Plantilla','Estado','Programada','Envíos','Apertura','Acciones',''].map(h => (
+              {['Campaña','Segmento','Plantilla','Estado','Programada','Envíos','Apertura','ROI','Acciones',''].map(h => (
                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--ink-400)' }}
                     className={h === '' ? 'ctx-col' : ''}>{h}</th>
               ))}
@@ -143,6 +154,14 @@ export default function Campanas() {
                   <td style={{ padding: '10px 12px', fontSize: 13 }}>{c.total_envios}</td>
                   <td style={{ padding: '10px 12px', fontSize: 13 }}>
                     {c.enviados > 0 ? `${tasaApertura}%` : '—'}
+                  </td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>
+                    {c.revenue_atribuido != null && c.revenue_atribuido > 0
+                      ? <span style={{ color: '#166534', fontWeight: 600 }}>
+                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(c.revenue_atribuido)}
+                        </span>
+                      : <span style={{ color: 'var(--ink-300)' }}>—</span>
+                    }
                   </td>
                   <td style={{ padding: '10px 12px' }}>
                     <AccionesCampana

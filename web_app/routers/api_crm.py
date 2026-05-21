@@ -348,12 +348,14 @@ async def listar_campanas(user: dict = Depends(get_usuario_api)):
                    COUNT(DISTINCT e.id)                                 AS total_envios,
                    COUNT(DISTINCT e.id) FILTER (WHERE e.estado='enviado') AS enviados,
                    COUNT(DISTINCT ev.id) FILTER (WHERE ev.tipo='apertura') AS aperturas,
-                   COUNT(DISTINCT ev.id) FILTER (WHERE ev.tipo='clic')    AS clics
+                   COUNT(DISTINCT ev.id) FILTER (WHERE ev.tipo='clic')    AS clics,
+                   COALESCE(SUM(a.monto), 0)                            AS revenue_atribuido
             FROM crm_campanas c
             LEFT JOIN crm_plantillas p ON p.id = c.plantilla_id
             LEFT JOIN crm_segmentos s  ON s.id = c.segmento_id
             LEFT JOIN crm_envios e     ON e.campana_id = c.id
             LEFT JOIN crm_envio_eventos ev ON ev.envio_id = e.id
+            LEFT JOIN crm_campana_atribuciones a ON a.campana_id = c.id
             GROUP BY c.id, p.nombre, s.nombre
             ORDER BY c.created_at DESC
         """)
@@ -856,3 +858,91 @@ async def eliminar_prospecto(prospecto_id: int, user: dict = Depends(get_usuario
         if cur.rowcount == 0:
             raise HTTPException(404, "prospecto no encontrado")
     return JSONResponse({"ok": True})
+
+
+# ── Atribuciones CRM (ROI de campañas) ───────────────────────────────────────
+
+@router.post("/campanas/{campana_id}/atribuir")
+async def recalcular_atribuciones(campana_id: int, user: dict = Depends(get_usuario_api)):
+    """
+    Calcula atribuciones de una campaña: cotizaciones entregadas/pagadas de clientes que
+    recibieron la campaña, en los 30 días siguientes al envío.
+    """
+    if user.get("rol") != "Administrador":
+        raise HTTPException(403, "Solo Administrador")
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id FROM crm_campanas WHERE id = %s", (campana_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Campaña no encontrada")
+
+        # Obtener envíos de esta campaña con su fecha y cliente
+        cur.execute("""
+            SELECT DISTINCT co.cliente_id, MIN(e.fecha_envio) AS primer_envio
+            FROM crm_envios e
+            JOIN crm_contactos co ON co.id = e.contacto_id
+            WHERE e.campana_id = %s
+              AND e.estado = 'enviado'
+              AND e.fecha_envio IS NOT NULL
+            GROUP BY co.cliente_id
+        """, (campana_id,))
+        envios = {r[0]: r[1] for r in cur.fetchall()}
+
+        if not envios:
+            return JSONResponse({"insertados": 0, "total_atribuido": 0})
+
+        insertados = 0
+        total_monto = 0.0
+        for cliente_id, primer_envio in envios.items():
+            cur.execute("""
+                SELECT id, total,
+                       (%s::date - fecha_entrega::date) AS dias
+                FROM cotizaciones
+                WHERE cliente_id = %s
+                  AND estado IN ('Entregada', 'Parcialmente Entregada', 'Facturada', 'Pagada')
+                  AND fecha_entrega IS NOT NULL
+                  AND fecha_entrega >= %s::date
+                  AND fecha_entrega <= %s::date + INTERVAL '30 days'
+            """, (primer_envio, cliente_id, primer_envio, primer_envio))
+            for cot_id, monto, dias in cur.fetchall():
+                monto_f = float(monto or 0)
+                dias_i = int(dias or 0) if dias is not None else None
+                cur.execute("""
+                    INSERT INTO crm_campana_atribuciones
+                        (campana_id, cliente_id, cotizacion_id, monto, dias_desde_envio)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (campana_id, cotizacion_id) DO UPDATE
+                        SET monto = EXCLUDED.monto,
+                            dias_desde_envio = EXCLUDED.dias_desde_envio
+                """, (campana_id, cliente_id, cot_id, monto_f, dias_i))
+                insertados += 1
+                total_monto += monto_f
+
+    return JSONResponse({"insertados": insertados, "total_atribuido": round(total_monto, 2)})
+
+
+@router.get("/campanas/{campana_id}/atribuciones")
+async def ver_atribuciones(campana_id: int, user: dict = Depends(get_usuario_api)):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT a.id, cl.nombre_comercial AS cliente, c.folio,
+                   a.monto, a.dias_desde_envio, a.created_at
+            FROM crm_campana_atribuciones a
+            JOIN clientes cl ON cl.id = a.cliente_id
+            JOIN cotizaciones c ON c.id = a.cotizacion_id
+            WHERE a.campana_id = %s
+            ORDER BY a.monto DESC
+        """, (campana_id,))
+        items = _rows(cur)
+
+        cur.execute("""
+            SELECT COUNT(*), COALESCE(SUM(monto), 0)
+            FROM crm_campana_atribuciones WHERE campana_id = %s
+        """, (campana_id,))
+        cnt, total = cur.fetchone()
+
+    return JSONResponse({
+        "atribuciones": items,
+        "total_cotizaciones": cnt,
+        "revenue_atribuido": float(total or 0),
+    })

@@ -270,6 +270,20 @@ async def lifespan(app: FastAPI):
         """,
         "CREATE INDEX IF NOT EXISTS idx_cxp_proveedor ON cuentas_por_pagar(proveedor_id)",
         "CREATE INDEX IF NOT EXISTS idx_cxp_estado ON cuentas_por_pagar(estado)",
+        # Fase 12-D: atribuciones de campañas CRM (ROI)
+        """
+        CREATE TABLE IF NOT EXISTS crm_campana_atribuciones (
+            id               SERIAL PRIMARY KEY,
+            campana_id       INTEGER NOT NULL REFERENCES crm_campanas(id) ON DELETE CASCADE,
+            cliente_id       INTEGER NOT NULL REFERENCES clientes(id),
+            cotizacion_id    INTEGER NOT NULL REFERENCES cotizaciones(id),
+            monto            NUMERIC(14,2) NOT NULL,
+            dias_desde_envio INTEGER,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(campana_id, cotizacion_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_crm_attr_campana ON crm_campana_atribuciones(campana_id)",
     ]
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
