@@ -7,6 +7,7 @@ y generacion/validacion de tokens JWT.
 
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -60,6 +61,7 @@ def verificar_password(password: str, stored_hash: str, salt: Optional[str] = No
 
 def crear_token(payload: dict) -> str:
     data = payload.copy()
+    data["jti"] = str(uuid.uuid4())
     data["exp"] = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
     return jwt.encode(data, settings.secret_key_efectiva, algorithm=ALGORITHM)
 

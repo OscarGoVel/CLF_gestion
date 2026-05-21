@@ -29,7 +29,10 @@ export function useAuthState() {
     return data.user;
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/api/auth/logout', {});
+    } catch { /* best-effort */ }
     sessionStorage.removeItem('clf_token');
     sessionStorage.removeItem('clf_user');
     setUser(null);

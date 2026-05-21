@@ -201,8 +201,42 @@ async def login_api(request: Request, body: LoginJSON):
     return response
 
 
+@router.post("/api/auth/logout")
+async def logout_api(request: Request):
+    """Invalida el token JWT agregando su jti a la blacklist."""
+    from datetime import datetime, timezone
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if token:
+        from web_app.auth import decodificar_token
+        from web_app.database import pool_usuarios
+        payload = decodificar_token(token)
+        if payload:
+            jti = payload.get("jti")
+            exp_ts = payload.get("exp")
+            if jti and exp_ts:
+                try:
+                    exp_dt = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+                    with pool_usuarios.conexion() as (_, cur):
+                        cur.execute(
+                            "INSERT INTO jwt_blacklist (jti, exp) VALUES (%s, %s) ON CONFLICT (jti) DO NOTHING",
+                            (jti, exp_dt),
+                        )
+                except Exception:
+                    pass
+
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("access_token")
+    return response
+
+
 @router.get("/api/auth/logout")
-async def logout_api():
+async def logout_api_get():
     response = JSONResponse({"ok": True})
     response.delete_cookie("access_token")
     return response

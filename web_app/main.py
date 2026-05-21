@@ -281,6 +281,21 @@ async def lifespan(app: FastAPI):
                     cur.execute(sql)
             except Exception as e:
                 _log.warning(f"Migracion en {db}: {e}")
+    # Migración global: jwt_blacklist (en clf_usuarios)
+    try:
+        with pool_usuarios.conexion() as (_, cur):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS jwt_blacklist (
+                    id         SERIAL PRIMARY KEY,
+                    jti        TEXT NOT NULL UNIQUE,
+                    exp        TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_jbl_jti ON jwt_blacklist(jti)")
+    except Exception as e:
+        _log.warning(f"Migración jwt_blacklist: {e}")
+
     # Scheduler CRM (solo si APScheduler instalado y módulo disponible)
     _crm_scheduler = None
     try:

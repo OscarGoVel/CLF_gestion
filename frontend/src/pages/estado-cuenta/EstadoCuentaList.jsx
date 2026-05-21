@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
+import { exportCSV } from '../../lib/exportCSV';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -41,6 +42,14 @@ export default function EstadoCuentaList() {
           <div className="page-title">Estado de Cuenta</div>
           <div className="page-sub">Cartera activa de clientes</div>
         </div>
+        <button className="btn" disabled={clientes.length === 0}
+          onClick={() => exportCSV(
+            ['nombre', 'tipo', 'rfc', 'corporativo', 'cartera', 'cobrado', 'pendiente', 'dso'],
+            clientes,
+            'estado_cuenta'
+          )}>
+          Exportar CSV
+        </button>
       </div>
 
       {/* KPIs */}
