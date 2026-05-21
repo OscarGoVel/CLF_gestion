@@ -1,4 +1,5 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { MobileNav } from './MobileNav';
 import { ToastContainer } from './ToastContainer';
@@ -168,12 +169,28 @@ export const ROLE_KEY = {
 export function Shell({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const role = ROLE_KEY[user?.role] ?? 'lectura';
   const items = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.lectura;
   const current = activeId(items, location.pathname);
   const subitems = (SUBNAV_BY_ROLE[role] ?? {})[current] ?? [];
 
   const activeColor = MODULE_COLOR[current] ?? 'var(--accent)';
+
+  useEffect(() => {
+    function onKey(e) {
+      const tag = document.activeElement?.tagName ?? '';
+      const isEditing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) ||
+        document.activeElement?.isContentEditable;
+      if (isEditing) return;
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        navigate('/cotizaciones/nueva');
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigate]);
 
   return (
     <div className="shell">
