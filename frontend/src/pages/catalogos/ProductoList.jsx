@@ -52,6 +52,7 @@ export default function ProductoList() {
       precio_base:   p.precio_base ?? '',
       stock_minimo:  p.stock_minimo ?? '',
       aplica_iva:    p.aplica_iva ?? false,
+      maneja_lotes:  p.maneja_lotes ?? false,
     });
     setEditErr('');
     setEditItem(p);
@@ -262,6 +263,12 @@ export default function ProductoList() {
                 checked={editData.aplica_iva ?? false}
                 onChange={(e) => setEditData((d) => ({ ...d, aplica_iva: e.target.checked }))} />
               <span style={{ fontSize: 13 }}>Aplica IVA (16%)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox"
+                checked={editData.maneja_lotes ?? false}
+                onChange={(e) => setEditData((d) => ({ ...d, maneja_lotes: e.target.checked }))} />
+              <span style={{ fontSize: 13 }}>Maneja lotes / vencimientos</span>
             </div>
           </div>
           {editErr && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{editErr}</div>}

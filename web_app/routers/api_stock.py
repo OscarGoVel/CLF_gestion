@@ -4,6 +4,7 @@ web_app/routers/api_stock.py
 /api/stock — inventario y movimientos para el SPA React.
 """
 
+from datetime import date as _date
 from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +26,94 @@ def _rows(cur):
     cols = [d[0] for d in cur.description]
     return [{k: _serial(v) for k, v in zip(cols, r)} for r in cur.fetchall()]
 
+
+# ── GET /api/stock/lotes/alertas ─────────────────────────────────────────────
+
+@router.get("/lotes/alertas")
+async def lotes_alertas(user: dict = Depends(get_usuario_api)):
+    hoy = _date.today()
+    prox = hoy.replace(day=min(hoy.day + 30, 28)) if hoy.day <= 28 else \
+        _date(hoy.year + (hoy.month // 12), (hoy.month % 12) + 1, hoy.day - 28)
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT l.id, p.nombre AS producto, p.codigo, l.numero_lote,
+                   l.fecha_vencimiento, l.cantidad,
+                   CASE
+                       WHEN l.fecha_vencimiento < %s THEN 'vencido'
+                       WHEN l.fecha_vencimiento <= %s THEN 'proximo'
+                       ELSE 'ok'
+                   END AS alerta
+            FROM lotes l
+            JOIN productos p ON p.id = l.producto_id
+            WHERE l.cantidad > 0
+              AND l.fecha_vencimiento IS NOT NULL
+              AND l.fecha_vencimiento <= %s
+            ORDER BY l.fecha_vencimiento ASC
+        """, (hoy, prox, prox))
+        alertas = _rows(cur)
+    return JSONResponse({"alertas": alertas})
+
+
+# ── GET /api/stock/{producto_id}/lotes ───────────────────────────────────────
+
+@router.get("/{producto_id}/lotes")
+async def listar_lotes(producto_id: int, user: dict = Depends(get_usuario_api)):
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id FROM productos WHERE id = %s", (producto_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        cur.execute("""
+            SELECT id, numero_lote, fecha_vencimiento, cantidad, fecha_entrada, notas, created_at
+            FROM lotes WHERE producto_id = %s
+            ORDER BY fecha_vencimiento ASC NULLS LAST, id DESC
+        """, (producto_id,))
+        lotes = _rows(cur)
+    hoy = _date.today()
+    prox = hoy.replace(day=min(hoy.day + 30, 28)) if hoy.day <= 28 else \
+        _date(hoy.year + (hoy.month // 12), (hoy.month % 12) + 1, hoy.day - 28)
+    for lt in lotes:
+        fv = lt.get("fecha_vencimiento")
+        if fv is None:
+            lt["alerta"] = "ok"
+        else:
+            fv_d = _date.fromisoformat(str(fv)[:10])
+            lt["alerta"] = "vencido" if fv_d < hoy else ("proximo" if fv_d <= prox else "ok")
+    return JSONResponse({"lotes": lotes})
+
+
+# ── POST /api/stock/{producto_id}/lotes ──────────────────────────────────────
+
+class LoteIn(BaseModel):
+    numero_lote: str
+    fecha_vencimiento: Optional[str] = None
+    cantidad: float
+    fecha_entrada: Optional[str] = None
+    notas: Optional[str] = None
+
+
+@router.post("/{producto_id}/lotes", status_code=201)
+async def crear_lote(producto_id: int, body: LoteIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if body.cantidad <= 0:
+        raise HTTPException(status_code=422, detail="Cantidad debe ser mayor a 0")
+    if not body.numero_lote.strip():
+        raise HTTPException(status_code=422, detail="Número de lote requerido")
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("SELECT id FROM productos WHERE id = %s", (producto_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        cur.execute("""
+            INSERT INTO lotes (producto_id, numero_lote, fecha_vencimiento, cantidad, fecha_entrada, notas)
+            VALUES (%s, %s, %s::date, %s, %s::date, %s)
+        """, (producto_id, body.numero_lote.strip(),
+              body.fecha_vencimiento or None, body.cantidad,
+              body.fecha_entrada or None, body.notas or None))
+        new_id = cur.lastrowid
+    return JSONResponse({"id": new_id}, status_code=201)
+
+
+# ── GET /api/stock ────────────────────────────────────────────────────────────
 
 @router.get("")
 async def inventario(
@@ -53,7 +142,12 @@ async def inventario(
                    cat.nombre  AS categoria,
                    sub.nombre  AS subcategoria,
                    COALESCE(AVG(cd.costo_unitario), p.precio_base, 0) AS costo_prom,
-                   prov.nombre AS proveedor_principal
+                   prov.nombre AS proveedor_principal,
+                   p.maneja_lotes,
+                   (SELECT COUNT(*) FROM lotes lt WHERE lt.producto_id = p.id AND lt.cantidad > 0) AS lote_count,
+                   (SELECT MIN(lt.fecha_vencimiento) FROM lotes lt
+                    WHERE lt.producto_id = p.id AND lt.cantidad > 0
+                      AND lt.fecha_vencimiento IS NOT NULL) AS proximo_vencimiento
             FROM productos p
             LEFT JOIN categorias    cat  ON cat.id  = p.categoria_id
             LEFT JOIN subcategorias sub  ON sub.id  = p.subcategoria_id
@@ -81,8 +175,9 @@ async def inventario(
         cur.execute("SELECT nombre FROM categorias ORDER BY nombre")
         categorias = [r[0] for r in cur.fetchall()]
 
-    from datetime import date as _date
     hoy = _date.today()
+    prox_30 = hoy.replace(day=min(hoy.day + 30, 28)) if hoy.day <= 28 else \
+        _date(hoy.year + (hoy.month // 12), (hoy.month % 12) + 1, hoy.day - 28)
 
     for p in productos:
         # Días de inventario
@@ -106,6 +201,17 @@ async def inventario(
                 p["precio_base_dias"] = None
         else:
             p["precio_base_dias"] = None
+
+        # Alerta de lote vencimiento
+        pv = p.get("proximo_vencimiento")
+        if p.get("maneja_lotes") and pv:
+            try:
+                pv_d = _date.fromisoformat(str(pv)[:10])
+                p["lote_alerta"] = "vencido" if pv_d < hoy else ("proximo" if pv_d <= prox_30 else "ok")
+            except (ValueError, TypeError):
+                p["lote_alerta"] = "ok"
+        else:
+            p["lote_alerta"] = None
 
     # Clasificación ABC por valor de inventario (acumulado: A=0-80%, B=80-95%, C=95-100%)
     total_valor = sum((p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0) for p in productos)

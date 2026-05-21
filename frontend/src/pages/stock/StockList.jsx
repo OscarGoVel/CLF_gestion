@@ -51,6 +51,19 @@ function TipoBadge({ tipo }) {
   );
 }
 
+function LoteBadge({ alerta, count }) {
+  if (!alerta) return null;
+  const cfg = {
+    vencido: { bg: '#fee2e2', color: '#991b1b', label: `${count ?? '?'}L Vencido` },
+    proximo: { bg: '#ffedd5', color: '#9a3412', label: `${count ?? '?'}L Próximo` },
+    ok:      { bg: '#dcfce7', color: '#166534', label: `${count ?? 0}L` },
+  }[alerta] ?? { bg: '#f3f4f6', color: '#6b7280', label: '—' };
+  return (
+    <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+      background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+  );
+}
+
 export default function StockList() {
   const navigate = useNavigate();
   const [q, setQ]               = useState('');
@@ -68,6 +81,13 @@ export default function StockList() {
   const [referencia, setReferencia] = useState('');
   const [saving, setSaving]         = useState(false);
   const [ajusteErr, setAjusteErr]   = useState('');
+
+  // Modal lotes
+  const [lotesProd, setLotesProd]   = useState(null);
+  const [lotes, setLotes]           = useState([]);
+  const [lotesLoading, setLotesLoading] = useState(false);
+  const [nuevoLote, setNuevoLote]   = useState({ numero_lote: '', fecha_vencimiento: '', cantidad: '', notas: '' });
+  const [savingLote, setSavingLote] = useState(false);
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -122,6 +142,34 @@ export default function StockList() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function abrirLotes(p) {
+    setLotesProd(p);
+    setNuevoLote({ numero_lote: '', fecha_vencimiento: '', cantidad: '', notas: '' });
+    setLotesLoading(true);
+    try {
+      const res = await api.get(`/api/stock/${p.id}/lotes`);
+      setLotes(res.lotes ?? []);
+    } catch { setLotes([]); } finally { setLotesLoading(false); }
+  }
+
+  async function crearLote() {
+    if (!nuevoLote.numero_lote.trim() || !nuevoLote.cantidad) return;
+    setSavingLote(true);
+    try {
+      await api.post(`/api/stock/${lotesProd.id}/lotes`, {
+        numero_lote:       nuevoLote.numero_lote.trim(),
+        fecha_vencimiento: nuevoLote.fecha_vencimiento || null,
+        cantidad:          parseFloat(nuevoLote.cantidad),
+        notas:             nuevoLote.notas || null,
+      });
+      toast.success('Lote registrado');
+      const res = await api.get(`/api/stock/${lotesProd.id}/lotes`);
+      setLotes(res.lotes ?? []);
+      setNuevoLote({ numero_lote: '', fecha_vencimiento: '', cantidad: '', notas: '' });
+      await refetch();
+    } catch (err) { toast.error(err.message); } finally { setSavingLote(false); }
   }
 
   const diferencia = ajusteProd != null ? parseFloat(sNuevo) - (ajusteProd.stock_actual ?? 0) : 0;
@@ -211,6 +259,7 @@ export default function StockList() {
                   <th className="num" style={{ width: 70 }}>Días inv.</th>
                   <th style={{ width: 40 }}>ABC</th>
                   <th className="num" style={{ width: 70 }} title="Días desde última actualización del precio base">Precio</th>
+                  <th style={{ width: 70 }}>Lotes</th>
                   <th style={{ width: 72 }}></th>
                 </tr>
               </thead>
@@ -247,6 +296,14 @@ export default function StockList() {
                       </td>
                       <td className="num">
                         <PrecioBadge dias={p.precio_base_dias} />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {p.maneja_lotes ? (
+                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            onClick={() => abrirLotes(p)}>
+                            <LoteBadge alerta={p.lote_alerta ?? 'ok'} count={p.lote_count} />
+                          </button>
+                        ) : <span style={{ color: 'var(--ink-300)', fontSize: 11 }}>—</span>}
                       </td>
                       <td style={{ textAlign: 'right', paddingRight: 10 }}>
                         <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }}
@@ -371,6 +428,84 @@ export default function StockList() {
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Modal lotes */}
+      <Modal open={!!lotesProd} onClose={() => setLotesProd(null)}
+        title={`Lotes — ${lotesProd?.nombre ?? ''}`} width={540}>
+        {lotesProd && (
+          <div>
+            {lotesLoading ? (
+              <div style={{ textAlign: 'center', padding: 24, color: 'var(--ink-400)' }}>Cargando…</div>
+            ) : lotes.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 16, color: 'var(--ink-400)', fontSize: 13, marginBottom: 16 }}>Sin lotes registrados</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--ink-200)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--ink-500)' }}>Lote</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--ink-500)' }}>Vence</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--ink-500)' }}>Cant.</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--ink-500)' }}>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotes.map((lt) => {
+                    const color = lt.alerta === 'vencido' ? '#dc2626' : lt.alerta === 'proximo' ? '#ea580c' : '#16a34a';
+                    return (
+                      <tr key={lt.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
+                        <td style={{ padding: '7px 8px', fontFamily: 'var(--mono)', fontSize: 12 }}>{lt.numero_lote}</td>
+                        <td style={{ padding: '7px 8px', fontSize: 12 }}>{lt.fecha_vencimiento ?? '—'}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right', fontSize: 12 }}>{lt.cantidad}</td>
+                        <td style={{ padding: '7px 8px' }}>
+                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+                            background: color + '20', color }}>
+                            {lt.alerta === 'vencido' ? 'Vencido' : lt.alerta === 'proximo' ? 'Próximo' : 'OK'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--ink-200)', paddingTop: 14, marginTop: 4 }}>
+              <div className="note" style={{ marginBottom: 10 }}>NUEVO LOTE</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div className="note" style={{ marginBottom: 3 }}>Nº LOTE *</div>
+                  <input className="input" value={nuevoLote.numero_lote}
+                    onChange={(e) => setNuevoLote((f) => ({ ...f, numero_lote: e.target.value }))} />
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 3 }}>CANTIDAD *</div>
+                  <input className="input" type="number" min="0.001" step="0.001"
+                    value={nuevoLote.cantidad}
+                    onChange={(e) => setNuevoLote((f) => ({ ...f, cantidad: e.target.value }))} />
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 3 }}>FECHA VENCIMIENTO</div>
+                  <input className="input" type="date" value={nuevoLote.fecha_vencimiento}
+                    onChange={(e) => setNuevoLote((f) => ({ ...f, fecha_vencimiento: e.target.value }))} />
+                </div>
+                <div>
+                  <div className="note" style={{ marginBottom: 3 }}>NOTAS</div>
+                  <input className="input" value={nuevoLote.notas}
+                    onChange={(e) => setNuevoLote((f) => ({ ...f, notas: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button className="btn" onClick={() => setLotesProd(null)}>Cerrar</button>
+                <button className="btn btn-primary"
+                  disabled={savingLote || !nuevoLote.numero_lote.trim() || !nuevoLote.cantidad}
+                  onClick={crearLote}>
+                  {savingLote ? 'Guardando…' : 'Agregar lote'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

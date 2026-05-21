@@ -165,7 +165,7 @@ async def listar_productos(
         cur.execute(f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
                    p.stock_actual, p.stock_minimo, p.precio_base,
-                   p.aplica_iva,
+                   p.aplica_iva, p.maneja_lotes,
                    cat.nombre  AS categoria,
                    sub.nombre  AS subcategoria,
                    COALESCE(AVG(cd.costo_unitario), p.precio_base, 0) AS costo_prom,
@@ -324,7 +324,7 @@ async def editar_producto(producto_id: int, request: Request, user: dict = Depen
     if user.get("rol") not in ("Administrador", "Operador"):
         raise HTTPException(status_code=403, detail="Sin permiso")
     body = await request.json()
-    allowed = {"nombre", "codigo", "unidad_medida", "precio_base", "precio_venta", "stock_minimo", "aplica_iva"}
+    allowed = {"nombre", "codigo", "unidad_medida", "precio_base", "precio_venta", "stock_minimo", "aplica_iva", "maneja_lotes"}
     data = {k: v for k, v in body.items() if k in allowed}
     for str_field in ("nombre", "codigo", "unidad_medida"):
         if str_field in data:

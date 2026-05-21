@@ -35,7 +35,9 @@ function PendientesSection({ titulo, items, urgencia, cta, navigate }) {
 
 export default function Dashboard() {
   const { data, loading } = useFetch('/api/dashboard');
+  const { data: lotesData } = useFetch('/api/stock/lotes/alertas');
   const navigate = useNavigate();
+  const lotesAlertas = lotesData?.alertas ?? [];
 
   const kpis    = data?.kpis ?? {};
   const bloques = data?.bloques ?? {};
@@ -103,6 +105,45 @@ export default function Dashboard() {
             );
           })}
         </div>
+      )}
+
+      {/* Alertas de lotes */}
+      {lotesAlertas.length > 0 && (
+        <>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>Alertas de vencimiento de lotes</div>
+          <div className="card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Lote</th>
+                  <th style={{ width: '15%' }}>Vence</th>
+                  <th className="num" style={{ width: 80 }}>Cant.</th>
+                  <th style={{ width: 90 }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lotesAlertas.map((lt) => {
+                  const color = lt.alerta === 'vencido' ? 'var(--danger)' : 'var(--warn)';
+                  return (
+                    <tr key={lt.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/stock')}>
+                      <td style={{ fontWeight: 500 }}>{lt.producto}</td>
+                      <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{lt.numero_lote}</td>
+                      <td style={{ color, fontWeight: 600, fontSize: 12 }}>{lt.fecha_vencimiento}</td>
+                      <td className="num" style={{ fontSize: 12 }}>{lt.cantidad}</td>
+                      <td>
+                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+                          background: color + '20', color }}>
+                          {lt.alerta === 'vencido' ? 'Vencido' : 'Próximo'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Próximas entregas */}
