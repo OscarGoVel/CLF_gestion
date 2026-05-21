@@ -4,6 +4,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { StatusBadge } from '../../components/StatusBadge';
+import { EmptyState } from '../../components/EmptyState';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -172,11 +173,7 @@ export default function CompraDetalle() {
           </thead>
           <tbody>
             {lineas.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: 32, textAlign: 'center', color: 'var(--ink-400)' }}>
-                  Sin líneas registradas
-                </td>
-              </tr>
+              <tr><td colSpan={7}><EmptyState message="Aún no hay líneas registradas." /></td></tr>
             ) : lineas.map((l, i) => (
               <tr key={l.id ?? i} style={{ borderBottom: '1px solid var(--ink-100)' }}>
                 <td style={{ padding: '10px 16px', fontWeight: 500 }}>{l.nombre}</td>

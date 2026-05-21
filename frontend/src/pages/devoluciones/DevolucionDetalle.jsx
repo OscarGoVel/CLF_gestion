@@ -3,13 +3,15 @@ import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { useState } from 'react';
+import { StatusBadge } from '../../components/StatusBadge';
+import { EmptyState } from '../../components/EmptyState';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
 export default function DevolucionDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch(`/api/devoluciones/${id}`);
+  const { data, loading, refetch } = useFetch(`/api/comercial/devoluciones/${id}`);
   const [cerrando, setCerrando] = useState(false);
 
   const dev   = data?.devolucion ?? null;
@@ -18,7 +20,7 @@ export default function DevolucionDetalle() {
   async function handleCerrar() {
     setCerrando(true);
     try {
-      await api.patch(`/api/devoluciones/${id}/cerrar`, {});
+      await api.patch(`/api/comercial/devoluciones/${id}/cerrar`, {});
       toast.success('Devolución cerrada');
       refetch();
     } catch (e) {
@@ -34,7 +36,7 @@ export default function DevolucionDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/devoluciones')}>Devoluciones</a>
+        <a onClick={() => navigate('/comercial/devoluciones')}>Devoluciones</a>
         <span className="sep">/</span>
         <span>{dev.folio}</span>
       </div>
@@ -43,11 +45,7 @@ export default function DevolucionDetalle() {
         <div>
           <div className="page-title" style={{ fontFamily: 'var(--mono)', display: 'flex', alignItems: 'center', gap: 10 }}>
             {dev.folio}
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-              background: dev.estado === 'Cerrada' ? '#f3f4f6' : '#dcfce7',
-              color: dev.estado === 'Cerrada' ? '#374151' : '#166534',
-            }}>{dev.estado}</span>
+            {dev.estado && <StatusBadge status={dev.estado} />}
           </div>
           <div className="page-sub">
             {dev.cliente}
@@ -61,7 +59,7 @@ export default function DevolucionDetalle() {
               {cerrando ? 'Cerrando…' : 'Cerrar devolución'}
             </button>
           )}
-          <button className="btn" onClick={() => navigate('/devoluciones')}>← Volver</button>
+          <button className="btn" onClick={() => navigate('/comercial/devoluciones')}>← Volver</button>
         </div>
       </div>
 
@@ -83,7 +81,7 @@ export default function DevolucionDetalle() {
               </thead>
               <tbody>
                 {lineas.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin líneas</td></tr>
+                  <tr><td colSpan={6}><EmptyState message="Aún no hay productos devueltos." /></td></tr>
                 ) : lineas.map((l, i) => (
                   <tr key={l.id ?? i}>
                     <td style={{ fontWeight: 500 }}>{l.nombre}</td>
@@ -116,7 +114,7 @@ export default function DevolucionDetalle() {
               {dev.cot_folio && (
                 <div>
                   <div className="note" style={{ marginBottom: 2 }}>COTIZACIÓN</div>
-                  <Link to={`/cotizaciones/${dev.cotizacion_id}`}
+                  <Link to={`/comercial/cotizaciones/${dev.cotizacion_id}`}
                     style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>
                     {dev.cot_folio}
                   </Link>
