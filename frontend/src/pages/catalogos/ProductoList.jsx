@@ -94,7 +94,7 @@ export default function ProductoList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Catálogos</span>
         <span className="sep">/</span>
@@ -103,15 +103,15 @@ export default function ProductoList() {
 
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--ink-200)', marginBottom: 20 }}>
         {[
-          { label: 'Clientes',    path: '/catalogos/clientes' },
-          { label: 'Productos',   path: '/catalogos/productos' },
-          { label: 'Proveedores', path: '/catalogos/proveedores' },
+          { label: 'Clientes',    path: '/comercial/clientes' },
+          { label: 'Productos',   path: '/inventario/productos' },
+          { label: 'Proveedores', path: '/abastecimiento/proveedores' },
         ].map((t) => (
           <button key={t.path} onClick={() => navigate(t.path)} style={{
             padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-            fontWeight: t.path === '/catalogos/productos' ? 500 : 400,
-            color: t.path === '/catalogos/productos' ? 'var(--ink-900)' : 'var(--ink-500)',
-            borderBottom: t.path === '/catalogos/productos' ? '2px solid var(--accent)' : '2px solid transparent',
+            fontWeight: t.path === '/inventario/productos' ? 500 : 400,
+            color: t.path === '/inventario/productos' ? 'var(--ink-900)' : 'var(--ink-500)',
+            borderBottom: t.path === '/inventario/productos' ? '2px solid var(--accent)' : '2px solid transparent',
             marginBottom: -1,
           }}>{t.label}</button>
         ))}
@@ -129,7 +129,7 @@ export default function ProductoList() {
             ['codigo', 'nombre', 'categoria', 'unidad_medida', 'stock_actual', 'stock_minimo', 'costo_prom'],
             productos, 'productos'
           )}>Exportar CSV</button>
-          <button className="btn btn-primary" onClick={() => navigate('/catalogos/productos/nuevo')}>Nuevo producto</button>
+          <button className="btn btn-primary" onClick={() => navigate('/inventario/productos/nuevo')}>Nuevo producto</button>
         </div>
       </div>
 

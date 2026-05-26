@@ -547,7 +547,7 @@ export default function Analisis() {
               {alertasMargen.map((a, i) => (
                 <tr key={i}>
                   <td>
-                    <a href={`/cotizaciones/${a.cot_id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
+                    <a href={`/comercial/cotizaciones/${a.cot_id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
                       {a.folio}
                     </a>
                   </td>

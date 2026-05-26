@@ -34,6 +34,15 @@ class Settings:
     SECRET_KEY:   str = os.environ.get("CLF_SECRET_KEY", "")
     ENVIRONMENT:  str = os.environ.get("CLF_ENV", "development")
 
+    # CRM / Email
+    SENDGRID_API_KEY: str = os.environ.get("SENDGRID_API_KEY", "")
+    CRM_FROM_EMAIL:   str = os.environ.get("CRM_FROM_EMAIL", "noreply@clf-gestion.com")
+    CRM_FROM_NAME:    str = os.environ.get("CRM_FROM_NAME",  "CLF Gestión")
+    CRM_BASE_URL:     str = os.environ.get("CRM_BASE_URL",   "https://clf-gestion.web.app")
+
+    # Almacenamiento Cloud (XMLs de facturas)
+    GCS_XML_BUCKET: str = os.environ.get("GCS_XML_BUCKET", "")
+
     # Red
     HOST:       str = os.environ.get("CLF_HOST", "0.0.0.0")
     PORT:       int = int(os.environ.get("CLF_PORT", "8000"))

@@ -94,9 +94,9 @@ export default function StockList() {
   catFiltro.forEach((c) => params.append('categoria', c));
   if (bajoMin) params.set('bajo_minimo', bajoMin);
 
-  const { data, loading, refetch }    = useFetch(vista === 'inventario' ? `/api/stock?${params}` : null);
+  const { data, loading, refetch }    = useFetch(vista === 'inventario' ? `/api/inventario/stock?${params}` : null);
   const { data: movData, loading: movLoading, refetch: refetchMov } = useFetch(
-    vista === 'movimientos' ? `/api/stock/movimientos?pagina=${movPag}` : null
+    vista === 'movimientos' ? `/api/inventario/stock/movimientos?pagina=${movPag}` : null
   );
 
   const productos  = data?.productos  ?? [];
@@ -127,7 +127,7 @@ export default function StockList() {
     if (motivo === 'Otro' && !notas.trim()) { setAjusteErr('Las notas son obligatorias cuando el motivo es "Otro"'); return; }
     setSaving(true);
     try {
-      await api.post('/api/stock/ajuste', {
+      await api.post('/api/inventario/stock/ajuste', {
         producto_id: ajusteProd.id,
         stock_nuevo: stockNuevo,
         motivo,
@@ -149,7 +149,7 @@ export default function StockList() {
     setNuevoLote({ numero_lote: '', fecha_vencimiento: '', cantidad: '', notas: '' });
     setLotesLoading(true);
     try {
-      const res = await api.get(`/api/stock/${p.id}/lotes`);
+      const res = await api.get(`/api/inventario/stock/${p.id}/lotes`);
       setLotes(res.lotes ?? []);
     } catch { setLotes([]); } finally { setLotesLoading(false); }
   }
@@ -158,14 +158,14 @@ export default function StockList() {
     if (!nuevoLote.numero_lote.trim() || !nuevoLote.cantidad) return;
     setSavingLote(true);
     try {
-      await api.post(`/api/stock/${lotesProd.id}/lotes`, {
+      await api.post(`/api/inventario/stock/${lotesProd.id}/lotes`, {
         numero_lote:       nuevoLote.numero_lote.trim(),
         fecha_vencimiento: nuevoLote.fecha_vencimiento || null,
         cantidad:          parseFloat(nuevoLote.cantidad),
         notas:             nuevoLote.notas || null,
       });
       toast.success('Lote registrado');
-      const res = await api.get(`/api/stock/${lotesProd.id}/lotes`);
+      const res = await api.get(`/api/inventario/stock/${lotesProd.id}/lotes`);
       setLotes(res.lotes ?? []);
       setNuevoLote({ numero_lote: '', fecha_vencimiento: '', cantidad: '', notas: '' });
       await refetch();
@@ -179,7 +179,7 @@ export default function StockList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Almacén</span>
       </div>

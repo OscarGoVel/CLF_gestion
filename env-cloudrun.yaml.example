@@ -5,3 +5,9 @@ CLF_PG_USER: "postgres"
 CLF_PG_PASSWORD: "<contraseña de Cloud SQL>"
 CLF_PG_DB_USUARIOS: "clf_usuarios"
 CLF_EMPRESAS_JSON: '[{"id":"emp_<RFC>_default","nombre":"<RAZON SOCIAL>","rfc":"<RFC>","razon_social":"<RAZON SOCIAL COMPLETA>","email":"<EMAIL>","telefono":"<TEL>","direccion":"<DIR>","pg_database":"clf_empresa","fecha_registro":"YYYY-MM-DD"}]'
+# CRM / Email (opcional — sin SENDGRID_API_KEY los correos no se envían)
+SENDGRID_API_KEY: "<tu API key de SendGrid>"
+CRM_FROM_EMAIL: "correo@tudominio.com"
+CRM_FROM_NAME: "CLF Gestión"
+# Almacenamiento XML de facturas en GCS (recomendado en Cloud Run — filesystem es efímero)
+GCS_XML_BUCKET: "<nombre-del-bucket, ej: clf-gestion-facturas-xml>"

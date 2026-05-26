@@ -30,7 +30,7 @@ export default function DevolucionNueva() {
   async function buscarProducto(idx, q) {
     setProdQ((p) => ({ ...p, [idx]: q }));
     if (q.length < 2) { setProdRes((p) => ({ ...p, [idx]: [] })); return; }
-    const res = await api.get(`/api/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`).catch(() => null);
+    const res = await api.get(`/api/comercial/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`).catch(() => null);
     setProdRes((p) => ({ ...p, [idx]: res?.resultados ?? [] }));
   }
 
@@ -78,7 +78,7 @@ export default function DevolucionNueva() {
         })),
       });
       toast.success(`Devolución ${res.folio} creada`);
-      navigate(`/devoluciones/${res.id}`);
+      navigate(`/comercial/devoluciones/${res.id}`);
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -91,7 +91,7 @@ export default function DevolucionNueva() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/devoluciones')}>Devoluciones</a>
+        <a onClick={() => navigate('/comercial/devoluciones')}>Devoluciones</a>
         <span className="sep">/</span>
         <span>Nueva</span>
       </div>
@@ -243,7 +243,7 @@ export default function DevolucionNueva() {
               {guardando ? 'Guardando…' : 'Registrar devolución'}
             </button>
             <button className="btn" style={{ width: '100%', marginTop: 8 }}
-              onClick={() => navigate('/devoluciones')}>
+              onClick={() => navigate('/comercial/devoluciones')}>
               Cancelar
             </button>
           </div>

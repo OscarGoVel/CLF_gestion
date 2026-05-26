@@ -8,7 +8,7 @@ const CATEGORIAS = ['informativo', 'promocional', 'secuencia', 'reactivacion'];
 
 export default function Plantillas() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/plantillas');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/plantillas');
   const plantillas = data?.plantillas ?? [];
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando]   = useState(null);
@@ -21,7 +21,7 @@ export default function Plantillas() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Plantillas</span>
       </div>
@@ -113,7 +113,7 @@ function PreviewBtn({ plantillaId }) {
 
   async function handleOpen() {
     try {
-      const r = await api.post(`/api/crm/plantillas/${plantillaId}/preview`, {});
+      const r = await api.post(`/api/comercial/crm/plantillas/${plantillaId}/preview`, {});
       setHtml(r.html);
       setOpen(true);
     } catch (e) {
@@ -175,12 +175,12 @@ function PlantillaModal({ initial, onClose, onSaved }) {
     setSaving(true); setError('');
     try {
       if (initial?.id) {
-        await api.patch(`/api/crm/plantillas/${initial.id}`, {
+        await api.patch(`/api/comercial/crm/plantillas/${initial.id}`, {
           nombre: nombre.trim(), categoria: cat,
           asunto_default: asunto.trim() || null, html_body: html,
         });
       } else {
-        await api.post('/api/crm/plantillas', {
+        await api.post('/api/comercial/crm/plantillas', {
           nombre: nombre.trim(), categoria: cat,
           asunto_default: asunto.trim() || null, html_body: html || HTML_STARTER,
         });

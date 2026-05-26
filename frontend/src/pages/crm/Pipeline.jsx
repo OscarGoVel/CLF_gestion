@@ -26,7 +26,7 @@ const BLANK = {
 
 export default function Pipeline() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/prospectos');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/prospectos');
 
   const [modal,    setModal]    = useState(false);
   const [editing,  setEditing]  = useState(null);   // null = nuevo
@@ -72,10 +72,10 @@ export default function Pipeline() {
         motivo_perdida: form.etapa === 'perdido' ? form.motivo_perdida || null : null,
       };
       if (editing) {
-        await api.patch(`/api/crm/prospectos/${editing}`, payload);
+        await api.patch(`/api/comercial/crm/prospectos/${editing}`, payload);
         toast.success('Prospecto actualizado');
       } else {
-        await api.post('/api/crm/prospectos', payload);
+        await api.post('/api/comercial/crm/prospectos', payload);
         toast.success('Prospecto creado');
       }
       setModal(false);
@@ -90,7 +90,7 @@ export default function Pipeline() {
   async function handleMover(id, nuevaEtapa) {
     setMoverOpen(null);
     try {
-      await api.patch(`/api/crm/prospectos/${id}`, {
+      await api.patch(`/api/comercial/crm/prospectos/${id}`, {
         etapa: nuevaEtapa,
         probabilidad: PROBA_ETAPA[nuevaEtapa] ?? 0,
       });
@@ -103,7 +103,7 @@ export default function Pipeline() {
   async function handleEliminar(id) {
     if (!window.confirm('¿Eliminar este prospecto?')) return;
     try {
-      await api.delete(`/api/crm/prospectos/${id}`);
+      await api.delete(`/api/comercial/crm/prospectos/${id}`);
       refetch();
     } catch (e) {
       toast.error(e.message);
@@ -118,7 +118,7 @@ export default function Pipeline() {
     <>
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Pipeline</span>
       </div>

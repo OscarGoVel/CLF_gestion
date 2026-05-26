@@ -7,6 +7,7 @@ import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { Modal } from '../../components/Modal';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { VincularCfdiModal } from '../facturas/VincularCfdiModal';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 
@@ -58,6 +59,7 @@ export default function CotDetalle() {
   const [tFecha,         setTFecha]         = useState('');
   const [tNotas,         setTNotas]         = useState('');
   const [guardandoTras,  setGuardandoTras]  = useState(false);
+  const [modalVincular,  setModalVincular]  = useState(false);
 
   const LABELS_ESTADO = {
     Programada: 'OC registrada — cotización programada',
@@ -124,8 +126,8 @@ export default function CotDetalle() {
   const steps     = buildSteps(cot);
   const nextAction = buildNextAction(cot, {
     onEnviar:            () => handleCambiarEstado('Pendiente'),
-    onGenerarOC:         () => navigate(`/abastecimiento/compras/nueva?cot=${cot.id}`),
-    onFacturar:          () => navigate(`/documentos/cfdi/importar`),
+    onGenerarOC:         () => navigate(`/abastecimiento/compras/nueva?cotizacion_id=${cot.id}`),
+    onFacturar:          () => setModalVincular(true),
     onRegistrarSinCfdi:  () => { setNroFactura(''); setFechaFactura(today); setModalSinCfdi(true); },
     onNotaRemision:      handleNotaRemision,
     onRegistrarOC:       () => { setOcInput(cot.orden_compra || ''); setModalOC(true); },
@@ -241,6 +243,29 @@ export default function CotDetalle() {
       {nextAction && (
         <div style={{ marginBottom: 20 }}>
           <NextRibbon action={nextAction} warn={cot.stock_ok === false} />
+        </div>
+      )}
+
+      {/* Banner: sin costo real */}
+      {['Entregada', 'Facturada', 'Pagada'].includes(cot.estado) && compras.length === 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: '#fff7ed', border: '1px solid #fed7aa',
+          borderRadius: 8, padding: '10px 16px', marginBottom: 20,
+          fontSize: 13, color: '#9a3412',
+        }}>
+          <span style={{ fontSize: 16 }}>⚠</span>
+          <div style={{ flex: 1 }}>
+            <strong>Sin costo real:</strong> esta cotización no tiene compra vinculada.
+            El margen mostrado es estimado (costo snapshot del catálogo).
+          </div>
+          <button
+            className="btn btn-sm"
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => navigate(`/abastecimiento/compras/nueva?cotizacion_id=${cot.id}`)}
+          >
+            Registrar compra
+          </button>
         </div>
       )}
 
@@ -744,6 +769,15 @@ export default function CotDetalle() {
         </div>
       </div>
     </Modal>
+
+    {/* Modal: Vincular CFDI */}
+    <VincularCfdiModal
+      open={modalVincular}
+      onClose={() => setModalVincular(false)}
+      cotizacionId={Number(id)}
+      onLinked={refetch}
+      facturasVinculadas={facturas}
+    />
 
     {/* Modal: Registrar factura sin CFDI */}
     <Modal open={modalSinCfdi} onClose={() => setModalSinCfdi(false)} title="Registrar número de factura" width={400}>

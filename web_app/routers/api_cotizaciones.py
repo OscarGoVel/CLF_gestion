@@ -18,9 +18,10 @@ from typing import List, Optional
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
+from web_app.historial import log_evento
 from core.constants import ESTADOS_COTIZACION as ESTADOS, formato_folio
 
-router = APIRouter(prefix="/api/cotizaciones", tags=["api"])
+router = APIRouter(prefix="/api/comercial/cotizaciones", tags=["api"])
 
 POR_PAGINA = 25
 
@@ -317,6 +318,13 @@ async def cambiar_estado(cot_id: int, body: EstadoIn, user: dict = Depends(get_u
     from web_app.cache import cache as _cache
     _cache.invalidar(f"dashboard:{empresa_db}")
 
+    log_evento(
+        empresa_db, "cotizacion", cot_id,
+        f"Estado → {body.nuevo_estado}",
+        detalle=f"Cambiado por {user.get('username', '?')}",
+        usuario=user.get("username"),
+    )
+
     return JSONResponse({"ok": True})
 
 
@@ -503,11 +511,18 @@ async def exportar(user: dict = Depends(get_usuario_api)):
         cur.execute("""
             SELECT c.folio, c.fecha,
                    COALESCE(cl.nombre_comercial, '—') AS cliente,
-                   c.total, c.estado,
-                   c.orden_compra, c.numero_factura
+                   c.total AS total_cotizacion, c.estado,
+                   c.orden_compra, c.numero_factura,
+                   COALESCE(p.codigo, '')                        AS codigo,
+                   COALESCE(p.nombre, cd.descripcion_libre, '')  AS concepto,
+                   COALESCE(p.unidad_medida, '')                 AS unidad,
+                   cd.cantidad, cd.precio_unitario,
+                   cd.subtotal, cd.iva, cd.total                 AS total_partida
             FROM cotizaciones c
             LEFT JOIN clientes cl ON cl.id = c.cliente_id
-            ORDER BY c.fecha DESC, c.id DESC
+            LEFT JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+            LEFT JOIN productos p ON p.id = cd.producto_id
+            ORDER BY c.fecha DESC, c.id DESC, cd.id
         """)
         rows = _rows(cur)
 
@@ -529,7 +544,7 @@ async def exportar(user: dict = Depends(get_usuario_api)):
         "facturado":  _serial(r[2]) or 0,
         "pagado":     _serial(r[3]) or 0,
     }
-    return JSONResponse({"cotizaciones": rows, "totales": totales})
+    return JSONResponse({"partidas": rows, "totales": totales})
 
 
 # ── GET /api/cotizaciones/{cot_id} ───────────────────────────────────────────
@@ -777,6 +792,12 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
                  1 if tiene_stock else 0, costo_snap, margen_pct),
             )
 
+    log_evento(
+        empresa_db, "cotizacion", cot_id,
+        "Cotización creada",
+        detalle=f"Folio {folio}",
+        usuario=user.get("username"),
+    )
     return JSONResponse({"id": cot_id, "folio": folio}, status_code=201)
 
 

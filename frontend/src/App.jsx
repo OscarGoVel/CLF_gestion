@@ -93,65 +93,67 @@ export default function App() {
               <RequireAuth>
                 <Shell>
                   <Routes>
-                    <Route path="/"           element={<Navigate to="/dashboard" replace />} />
-                    <Route path="/dashboard"  element={<Dashboard />} />
+                    <Route path="/"       element={<Navigate to="/panel" replace />} />
+                    <Route path="/panel"  element={<Dashboard />} />
 
-                    {/* Comercial */}
-                    <Route path="/cotizaciones"            element={<CotList />} />
-                    <Route path="/cotizaciones/nueva"      element={<CotNueva />} />
-                    <Route path="/cotizaciones/:id/editar"      element={<CotEditar />} />
-                    <Route path="/cotizaciones/:id/expediente" element={<CotExpediente />} />
-                    <Route path="/cotizaciones/:id"            element={<CotDetalle />} />
+                    {/* Gestión Comercial */}
+                    <Route path="/comercial/cotizaciones"                      element={<CotList />} />
+                    <Route path="/comercial/cotizaciones/nueva"                element={<CotNueva />} />
+                    <Route path="/comercial/cotizaciones/:id/editar"           element={<CotEditar />} />
+                    <Route path="/comercial/cotizaciones/:id/expediente"       element={<CotExpediente />} />
+                    <Route path="/comercial/cotizaciones/:id"                  element={<CotDetalle />} />
+                    <Route path="/comercial/clientes"                          element={<ClienteList />} />
+                    <Route path="/comercial/devoluciones"                      element={<DevolucionesList />} />
+                    <Route path="/comercial/devoluciones/nueva"                element={<DevolucionNueva />} />
+                    <Route path="/comercial/devoluciones/:id"                  element={<DevolucionDetalle />} />
+                    <Route path="/comercial/crm"                               element={<CrmDashboard />} />
+                    <Route path="/comercial/crm/pipeline"                      element={<Pipeline />} />
+                    <Route path="/comercial/crm/campanas"                      element={<Campanas />} />
+                    <Route path="/comercial/crm/plantillas"                    element={<Plantillas />} />
+                    <Route path="/comercial/crm/contactos"                     element={<Contactos />} />
+                    <Route path="/comercial/crm/secuencias"                    element={<Secuencias />} />
+                    <Route path="/comercial/crm/segmentos"                     element={<Segmentos />} />
+                    <Route path="/comercial/crm/rfm"                           element={<RfmView />} />
+                    <Route path="/comercial"                                    element={<Navigate to="/comercial/cotizaciones" replace />} />
 
-                    {/* Operación */}
-                    <Route path="/stock"             element={<StockList />} />
-                    <Route path="/stock/*"           element={<StockList />} />
-                    <Route path="/compras"           element={<CompraList />} />
-                    <Route path="/compras/nueva"     element={<CompraNueva />} />
-                    <Route path="/compras/:id"       element={<CompraDetalle />} />
-                    <Route path="/preinventario"     element={<PreInvList />} />
-                    <Route path="/preinventario/nueva" element={<PreInvNueva />} />
-                    <Route path="/preinventario/:id" element={<PreInvDetalle />} />
-                    <Route path="/devoluciones"      element={<DevolucionesList />} />
-                    <Route path="/devoluciones/nueva" element={<DevolucionNueva />} />
-                    <Route path="/devoluciones/:id"  element={<DevolucionDetalle />} />
-                    <Route path="/cuentas-pagar"     element={<CuentasPagarList />} />
+                    {/* Abastecimiento */}
+                    <Route path="/abastecimiento/compras"                      element={<CompraList />} />
+                    <Route path="/abastecimiento/compras/nueva"                element={<CompraNueva />} />
+                    <Route path="/abastecimiento/compras/:id"                  element={<CompraDetalle />} />
+                    <Route path="/abastecimiento/proveedores"                  element={<ProveedorList />} />
+                    <Route path="/abastecimiento/estudios"                     element={<MercadoList />} />
+                    <Route path="/abastecimiento/estudios/:id"                 element={<MercadoDetalle />} />
+                    <Route path="/abastecimiento"                              element={<Navigate to="/abastecimiento/compras" replace />} />
 
-                    {/* Cobranza */}
-                    <Route path="/facturas"          element={<FacturaList />} />
-                    <Route path="/facturas/importar" element={<FacturaImportar />} />
-                    <Route path="/facturas/*"        element={<Placeholder title="Facturación" />} />
-                    <Route path="/estado-cuenta"     element={<EstadoCuentaList />} />
-                    <Route path="/estado-cuenta/:cliente_id" element={<EstadoCuentaDetalle />} />
+                    {/* Inventario */}
+                    <Route path="/inventario/stock"                            element={<StockList />} />
+                    <Route path="/inventario/stock/*"                          element={<StockList />} />
+                    <Route path="/inventario/conteos"                          element={<PreInvList />} />
+                    <Route path="/inventario/conteos/nueva"                    element={<PreInvNueva />} />
+                    <Route path="/inventario/conteos/:id"                      element={<PreInvDetalle />} />
+                    <Route path="/inventario/productos"                        element={<ProductoList />} />
+                    <Route path="/inventario/productos/nuevo"                  element={<ProductoNuevo />} />
+                    <Route path="/inventario"                                  element={<Navigate to="/inventario/stock" replace />} />
 
-                    {/* Análisis */}
-                    <Route path="/analisis"          element={<Analisis />} />
-                    <Route path="/analisis/*"        element={<Analisis />} />
-                    <Route path="/costos-fijos"      element={<CostosFijosList />} />
-                    <Route path="/costos-fijos/:id/editar" element={<CostosFijosEditar />} />
-                    <Route path="/estudio-mercado"   element={<MercadoList />} />
-                    <Route path="/estudio-mercado/:id" element={<MercadoDetalle />} />
+                    {/* Documentos fiscales */}
+                    <Route path="/documentos/cfdi"                             element={<FacturaList />} />
+                    <Route path="/documentos/cfdi/importar"                    element={<FacturaImportar />} />
+                    <Route path="/documentos"                                  element={<Navigate to="/documentos/cfdi" replace />} />
 
-                    {/* Catálogos */}
-                    <Route path="/catalogos"          element={<Navigate to="/catalogos/clientes" replace />} />
-                    <Route path="/catalogos/clientes"    element={<ClienteList />} />
-                    <Route path="/catalogos/productos"   element={<ProductoList />} />
-                    <Route path="/catalogos/productos/nuevo" element={<ProductoNuevo />} />
-                    <Route path="/catalogos/proveedores" element={<ProveedorList />} />
-                    <Route path="/catalogos/*"           element={<Placeholder title="Catálogos" />} />
+                    {/* Finanzas */}
+                    <Route path="/finanzas/cobranza"                           element={<EstadoCuentaList />} />
+                    <Route path="/finanzas/cobranza/:cliente_id"               element={<EstadoCuentaDetalle />} />
+                    <Route path="/finanzas/cuentas-pagar"                      element={<CuentasPagarList />} />
+                    <Route path="/finanzas/costos-fijos"                       element={<CostosFijosList />} />
+                    <Route path="/finanzas/costos-fijos/:id/editar"            element={<CostosFijosEditar />} />
+                    <Route path="/finanzas"                                    element={<Navigate to="/finanzas/cobranza" replace />} />
 
-                    {/* CRM */}
-                    <Route path="/crm"              element={<CrmDashboard />} />
-                    <Route path="/crm/campanas"     element={<Campanas />} />
-                    <Route path="/crm/plantillas"   element={<Plantillas />} />
-                    <Route path="/crm/contactos"    element={<Contactos />} />
-                    <Route path="/crm/secuencias"   element={<Secuencias />} />
-                    <Route path="/crm/segmentos"    element={<Segmentos />} />
-                    <Route path="/crm/rfm"          element={<RfmView />} />
-                    <Route path="/crm/pipeline"     element={<Pipeline />} />
+                    {/* Reportes */}
+                    <Route path="/reportes"                                    element={<Analisis />} />
+                    <Route path="/reportes/*"                                  element={<Analisis />} />
 
                     {/* Ajustes */}
-                    <Route path="/ajustes" element={<Ajustes />} />
+                    <Route path="/ajustes"                                     element={<Ajustes />} />
 
                     {/* Admin */}
                     <Route path="/admin/usuarios"    element={<AdminUsuarios />} />
@@ -160,7 +162,7 @@ export default function App() {
                     <Route path="/admin/auditoria"   element={<AdminAuditoria />} />
                     <Route path="/admin/*"           element={<Placeholder title="Administración" />} />
 
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="*" element={<Navigate to="/panel" replace />} />
                   </Routes>
                 </Shell>
               </RequireAuth>

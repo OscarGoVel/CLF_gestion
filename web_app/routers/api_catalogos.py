@@ -12,7 +12,26 @@ from fastapi.responses import JSONResponse
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
+from web_app.database import get_pool_empresa as _get_pool
+
 router = APIRouter(prefix="/api/catalogos", tags=["api"])
+
+historial_router = APIRouter(prefix="/api/historial", tags=["api"])
+
+
+@historial_router.get("/{entidad}/{entidad_id}")
+async def get_historial(entidad: str, entidad_id: int, user: dict = Depends(get_usuario_api)):
+    with _get_pool(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT id, entidad, entidad_id, accion, detalle, usuario, ts
+            FROM historial_eventos
+            WHERE entidad = %s AND entidad_id = %s
+            ORDER BY ts DESC
+            LIMIT 50
+        """, (entidad, entidad_id))
+        cols = [d[0] for d in cur.description]
+        eventos = [{k: _serial(v) for k, v in zip(cols, r)} for r in cur.fetchall()]
+    return JSONResponse({"eventos": eventos})
 
 
 def _serial(v):
@@ -413,6 +432,69 @@ async def crear_producto_rapido(request: Request, user: dict = Depends(get_usuar
         "tiene_historial_compras": False,
         "dias_sin_actualizar": None,
     }, status_code=201)
+
+
+@router.get("/buscar")
+async def buscar_global(
+    q: str = Query(""),
+    user: dict = Depends(get_usuario_api),
+):
+    """Búsqueda multi-entidad: clientes, productos, proveedores, cotizaciones."""
+    if not q or len(q.strip()) < 2:
+        return JSONResponse({"resultados": []})
+    term = q.strip()
+    like = f"%{term}%"
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute("""
+            SELECT 'cliente' AS tipo, id::text, nombre_comercial AS label,
+                   tipo AS sub, '/comercial/clientes' AS base_url
+            FROM clientes
+            WHERE nombre_comercial ILIKE %s OR rfc ILIKE %s
+            LIMIT 5
+        """, (like, like))
+        clientes = _rows(cur)
+
+        cur.execute("""
+            SELECT 'producto' AS tipo, id::text, nombre AS label,
+                   codigo AS sub, '/inventario/productos' AS base_url
+            FROM productos
+            WHERE nombre ILIKE %s OR codigo ILIKE %s
+            LIMIT 5
+        """, (like, like))
+        productos = _rows(cur)
+
+        cur.execute("""
+            SELECT 'proveedor' AS tipo, id::text, nombre AS label,
+                   rfc AS sub, '/abastecimiento/proveedores' AS base_url
+            FROM proveedores
+            WHERE nombre ILIKE %s OR rfc ILIKE %s
+            LIMIT 5
+        """, (like, like))
+        proveedores = _rows(cur)
+
+        cur.execute("""
+            SELECT 'cotizacion' AS tipo, c.id::text, c.folio AS label,
+                   cl.nombre_comercial AS sub,
+                   '/comercial/cotizaciones' AS base_url
+            FROM cotizaciones c
+            LEFT JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE c.folio ILIKE %s OR cl.nombre_comercial ILIKE %s
+            LIMIT 5
+        """, (like, like))
+        cotizaciones = _rows(cur)
+
+        cur.execute("""
+            SELECT 'compra' AS tipo, id::text, folio AS label,
+                   NULL AS sub, '/abastecimiento/compras' AS base_url
+            FROM compras
+            WHERE folio ILIKE %s
+            LIMIT 3
+        """, (like,))
+        compras = _rows(cur)
+
+    resultados = clientes + cotizaciones + productos + proveedores + compras
+    return JSONResponse({"resultados": resultados[:15]})
 
 
 @router.post("/productos", status_code=201)

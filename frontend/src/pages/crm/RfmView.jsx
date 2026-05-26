@@ -16,7 +16,7 @@ const SEGMENTO_META = {
 
 export default function RfmView() {
   const navigate  = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/rfm');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/rfm');
   const clientes      = data?.clientes      ?? [];
   const distribucion  = data?.distribucion  ?? {};
   const [filtro,  setFiltro]  = useState('');
@@ -25,7 +25,7 @@ export default function RfmView() {
   async function handleRecalcular() {
     setRecalc(true);
     try {
-      await api.post('/api/crm/rfm/recalcular', {});
+      await api.post('/api/comercial/crm/rfm/recalcular', {});
       await refetch();
       toast.success('RFM recalculado');
     } catch (e) {
@@ -42,7 +42,7 @@ export default function RfmView() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>RFM</span>
       </div>

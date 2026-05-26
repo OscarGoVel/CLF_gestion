@@ -11,7 +11,7 @@ export default function PreInvDetalle() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const { data, loading, refetch } = useFetch(`/api/preinventario/sesiones/${id}`);
+  const { data, loading, refetch } = useFetch(`/api/inventario/conteos/sesiones/${id}`);
 
   const sesion = data?.sesion ?? {};
   const items  = data?.items  ?? [];
@@ -46,7 +46,7 @@ export default function PreInvDetalle() {
     clearTimeout(busqTimer.current);
     if (v.length < 2) { setSugs([]); return; }
     busqTimer.current = setTimeout(async () => {
-      const res = await api.get(`/api/preinventario/buscar?q=${encodeURIComponent(v)}`);
+      const res = await api.get(`/api/inventario/conteos/buscar?q=${encodeURIComponent(v)}`);
       setSugs(res.resultados ?? []);
     }, 250);
   }
@@ -64,7 +64,7 @@ export default function PreInvDetalle() {
     if (!prodSel || cantidad === '') return;
     setSaving(true);
     try {
-      await api.post(`/api/preinventario/sesiones/${id}/items`, {
+      await api.post(`/api/inventario/conteos/sesiones/${id}/items`, {
         producto_id:     prodSel.id,
         cantidad_contada: parseFloat(cantidad),
         observaciones:   obs || null,
@@ -82,7 +82,7 @@ export default function PreInvDetalle() {
   async function handleEliminar() {
     setDeleting(true);
     try {
-      await api.delete(`/api/preinventario/items/${deleteItemId}`);
+      await api.delete(`/api/inventario/conteos/items/${deleteItemId}`);
       setDeleteItemId(null);
       await refetch();
       toast.success('Ítem eliminado');
@@ -96,7 +96,7 @@ export default function PreInvDetalle() {
   async function handleCerrar() {
     setCerrando(true);
     try {
-      await api.post(`/api/preinventario/sesiones/${id}/cerrar`, {});
+      await api.post(`/api/inventario/conteos/sesiones/${id}/cerrar`, {});
       setConfirmCerrar(false);
       await refetch();
       toast.success('Sesión cerrada');
@@ -111,7 +111,7 @@ export default function PreInvDetalle() {
     e.preventDefault();
     setAprobando(true); setErrAprob('');
     try {
-      await api.post(`/api/preinventario/sesiones/${id}/aprobar`, { clave, notas });
+      await api.post(`/api/inventario/conteos/sesiones/${id}/aprobar`, { clave, notas });
       setShowAprobar(false);
       await refetch();
       toast.success('Pre-inventario aprobado — ajustes de stock aplicados');
@@ -126,7 +126,7 @@ export default function PreInvDetalle() {
     if (!motivoRechazo.trim()) return;
     setRechazando(true);
     try {
-      await api.post(`/api/preinventario/sesiones/${id}/rechazar`, { motivo: motivoRechazo.trim() });
+      await api.post(`/api/inventario/conteos/sesiones/${id}/rechazar`, { motivo: motivoRechazo.trim() });
       setShowRechazar(false);
       setMotivoRechazo('');
       await refetch();
@@ -145,9 +145,9 @@ export default function PreInvDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/preinventario')}>Pre-inventario</a>
+        <a onClick={() => navigate('/inventario/conteos')}>Pre-inventario</a>
         <span className="sep">/</span>
         <span>{sesion.nombre}</span>
       </div>

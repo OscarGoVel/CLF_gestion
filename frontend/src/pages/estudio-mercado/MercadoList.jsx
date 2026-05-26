@@ -15,7 +15,7 @@ export default function MercadoList() {
   const [showNuevo, setShowNuevo]       = useState(false);
 
   const { data, loading, refetch } = useFetch(
-    `/api/estudio-mercado${filtroEstado ? `?estado=${filtroEstado}` : ''}`
+    `/api/abastecimiento/estudios${filtroEstado ? `?estado=${filtroEstado}` : ''}`
   );
   const estudios = data?.estudios ?? [];
 
@@ -121,7 +121,7 @@ function NuevoEstudioModal({ onClose, onSaved }) {
     if (!nombre.trim()) { setError('El nombre es requerido'); return; }
     setSaving(true); setError('');
     try {
-      const res = await api.post('/api/estudio-mercado', {
+      const res = await api.post('/api/abastecimiento/estudios', {
         nombre: nombre.trim(),
         descripcion: desc.trim(),
         margen_pct: parseFloat(margen) / 100,

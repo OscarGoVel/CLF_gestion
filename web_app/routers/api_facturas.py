@@ -15,12 +15,31 @@ from fastapi.responses import JSONResponse
 from web_app.cfdi import parsear_cfdi_bytes
 from web_app.database import get_pool_empresa, get_empresas
 from web_app.dependencies import get_usuario_api
+from web_app.config import settings
 
 _BASE = Path(__file__).parent.parent.parent
 XML_DIR = _BASE / "facturas_xml"
 XML_DIR.mkdir(exist_ok=True)
 
-router = APIRouter(prefix="/api/facturas", tags=["api"])
+
+def _guardar_xml(contenido: bytes, nombre_archivo: str, uuid: str) -> str:
+    """Guarda el XML en GCS si está configurado; de lo contrario en filesystem local."""
+    bucket_name = settings.GCS_XML_BUCKET
+    if bucket_name:
+        from google.cloud import storage as gcs
+        blob_name = f"facturas_xml/{uuid[:4]}/{nombre_archivo}"
+        client = gcs.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(contenido, content_type="application/xml")
+        return f"gs://{bucket_name}/{blob_name}"
+    ruta = XML_DIR / nombre_archivo
+    if ruta.exists():
+        ruta = XML_DIR / f"{ruta.stem}_{uuid[:8]}.xml"
+    ruta.write_bytes(contenido)
+    return f"facturas_xml/{ruta.name}"
+
+router = APIRouter(prefix="/api/documentos/cfdi", tags=["api"])
 
 POR_PAGINA = 30
 
@@ -200,11 +219,7 @@ async def importar_xml(
             })
 
         nombre_archivo = archivo.filename or f"{uuid[:8]}.xml"
-        ruta_destino = XML_DIR / nombre_archivo
-        if ruta_destino.exists():
-            ruta_destino = XML_DIR / f"{ruta_destino.stem}_{uuid[:8]}.xml"
-        ruta_destino.write_bytes(contenido)
-        ruta_relativa = f"facturas_xml/{ruta_destino.name}"
+        ruta_relativa = _guardar_xml(contenido, nombre_archivo, uuid)
 
         cur.execute("""
             INSERT INTO facturas (
@@ -326,6 +341,9 @@ class VincularIn(_BM):
 class CancelarIn(_BM):
     motivo: _Opt[str] = None
 
+class CambiarTipoIn(_BM):
+    tipo: str
+
 @router.post("/{factura_id}/vincular")
 async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_usuario_api)):
     if user.get("rol") not in ("Administrador", "Operador"):
@@ -361,6 +379,26 @@ async def vincular(factura_id: int, body: VincularIn, user: dict = Depends(get_u
             _cache.invalidar(f"dashboard:{empresa_db}")
 
     return JSONResponse({"ok": True})
+
+
+# ── PATCH /api/facturas/{id}/tipo ────────────────────────────────────────────
+
+TIPOS_VALIDOS = {"I", "E", "P", "N", "T"}
+
+@router.patch("/{factura_id}/tipo")
+async def cambiar_tipo(factura_id: int, body: CambiarTipoIn, user: dict = Depends(get_usuario_api)):
+    if user.get("rol") != "Administrador":
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede cambiar el tipo")
+    if body.tipo not in TIPOS_VALIDOS:
+        raise HTTPException(status_code=422, detail=f"Tipo inválido. Valores permitidos: {', '.join(sorted(TIPOS_VALIDOS))}")
+    empresa_db = user["empresa_db"]
+    with get_pool_empresa(empresa_db).conexion() as (_, cur):
+        cur.execute("SELECT tipo FROM facturas WHERE id = %s", (factura_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        cur.execute("UPDATE facturas SET tipo = %s WHERE id = %s", (body.tipo, factura_id))
+    return JSONResponse({"ok": True, "tipo": body.tipo, "tipo_label": TIPO_LABEL.get(body.tipo, body.tipo)})
 
 
 # ── PATCH /api/facturas/{id}/cancelar ────────────────────────────────────────

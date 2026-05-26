@@ -15,7 +15,7 @@ const SEGMENTO_COLOR = {
 
 export default function CrmDashboard() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/dashboard');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/dashboard');
   const [recalculating, setRecalculating] = useState(false);
 
   const metricas   = data?.metricas_30d    ?? {};
@@ -27,7 +27,7 @@ export default function CrmDashboard() {
   async function handleRecalcularRfm() {
     setRecalculating(true);
     try {
-      await api.post('/api/crm/rfm/recalcular', {});
+      await api.post('/api/comercial/crm/rfm/recalcular', {});
       await refetch();
       toast.success('RFM recalculado');
     } catch (e) {
@@ -40,7 +40,7 @@ export default function CrmDashboard() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>CRM</span>
       </div>
@@ -51,10 +51,10 @@ export default function CrmDashboard() {
           <div className="page-sub">Campañas, contactos y métricas últimos 30 días</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate('/crm/campanas/nueva')}>
+          <button className="btn" onClick={() => navigate('/comercial/crm/campanas')}>
             Nueva campaña
           </button>
-          <button className="btn btn-primary" onClick={() => navigate('/crm/campanas')}>
+          <button className="btn btn-primary" onClick={() => navigate('/comercial/crm/campanas')}>
             Ver campañas
           </button>
         </div>
@@ -161,7 +161,7 @@ export default function CrmDashboard() {
                   <tr
                     key={c.id}
                     style={{ borderBottom: '1px solid var(--ink-100)', cursor: 'pointer' }}
-                    onClick={() => navigate(`/crm/campanas/${c.id}`)}
+                    onClick={() => navigate(`/comercial/crm/campanas/${c.id}`)}
                   >
                     <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>{c.nombre}</td>
                     <td style={{ padding: '10px 12px' }}><EstadoPill estado={c.estado} /></td>
@@ -180,11 +180,11 @@ export default function CrmDashboard() {
           {/* Accesos rápidos */}
           <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
             {[
-              ['Contactos',  '/crm/contactos'],
-              ['Plantillas', '/crm/plantillas'],
-              ['Secuencias', '/crm/secuencias'],
-              ['Segmentos',  '/crm/segmentos'],
-              ['RFM',        '/crm/rfm'],
+              ['Contactos',  '/comercial/crm/contactos'],
+              ['Plantillas', '/comercial/crm/plantillas'],
+              ['Secuencias', '/comercial/crm/secuencias'],
+              ['Segmentos',  '/comercial/crm/segmentos'],
+              ['RFM',        '/comercial/crm/rfm'],
             ].map(([label, path]) => (
               <button key={path} className="btn" onClick={() => navigate(path)}>
                 {label}

@@ -5,6 +5,7 @@ import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview, FieldGrid } from '../../components/SidePreview';
+import { Historial } from '../../components/Historial';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { Modal } from '../../components/Modal';
 import { exportCSV } from '../../lib/exportCSV';
@@ -124,7 +125,7 @@ export default function ClienteList() {
     <>
       <div className="page">
         <div className="crumbs">
-          <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+          <a onClick={() => navigate('/panel')}>CLF Gestión</a>
           <span className="sep">/</span>
           <span>Catálogos</span>
           <span className="sep">/</span>
@@ -133,15 +134,15 @@ export default function ClienteList() {
 
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--ink-200)', marginBottom: 20 }}>
           {[
-            { label: 'Clientes',    path: '/catalogos/clientes' },
-            { label: 'Productos',   path: '/catalogos/productos' },
-            { label: 'Proveedores', path: '/catalogos/proveedores' },
+            { label: 'Clientes',    path: '/comercial/clientes' },
+            { label: 'Productos',   path: '/inventario/productos' },
+            { label: 'Proveedores', path: '/abastecimiento/proveedores' },
           ].map((t) => (
             <button key={t.path} onClick={() => navigate(t.path)} style={{
               padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-              fontWeight: t.path === '/catalogos/clientes' ? 500 : 400,
-              color: t.path === '/catalogos/clientes' ? 'var(--ink-900)' : 'var(--ink-500)',
-              borderBottom: t.path === '/catalogos/clientes' ? '2px solid var(--accent)' : '2px solid transparent',
+              fontWeight: t.path === '/comercial/clientes' ? 500 : 400,
+              color: t.path === '/comercial/clientes' ? 'var(--ink-900)' : 'var(--ink-500)',
+              borderBottom: t.path === '/comercial/clientes' ? '2px solid var(--accent)' : '2px solid transparent',
               marginBottom: -1,
             }}>{t.label}</button>
           ))}
@@ -232,6 +233,7 @@ export default function ClienteList() {
                 <button className="btn btn-sm" onClick={() => openEdit(selected)}>Editar</button>
                 <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
               </div>
+              <Historial entidad="cliente" entidadId={selected?.id} />
             </SidePreview>
           )}
         </div>

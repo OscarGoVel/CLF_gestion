@@ -52,7 +52,7 @@ function ProductoSearch({ linea, onSelect, onChange, onQuickAdd }) {
     if (q.length < 2) { setResults([]); setSearched(false); return; }
     debounce.current = setTimeout(async () => {
       try {
-        const data = await api.get(`/api/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
+        const data = await api.get(`/api/comercial/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
         setResults(data.resultados ?? []);
         setSearched(true);
         setOpen(true);
@@ -250,7 +250,7 @@ export default function CotEditar() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: cotData, loading: loadingCot } = useFetch(`/api/cotizaciones/${id}`);
+  const { data: cotData, loading: loadingCot } = useFetch(`/api/comercial/cotizaciones/${id}`);
   const { data: clientesData } = useFetch('/api/catalogos/clientes');
   const clientes = clientesData?.clientes ?? [];
 
@@ -333,9 +333,9 @@ export default function CotEditar() {
           aplica_iva: l.aplica_iva,
         })),
       };
-      await api.put(`/api/cotizaciones/${id}`, payload);
+      await api.put(`/api/comercial/cotizaciones/${id}`, payload);
       toast.success('Cotización actualizada');
-      navigate(`/cotizaciones/${id}`);
+      navigate(`/comercial/cotizaciones/${id}`);
     } catch (e) {
       setError(e.message ?? 'Error al guardar');
     } finally {
@@ -363,9 +363,9 @@ export default function CotEditar() {
         />
       )}
       <div className="crumbs">
-        <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
+        <a onClick={() => navigate('/comercial/cotizaciones')}>Cotizaciones</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate(`/cotizaciones/${id}`)}>{folio}</a>
+        <a onClick={() => navigate(`/comercial/cotizaciones/${id}`)}>{folio}</a>
         <span className="sep">/</span>
         <span>Editar</span>
       </div>
@@ -376,7 +376,7 @@ export default function CotEditar() {
           <div className="page-sub" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{folio}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate(`/cotizaciones/${id}`)}>Cancelar</button>
+          <button className="btn" onClick={() => navigate(`/comercial/cotizaciones/${id}`)}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleGuardar} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>

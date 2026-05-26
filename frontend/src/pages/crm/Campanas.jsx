@@ -30,12 +30,13 @@ function EstadoPill({ estado }) {
 
 export default function Campanas() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/campanas');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/campanas');
   const campanas = data?.campanas ?? [];
 
-  const [showModal, setShowModal] = useState(false);
-  const [enviando, setEnviando]   = useState(null);
-  const [ctxMenu, setCtxMenu]     = useState(null);
+  const [showModal, setShowModal]     = useState(false);
+  const [enviando, setEnviando]       = useState(null);
+  const [procesando, setProcesando]   = useState(null);
+  const [ctxMenu, setCtxMenu]         = useState(null);
   const longPressTimer = useRef(null);
 
   function getCtxItems(c) {
@@ -47,7 +48,10 @@ export default function Campanas() {
 
     const items = [];
     if (c.estado === 'aprobada') {
-      items.push({ type: 'item', label: 'Enviar campaña', onClick: () => handleEnviar(c.id), disabled: enviando === c.id });
+      items.push({ type: 'item', label: 'Generar envíos', onClick: () => handleEnviar(c.id), disabled: enviando === c.id });
+    }
+    if (c.estado === 'enviando') {
+      items.push({ type: 'item', label: 'Enviar ahora', onClick: () => handleProcesar(c.id), disabled: procesando === c.id });
     }
     if (c.estado === 'completada') {
       items.push({ type: 'item', label: 'Calcular ROI', onClick: () => handleAtribuir(c.id) });
@@ -59,9 +63,23 @@ export default function Campanas() {
     return items;
   }
 
+  async function handleProcesar(id) {
+    if (!confirm('¿Enviar correos pendientes ahora? Esta acción contacta a los destinatarios.')) return;
+    setProcesando(id);
+    try {
+      const r = await api.post(`/api/comercial/crm/campanas/${id}/procesar`, {});
+      toast.success(`Procesando ${r.procesando} correos en segundo plano`);
+      setTimeout(refetch, 3000);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setProcesando(null);
+    }
+  }
+
   async function handleAtribuir(id) {
     try {
-      const r = await api.post(`/api/crm/campanas/${id}/atribuir`, {});
+      const r = await api.post(`/api/comercial/crm/campanas/${id}/atribuir`, {});
       toast.success(`ROI calculado: ${r.insertados} ventas — $${r.total_atribuido.toLocaleString('es-MX')}`);
       refetch();
     } catch (e) { toast.error(e.message); }
@@ -71,7 +89,7 @@ export default function Campanas() {
     if (!confirm('¿Generar envíos para esta campaña?')) return;
     setEnviando(id);
     try {
-      const r = await api.post(`/api/crm/campanas/${id}/enviar`, {});
+      const r = await api.post(`/api/comercial/crm/campanas/${id}/enviar`, {});
       toast.success(`${r.envios_generados} envíos generados`);
       refetch();
     } catch (e) {
@@ -83,7 +101,7 @@ export default function Campanas() {
 
   async function handleCambiarEstado(id, estado) {
     try {
-      await api.patch(`/api/crm/campanas/${id}`, { estado });
+      await api.patch(`/api/comercial/crm/campanas/${id}`, { estado });
       refetch();
       toast.success(`Estado actualizado: ${estado}`);
     } catch (e) {
@@ -94,7 +112,7 @@ export default function Campanas() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Campañas</span>
       </div>
@@ -167,9 +185,11 @@ export default function Campanas() {
                     <AccionesCampana
                       campana={c}
                       onEnviar={() => handleEnviar(c.id)}
+                      onProcesar={() => handleProcesar(c.id)}
                       onAprobar={() => handleCambiarEstado(c.id, 'aprobada')}
                       onBorrador={() => handleCambiarEstado(c.id, 'borrador')}
                       enviando={enviando === c.id}
+                      procesando={procesando === c.id}
                     />
                   </td>
                   <td className="ctx-col" onClick={(e) => { e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row: c }); }}>
@@ -200,7 +220,7 @@ export default function Campanas() {
   );
 }
 
-function AccionesCampana({ campana, onEnviar, onAprobar, onBorrador, enviando }) {
+function AccionesCampana({ campana, onEnviar, onProcesar, onAprobar, onBorrador, enviando, procesando }) {
   return (
     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
       {campana.estado === 'borrador' && (
@@ -212,12 +232,18 @@ function AccionesCampana({ campana, onEnviar, onAprobar, onBorrador, enviando })
         <>
           <button className="btn btn-primary" style={{ padding: '2px 8px', fontSize: 11 }}
             onClick={onEnviar} disabled={enviando}>
-            {enviando ? '…' : 'Enviar'}
+            {enviando ? '…' : 'Generar envíos'}
           </button>
           <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={onBorrador}>
             Reabrir
           </button>
         </>
+      )}
+      {campana.estado === 'enviando' && (
+        <button className="btn btn-primary" style={{ padding: '2px 8px', fontSize: 11 }}
+          onClick={onProcesar} disabled={procesando}>
+          {procesando ? '…' : 'Enviar ahora'}
+        </button>
       )}
       {campana.estado === 'completada' && (
         <span style={{ fontSize: 11, color: 'var(--ink-400)' }}>Completada</span>
@@ -227,8 +253,8 @@ function AccionesCampana({ campana, onEnviar, onAprobar, onBorrador, enviando })
 }
 
 function CampanaModal({ onClose, onSaved }) {
-  const { data: platData } = useFetch('/api/crm/plantillas');
-  const { data: segData  } = useFetch('/api/crm/segmentos');
+  const { data: platData } = useFetch('/api/comercial/crm/plantillas');
+  const { data: segData  } = useFetch('/api/comercial/crm/segmentos');
   const plantillas = platData?.plantillas ?? [];
   const segmentos  = segData?.segmentos  ?? [];
 
@@ -236,23 +262,31 @@ function CampanaModal({ onClose, onSaved }) {
   const [asunto, setAsunto]     = useState('');
   const [platId, setPlatId]     = useState('');
   const [segId,  setSegId]      = useState('');
-  const [fecha,  setFecha]      = useState('');
+  const [fechaDia,  setFechaDia]  = useState('');
+  const [fechaHora, setFechaHora] = useState('');
   const [notas,  setNotas]      = useState('');
   const [saving, setSaving]     = useState(false);
   const [error,  setError]      = useState('');
 
+  const horasOpciones = [];
+  for (let h = 6; h <= 22; h++) {
+    horasOpciones.push(`${String(h).padStart(2,'0')}:00`);
+    horasOpciones.push(`${String(h).padStart(2,'0')}:30`);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!nombre.trim() || !asunto.trim()) { setError('Nombre y asunto son requeridos'); return; }
+    const fechaProgramada = fechaDia && fechaHora ? `${fechaDia}T${fechaHora}` : null;
     setSaving(true); setError('');
     try {
-      await api.post('/api/crm/campanas', {
-        nombre:          nombre.trim(),
-        asunto:          asunto.trim(),
-        plantilla_id:    platId   || null,
-        segmento_id:     segId    || null,
-        fecha_programada: fecha   || null,
-        notas:           notas.trim() || null,
+      await api.post('/api/comercial/crm/campanas', {
+        nombre:           nombre.trim(),
+        asunto:           asunto.trim(),
+        plantilla_id:     platId || null,
+        segmento_id:      segId  || null,
+        fecha_programada: fechaProgramada,
+        notas:            notas.trim() || null,
       });
       onSaved();
     } catch (e) {
@@ -292,8 +326,21 @@ function CampanaModal({ onClose, onSaved }) {
             </select>
           </Field>
           <Field label="Fecha y hora de envío">
-            <input className="input" type="datetime-local" style={{ width: '100%' }}
-              value={fecha} onChange={e => setFecha(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" type="date" style={{ flex: 2 }}
+                value={fechaDia} onChange={e => setFechaDia(e.target.value)} />
+              <select className="input" style={{ flex: 1 }}
+                value={fechaHora} onChange={e => setFechaHora(e.target.value)}
+                disabled={!fechaDia}>
+                <option value="">— Hora —</option>
+                {horasOpciones.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+            {fechaDia && !fechaHora && (
+              <div style={{ fontSize: 11, color: 'var(--ink-400)', marginTop: 4 }}>
+                Sin hora = envío inmediato al generar
+              </div>
+            )}
           </Field>
           <Field label="Notas">
             <textarea className="input" style={{ width: '100%', minHeight: 64, resize: 'vertical' }}

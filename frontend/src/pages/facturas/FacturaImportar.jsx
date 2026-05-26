@@ -139,7 +139,7 @@ export default function FacturaImportar() {
       formData.append('archivo', item.file);
       try {
         const token = sessionStorage.getItem('clf_token');
-        const res = await fetch('/api/facturas/importar', {
+        const res = await fetch('/api/documentos/cfdi/importar', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
@@ -166,7 +166,7 @@ export default function FacturaImportar() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/facturas')}>Facturas</a>
+        <a onClick={() => navigate('/documentos/cfdi')}>Facturas</a>
         <span className="sep">/</span>
         <span>Importar XML</span>
       </div>
@@ -178,11 +178,11 @@ export default function FacturaImportar() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {results.length > 0 && (
-            <button className="btn btn-primary" onClick={() => navigate('/facturas')}>
+            <button className="btn btn-primary" onClick={() => navigate('/documentos/cfdi')}>
               Ver todas las facturas
             </button>
           )}
-          <button className="btn" onClick={() => navigate('/facturas')}>Cancelar</button>
+          <button className="btn" onClick={() => navigate('/documentos/cfdi')}>Cancelar</button>
         </div>
       </div>
 

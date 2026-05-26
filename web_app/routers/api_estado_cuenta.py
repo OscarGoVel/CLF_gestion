@@ -15,9 +15,9 @@ from pydantic import BaseModel
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/estado-cuenta", tags=["api"])
+router = APIRouter(prefix="/api/finanzas/cobranza", tags=["api"])
 
-_ESTADOS_ACTIVOS = ('Programada', 'Parcialmente Entregada', 'Entregada', 'Facturada', 'Pagada')
+_ESTADOS_ACTIVOS = ('Programada', 'Parcialmente Entregada', 'Entregada', 'Facturada')
 
 
 def _s(v):
@@ -71,12 +71,9 @@ async def listar(
                 SUM(c.total)                                        AS cartera,
                 SUM(COALESCE(c.monto_pagado, 0))                    AS cobrado,
                 SUM(c.total - COALESCE(c.monto_pagado, 0))          AS pendiente,
-                AVG(
-                    EXTRACT(EPOCH FROM (c.fecha_pago - c.fecha_entrega)) / 86400.0
-                ) FILTER (
-                    WHERE c.estado = 'Pagada'
-                      AND c.fecha_pago IS NOT NULL
-                      AND c.fecha_entrega IS NOT NULL
+                AVG(CURRENT_DATE - c.fecha_entrega) FILTER (
+                    WHERE c.fecha_entrega IS NOT NULL
+                      AND c.total - COALESCE(c.monto_pagado, 0) > 0
                 )                                                   AS dso
             FROM clientes cl
             JOIN cotizaciones c ON c.cliente_id = cl.id
@@ -94,12 +91,9 @@ async def listar(
                 SUM(c.total)                                    AS cartera_total,
                 SUM(COALESCE(c.monto_pagado, 0))                AS cobrado_total,
                 SUM(c.total - COALESCE(c.monto_pagado, 0))      AS pendiente_total,
-                AVG(
-                    EXTRACT(EPOCH FROM (c.fecha_pago - c.fecha_entrega)) / 86400.0
-                ) FILTER (
-                    WHERE c.estado = 'Pagada'
-                      AND c.fecha_pago IS NOT NULL
-                      AND c.fecha_entrega IS NOT NULL
+                AVG(CURRENT_DATE - c.fecha_entrega) FILTER (
+                    WHERE c.fecha_entrega IS NOT NULL
+                      AND c.total - COALESCE(c.monto_pagado, 0) > 0
                 )                                               AS dso_global
             FROM cotizaciones c
             JOIN clientes cl ON cl.id = c.cliente_id
@@ -124,6 +118,202 @@ async def listar_corporativos(user: dict = Depends(get_usuario_api)):
         cur.execute("SELECT id, nombre FROM corporativos ORDER BY nombre")
         corps = _rows(cur)
     return {"corporativos": corps}
+
+
+# ── GET /api/estado-cuenta/export-pdf ────────────────────────────────────────
+
+@router.get("/export-pdf")
+async def exportar_aging_pdf(
+    corporativo_id: int = Query(0),
+    tipo: str = Query(""),
+    desde: str = Query(""),
+    hasta: str = Query(""),
+    user: dict = Depends(get_usuario_api),
+):
+    _ph = ", ".join(["%s"] * len(_ESTADOS_ACTIVOS))
+    where = [f"c.estado IN ({_ph})"]
+    params: list = list(_ESTADOS_ACTIVOS)
+
+    if corporativo_id:
+        where.append("cl.corporativo_id = %s")
+        params.append(corporativo_id)
+    if tipo:
+        where.append("cl.tipo = %s")
+        params.append(tipo)
+    if desde:
+        where.append("c.fecha_entrega >= %s")
+        params.append(desde)
+    if hasta:
+        where.append("c.fecha_entrega <= %s")
+        params.append(hasta)
+
+    w = " AND ".join(where)
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(f"""
+            SELECT
+                cl.nombre_comercial,
+                cl.tipo,
+                COALESCE(corp.nombre, '—')                          AS corporativo,
+                SUM(c.total)                                        AS cartera,
+                SUM(COALESCE(c.monto_pagado, 0))                    AS cobrado,
+                SUM(c.total - COALESCE(c.monto_pagado, 0))          AS pendiente,
+                AVG(CURRENT_DATE - c.fecha_entrega) FILTER (
+                    WHERE c.fecha_entrega IS NOT NULL
+                      AND c.total - COALESCE(c.monto_pagado, 0) > 0
+                )                                                   AS dso
+            FROM clientes cl
+            JOIN cotizaciones c ON c.cliente_id = cl.id
+            LEFT JOIN corporativos corp ON corp.id = cl.corporativo_id
+            WHERE {w}
+            GROUP BY cl.id, cl.nombre_comercial, cl.tipo, corp.nombre
+            HAVING SUM(c.total - COALESCE(c.monto_pagado, 0)) > 0.01
+            ORDER BY pendiente DESC
+        """, params)
+        clientes = _rows(cur)
+
+        cur.execute(f"""
+            SELECT
+                SUM(c.total)                                    AS cartera_total,
+                SUM(COALESCE(c.monto_pagado, 0))                AS cobrado_total,
+                SUM(c.total - COALESCE(c.monto_pagado, 0))      AS pendiente_total,
+                AVG(CURRENT_DATE - c.fecha_entrega) FILTER (
+                    WHERE c.fecha_entrega IS NOT NULL
+                      AND c.total - COALESCE(c.monto_pagado, 0) > 0
+                )                                               AS dso_global
+            FROM cotizaciones c
+            JOIN clientes cl ON cl.id = c.cliente_id
+            WHERE {w}
+        """, params)
+        r = cur.fetchone()
+        kpis = {
+            "cartera_total":   _s(r[0]) or 0,
+            "cobrado_total":   _s(r[1]) or 0,
+            "pendiente_total": _s(r[2]) or 0,
+            "dso_global":      round(_s(r[3]), 1) if r[3] else None,
+        }
+
+    pdf_bytes = _generar_pdf_aging(clientes, kpis, desde, hasta)
+    fecha_str = date.today().isoformat()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="aging_cartera_{fecha_str}.pdf"'},
+    )
+
+
+def _generar_pdf_aging(clientes: list, kpis: dict, desde: str, hasta: str) -> bytes:
+    import io
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.5 * inch, rightMargin=0.5 * inch,
+        topMargin=0.6 * inch, bottomMargin=0.5 * inch,
+    )
+
+    _AZUL   = colors.HexColor('#1e3a5f')
+    _ROJO   = colors.HexColor('#dc2626')
+    _GRIS   = colors.HexColor('#f1f5f9')
+    _LINEA  = colors.HexColor('#cbd5e1')
+    _BLANCO = colors.white
+
+    def _mxn(v):
+        return f"${float(v or 0):,.0f}"
+
+    def _dso(v):
+        return f"{int(round(float(v)))} d" if v else "—"
+
+    title_style = ParagraphStyle("title", fontSize=16, textColor=_AZUL,
+                                  fontName="Helvetica-Bold", spaceAfter=4)
+    sub_style   = ParagraphStyle("sub",   fontSize=9,  textColor=colors.HexColor('#64748b'),
+                                  fontName="Helvetica",  spaceAfter=12)
+
+    elements = []
+
+    elements.append(Paragraph("Estado de Cuenta — Cartera Global", title_style))
+    subtitulo = f"Generado el {date.today().strftime('%d/%m/%Y')}"
+    if desde or hasta:
+        rango = []
+        if desde: rango.append(f"desde {desde}")
+        if hasta: rango.append(f"hasta {hasta}")
+        subtitulo += "   |   Entrega " + " ".join(rango)
+    elements.append(Paragraph(subtitulo, sub_style))
+
+    # KPIs
+    kpi_data = [[
+        Paragraph("Cartera total", ParagraphStyle("k", fontSize=8, textColor=colors.HexColor('#64748b'), fontName="Helvetica")),
+        Paragraph("Cobrado", ParagraphStyle("k", fontSize=8, textColor=colors.HexColor('#64748b'), fontName="Helvetica")),
+        Paragraph("Pendiente", ParagraphStyle("k", fontSize=8, textColor=colors.HexColor('#64748b'), fontName="Helvetica")),
+        Paragraph("DSO promedio", ParagraphStyle("k", fontSize=8, textColor=colors.HexColor('#64748b'), fontName="Helvetica")),
+    ], [
+        Paragraph(_mxn(kpis["cartera_total"]),   ParagraphStyle("v", fontSize=14, fontName="Helvetica-Bold")),
+        Paragraph(_mxn(kpis["cobrado_total"]),   ParagraphStyle("v", fontSize=14, fontName="Helvetica-Bold")),
+        Paragraph(_mxn(kpis["pendiente_total"]), ParagraphStyle("v", fontSize=14, fontName="Helvetica-Bold", textColor=_ROJO)),
+        Paragraph(_dso(kpis["dso_global"]),      ParagraphStyle("v", fontSize=14, fontName="Helvetica-Bold")),
+    ]]
+    w = (letter[0] - inch) / 4
+    kpi_tbl = Table(kpi_data, colWidths=[w, w, w, w])
+    kpi_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _GRIS),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [_GRIS, _GRIS]),
+        ("BOX", (0, 0), (-1, -1), 0.5, _LINEA),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, _LINEA),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    elements.append(kpi_tbl)
+    elements.append(Spacer(1, 14))
+
+    # Tabla de clientes
+    hdr_style = ParagraphStyle("hdr", fontSize=8, fontName="Helvetica-Bold",
+                                textColor=_BLANCO, alignment=TA_CENTER)
+    cell_r = ParagraphStyle("cr", fontSize=8, fontName="Helvetica", alignment=TA_RIGHT)
+    cell_l = ParagraphStyle("cl", fontSize=8, fontName="Helvetica")
+
+    col_w = [2.2 * inch, 0.7 * inch, 1.3 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch]
+    headers = [
+        Paragraph(h, hdr_style) for h in
+        ["Cliente", "Tipo", "Corporativo", "Cartera", "Cobrado", "Pendiente", "DSO"]
+    ]
+    tbl_data = [headers]
+
+    for cl in clientes:
+        tbl_data.append([
+            Paragraph(cl.get("nombre") or "—", cell_l),
+            Paragraph(cl.get("tipo") or "—",   cell_l),
+            Paragraph(cl.get("corporativo") or "—", cell_l),
+            Paragraph(_mxn(cl.get("cartera")),   cell_r),
+            Paragraph(_mxn(cl.get("cobrado")),   cell_r),
+            Paragraph(_mxn(cl.get("pendiente")), cell_r),
+            Paragraph(_dso(cl.get("dso")),       cell_r),
+        ])
+
+    tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
+    row_styles = [
+        ("BACKGROUND", (0, 0), (-1, 0), _AZUL),
+        ("TEXTCOLOR", (0, 0), (-1, 0), _BLANCO),
+        ("GRID", (0, 0), (-1, -1), 0.4, _LINEA),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]
+    for i in range(1, len(tbl_data), 2):
+        row_styles.append(("BACKGROUND", (0, i), (-1, i), _GRIS))
+    tbl.setStyle(TableStyle(row_styles))
+    elements.append(tbl)
+
+    doc.build(elements)
+    return buf.getvalue()
 
 
 # ── GET /api/estado-cuenta/{cliente_id} ──────────────────────────────────────
@@ -165,7 +355,7 @@ async def detalle(
                 c.fecha_pago,
                 CASE
                     WHEN c.fecha_entrega IS NOT NULL
-                    THEN EXTRACT(EPOCH FROM (%s::date - c.fecha_entrega::date)) / 86400.0
+                    THEN (%s::date - c.fecha_entrega)
                     ELSE NULL
                 END                                               AS dias_desde_entrega
             FROM cotizaciones c
@@ -181,12 +371,9 @@ async def detalle(
             SELECT
                 SUM(c.total)                        AS cartera,
                 SUM(COALESCE(c.monto_pagado, 0))    AS cobrado,
-                AVG(
-                    EXTRACT(EPOCH FROM (c.fecha_pago - c.fecha_entrega)) / 86400.0
-                ) FILTER (
-                    WHERE c.estado = 'Pagada'
-                      AND c.fecha_pago IS NOT NULL
-                      AND c.fecha_entrega IS NOT NULL
+                AVG(CURRENT_DATE - c.fecha_entrega) FILTER (
+                    WHERE c.fecha_entrega IS NOT NULL
+                      AND c.total - COALESCE(c.monto_pagado, 0) > 0
                 )                                   AS dso
             FROM cotizaciones c
             WHERE c.cliente_id = %s AND c.estado IN ({})

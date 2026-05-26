@@ -7,12 +7,36 @@ web_app/routers/api_crm.py
 from decimal import Decimal
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/crm", tags=["crm"])
+router = APIRouter(prefix="/api/comercial/crm", tags=["crm"])
+
+
+@router.get("/unsubscribe", response_class=HTMLResponse, include_in_schema=False)
+async def unsubscribe(token: str = ""):
+    from core.crm.tokens import verify_unsub_token
+    result = verify_unsub_token(token)
+    if not result:
+        return HTMLResponse("<h2>Enlace inválido o expirado.</h2>", status_code=400)
+    empresa_db, contacto_id = result
+    try:
+        with get_pool_empresa(empresa_db).conexion() as (_, cur):
+            cur.execute(
+                "UPDATE crm_contactos SET opt_out = TRUE, fecha_opt_out = NOW() WHERE id = %s",
+                (contacto_id,)
+            )
+    except Exception:
+        return HTMLResponse("<h2>Error al procesar la solicitud.</h2>", status_code=500)
+    return HTMLResponse("""<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<style>body{font-family:Arial,sans-serif;max-width:500px;margin:60px auto;text-align:center;color:#333}
+h2{color:#1a1a1a}p{color:#666}</style></head>
+<body><h2>Te has dado de baja exitosamente</h2>
+<p>Ya no recibirás correos promocionales de nuestra parte.</p>
+</body></html>""")
 
 
 def _serial(v):
@@ -482,6 +506,115 @@ async def enviar_campana(campana_id: int, background: BackgroundTasks,
     return JSONResponse({"ok": True, "envios_generados": len(contactos)})
 
 
+@router.post("/campanas/{campana_id}/procesar")
+async def procesar_campana_ahora(campana_id: int, background: BackgroundTasks,
+                                  user: dict = Depends(get_usuario_api)):
+    """
+    Fuerza el procesamiento inmediato de los envíos pendientes de una campaña
+    sin esperar al ciclo del scheduler (útil para pruebas y envíos urgentes).
+    """
+    if user.get("rol") not in ("Administrador", "Operador"):
+        raise HTTPException(403, "Sin permiso")
+
+    db = user["empresa_db"]
+    with get_pool_empresa(db).conexion() as (_, cur):
+        cur.execute("""
+            SELECT e.id, e.contacto_id, e.email_destino, e.asunto,
+                   ct.contacto, ct.nombre_comercial,
+                   p.html_body
+            FROM crm_envios e
+            LEFT JOIN crm_campanas c   ON c.id = e.campana_id
+            LEFT JOIN crm_plantillas p ON p.id = c.plantilla_id
+            LEFT JOIN crm_contactos co ON co.id = e.contacto_id
+            LEFT JOIN clientes ct      ON ct.id = co.cliente_id
+            WHERE e.campana_id = %s
+              AND e.estado = 'pendiente'
+        """, (campana_id,))
+        cols  = [d[0] for d in cur.description]
+        filas = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    if not filas:
+        return JSONResponse({"ok": True, "procesados": 0, "mensaje": "Sin envíos pendientes"})
+
+    async def _enviar():
+        from core.crm.envios import enviar_correo
+        from core.crm.plantillas import renderizar
+        from core.crm.tokens import unsub_url
+        enviados = fallidos = 0
+        for fila in filas:
+            ctx  = {'nombre_comercial': fila.get('nombre_comercial', ''),
+                    'contacto':         fila.get('contacto', ''),
+                    'unsubscribe_url':  unsub_url(db, fila['contacto_id'])}
+            html = renderizar(fila.get('html_body') or '', ctx)
+            ok, msg_id = enviar_correo(
+                to_email=fila['email_destino'],
+                to_name=fila.get('contacto') or fila['email_destino'],
+                subject=fila['asunto'],
+                html_content=html,
+            )
+            nuevo_estado = 'enviado' if ok else 'fallido'
+            with get_pool_empresa(db).conexion() as (_, cur):
+                cur.execute("""
+                    UPDATE crm_envios
+                    SET estado = %s, proveedor_msg_id = %s, fecha_envio = NOW()
+                    WHERE id = %s
+                """, (nuevo_estado, msg_id, fila['id']))
+            if ok: enviados += 1
+            else:  fallidos += 1
+
+        with get_pool_empresa(db).conexion() as (_, cur):
+            cur.execute("""
+                SELECT COUNT(*) FROM crm_envios
+                WHERE campana_id = %s AND estado = 'pendiente'
+            """, (campana_id,))
+            pendientes = cur.fetchone()[0]
+            if pendientes == 0:
+                cur.execute("""
+                    UPDATE crm_campanas SET estado = 'completada' WHERE id = %s
+                """, (campana_id,))
+
+    background.add_task(_enviar)
+    return JSONResponse({"ok": True, "procesando": len(filas)})
+
+
+@router.post("/test-correo")
+async def test_correo(request: Request, user: dict = Depends(get_usuario_api)):
+    """
+    Envía un correo de prueba al email del usuario actual.
+    Requiere SENDGRID_API_KEY configurada.
+    """
+    if user.get("rol") != "Administrador":
+        raise HTTPException(403, "Solo Administrador")
+
+    import os
+    from core.crm.envios import enviar_correo
+
+    destinatario = user.get("email") or user.get("username", "")
+    b = await request.json()
+    destinatario = b.get("email") or destinatario
+    if not destinatario:
+        raise HTTPException(422, "No se pudo determinar el correo del destinatario")
+
+    html = """
+    <h2>Correo de prueba — CLF Gestión CRM</h2>
+    <p>Si recibes este correo, el sistema de envío está funcionando correctamente.</p>
+    <p>SENDGRID_API_KEY: <strong>{}</strong></p>
+    """.format("configurada ✓" if os.getenv("SENDGRID_API_KEY") else "NO configurada ✗")
+
+    ok, msg_id = enviar_correo(
+        to_email=destinatario,
+        to_name=user.get("nombre", destinatario),
+        subject="Prueba CRM — CLF Gestión",
+        html_content=html,
+    )
+    return JSONResponse({
+        "ok": ok,
+        "destinatario": destinatario,
+        "msg_id": msg_id,
+        "sendgrid_key": bool(os.getenv("SENDGRID_API_KEY")),
+    })
+
+
 # ── Secuencias ────────────────────────────────────────────────────────────────
 
 @router.get("/secuencias")
@@ -683,6 +816,27 @@ async def dashboard_crm(user: dict = Depends(get_usuario_api)):
         "distribucion_rfm": distribucion_rfm,
         "campanas_recientes": campanas_recientes,
     })
+
+
+# ── Cron interno (llamado por Cloud Scheduler) ───────────────────────────────
+
+@router.post("/cron/procesar-envios")
+async def cron_procesar_envios(request: Request):
+    """
+    Endpoint llamado por Cloud Scheduler cada 5 minutos.
+    Procesa envíos pendientes de todas las empresas.
+    No requiere JWT — protegido con X-Cron-Secret.
+    """
+    import os
+    secret = os.getenv("CRM_CRON_SECRET", "")
+    if secret and request.headers.get("X-Cron-Secret") != secret:
+        raise HTTPException(401, "Unauthorized")
+
+    from web_app.database import get_pool_empresa, get_empresas
+    from core.crm.scheduler import _procesar_envios_pendientes
+    import asyncio
+    await _procesar_envios_pendientes(get_pool_empresa, get_empresas)
+    return JSONResponse({"ok": True})
 
 
 # ── Webhook SendGrid ──────────────────────────────────────────────────────────

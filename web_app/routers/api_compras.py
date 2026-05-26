@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/compras", tags=["api"])
+router = APIRouter(prefix="/api/abastecimiento/compras", tags=["api"])
 
 POR_PAGINA = 25
 

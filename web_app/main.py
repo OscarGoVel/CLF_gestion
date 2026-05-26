@@ -80,222 +80,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         _log.error(f"Error iniciando pool: {e}")
 
-    # Migraciones incrementales por empresa
-    _MIGRACIONES = [
-        "ALTER TABLE producto_precio_historial ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id)",
-        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS utilidad_pct NUMERIC(6,2) DEFAULT 0",
-        # Tabla de asignación de costos de compra a cotizaciones (módulo compras web)
-        """
-        CREATE TABLE IF NOT EXISTS compra_detalle_cotizacion (
-            id                SERIAL PRIMARY KEY,
-            compra_detalle_id INTEGER NOT NULL REFERENCES compra_detalle(id),
-            cotizacion_id     INTEGER REFERENCES cotizaciones(id),
-            cantidad          NUMERIC(14,4) NOT NULL,
-            notas             TEXT,
-            fecha_registro    TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        # Compradores: múltiples contactos de compra por cliente
-        """
-        CREATE TABLE IF NOT EXISTS compradores (
-            id             SERIAL PRIMARY KEY,
-            cliente_id     INTEGER NOT NULL REFERENCES clientes(id),
-            nombre         TEXT NOT NULL,
-            cargo          TEXT,
-            telefono       TEXT,
-            email          TEXT,
-            activo         BOOLEAN DEFAULT TRUE,
-            fecha_registro TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS comprador_id INTEGER REFERENCES compradores(id)",
-        # Línea libre en cotización (sin producto del catálogo)
-        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS descripcion_libre TEXT",
-        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS pendiente_catalogo BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE cotizacion_detalle ALTER COLUMN producto_id DROP NOT NULL",
-        # Costo promedio ponderado por producto (se actualiza en cada compra)
-        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS costo_promedio NUMERIC(14,4) DEFAULT 0",
-        # Snapshot del costo al momento de entregar la cotización
-        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega NUMERIC(14,4)",
-        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS costo_entrega_tipo TEXT",
-        # Estudio de mercado: margen configurable y vínculo a cotización de origen
-        "ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS margen_pct NUMERIC(5,4) DEFAULT 0.35",
-        "ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS cotizacion_id INTEGER REFERENCES cotizaciones(id)",
-        # Precio de venta sugerido en catálogo (calculado desde estudio de mercado)
-        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(14,4)",
-        # Log de aplicaciones de precios del estudio a cotizaciones
-        """
-        CREATE TABLE IF NOT EXISTS estudio_aplicaciones (
-            id             SERIAL PRIMARY KEY,
-            estudio_id     INTEGER NOT NULL REFERENCES estudios_mercado(id) ON DELETE CASCADE,
-            cotizacion_id  INTEGER NOT NULL REFERENCES cotizaciones(id),
-            aplicado_por   INTEGER REFERENCES usuarios(id),
-            forzado        BOOLEAN DEFAULT FALSE,
-            estado_cot     TEXT,
-            fecha          TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        # Costos fijos mensuales (módulo nuevo)
-        """
-        CREATE TABLE IF NOT EXISTS costos_fijos (
-            id           SERIAL PRIMARY KEY,
-            periodo      TEXT NOT NULL,
-            categoria    TEXT NOT NULL,
-            descripcion  TEXT NOT NULL,
-            monto        NUMERIC(14,2) NOT NULL,
-            created_by   TEXT,
-            created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """,
-        # Fase 4: margen por línea de cotización (costo_snapshot ya prioriza costo_promedio)
-        "ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS margen_pct NUMERIC(8,4)",
-        # Fase 5: resultado de cotización y motivo de pérdida (tasa de conversión)
-        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS resultado VARCHAR(20)",
-        "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS motivo_perdida VARCHAR(50)",
-        # Fase 5: alerta de precio de venta desactualizado por aumento de costo de compra
-        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_desactualizado BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta_fecha TIMESTAMPTZ",
-        # Fase 10: tabla de pagos (historial de cobros por cotización)
-        """
-        CREATE TABLE IF NOT EXISTS pagos (
-            id              SERIAL PRIMARY KEY,
-            cotizacion_id   INTEGER NOT NULL REFERENCES cotizaciones(id),
-            monto           NUMERIC(14,2) NOT NULL,
-            fecha_pago      DATE NOT NULL,
-            metodo          TEXT,
-            referencia      TEXT,
-            registrado_por  INTEGER REFERENCES usuarios(id),
-            created_at      TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_pagos_cotizacion ON pagos(cotizacion_id)",
-        # Fase 10: cancelación de facturas CFDI
-        "ALTER TABLE facturas ADD COLUMN IF NOT EXISTS cancelada BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE facturas ADD COLUMN IF NOT EXISTS motivo_cancelacion TEXT",
-        # Fase 11: recepción física de compras
-        "ALTER TABLE compras ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'Creada'",
-        "ALTER TABLE compra_detalle ADD COLUMN IF NOT EXISTS cantidad_recibida NUMERIC(14,4) DEFAULT 0",
-        # Fase 11: devoluciones de cliente
-        """
-        CREATE TABLE IF NOT EXISTS devoluciones (
-            id              SERIAL PRIMARY KEY,
-            folio           TEXT NOT NULL,
-            cotizacion_id   INTEGER REFERENCES cotizaciones(id),
-            cliente_id      INTEGER REFERENCES clientes(id),
-            fecha           DATE NOT NULL,
-            motivo          TEXT,
-            estado          TEXT DEFAULT 'Abierta',
-            total           NUMERIC(14,2) DEFAULT 0,
-            notas           TEXT,
-            created_at      TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS devolucion_detalle (
-            id              SERIAL PRIMARY KEY,
-            devolucion_id   INTEGER NOT NULL REFERENCES devoluciones(id) ON DELETE CASCADE,
-            producto_id     INTEGER NOT NULL REFERENCES productos(id),
-            cantidad        NUMERIC(14,4) NOT NULL,
-            precio_unitario NUMERIC(14,4) NOT NULL,
-            total           NUMERIC(14,2) NOT NULL,
-            retorna_stock   BOOLEAN DEFAULT TRUE
-        )
-        """,
-        # Fase 11: lotes y vencimientos
-        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS maneja_lotes BOOLEAN DEFAULT FALSE",
-        """
-        CREATE TABLE IF NOT EXISTS lotes (
-            id                SERIAL PRIMARY KEY,
-            producto_id       INTEGER NOT NULL REFERENCES productos(id),
-            numero_lote       TEXT NOT NULL,
-            fecha_vencimiento DATE,
-            cantidad          NUMERIC(14,4) NOT NULL DEFAULT 0,
-            fecha_entrada     DATE,
-            notas             TEXT,
-            created_at        TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        # Fase 11: carta porte / traslados
-        """
-        CREATE TABLE IF NOT EXISTS traslados (
-            id              SERIAL PRIMARY KEY,
-            cotizacion_id   INTEGER NOT NULL REFERENCES cotizaciones(id),
-            origen          TEXT,
-            destino         TEXT,
-            transportista   TEXT,
-            placas          TEXT,
-            fecha_traslado  DATE,
-            notas           TEXT,
-            created_at      TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        # Fase 12-B: campo origen en inscripciones de secuencia (para rastrear trigger automático)
-        "ALTER TABLE crm_secuencia_inscripciones ADD COLUMN IF NOT EXISTS origen TEXT",
-        # Fase 13-CRM: pipeline comercial (prospectos / kanban)
-        """
-        CREATE TABLE IF NOT EXISTS prospectos (
-            id                     SERIAL PRIMARY KEY,
-            nombre                 TEXT NOT NULL,
-            cliente_id             INTEGER REFERENCES clientes(id),
-            contacto_nombre        TEXT,
-            contacto_email         TEXT,
-            contacto_tel           TEXT,
-            etapa                  TEXT NOT NULL DEFAULT 'nuevo',
-            valor_estimado         NUMERIC(14,2),
-            probabilidad           INTEGER DEFAULT 0,
-            responsable_id         INTEGER REFERENCES usuarios(id),
-            notas                  TEXT,
-            fecha_estimada_cierre  DATE,
-            motivo_perdida         TEXT,
-            created_at             TIMESTAMPTZ DEFAULT NOW(),
-            updated_at             TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_prospectos_etapa ON prospectos(etapa)",
-        # Fase 10: cuentas por pagar a proveedores
-        """
-        CREATE TABLE IF NOT EXISTS cuentas_por_pagar (
-            id                SERIAL PRIMARY KEY,
-            compra_id         INTEGER REFERENCES compras(id),
-            proveedor_id      INTEGER NOT NULL REFERENCES proveedores(id),
-            monto_total       NUMERIC(14,2) NOT NULL,
-            monto_pagado      NUMERIC(14,2) DEFAULT 0,
-            fecha_vencimiento DATE,
-            estado            TEXT DEFAULT 'Pendiente',
-            referencia_pago   TEXT,
-            notas             TEXT,
-            created_at        TIMESTAMPTZ DEFAULT NOW()
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_cxp_proveedor ON cuentas_por_pagar(proveedor_id)",
-        "CREATE INDEX IF NOT EXISTS idx_cxp_estado ON cuentas_por_pagar(estado)",
-        # Fase 12-D: atribuciones de campañas CRM (ROI)
-        """
-        CREATE TABLE IF NOT EXISTS crm_campana_atribuciones (
-            id               SERIAL PRIMARY KEY,
-            campana_id       INTEGER NOT NULL REFERENCES crm_campanas(id) ON DELETE CASCADE,
-            cliente_id       INTEGER NOT NULL REFERENCES clientes(id),
-            cotizacion_id    INTEGER NOT NULL REFERENCES cotizaciones(id),
-            monto            NUMERIC(14,2) NOT NULL,
-            dias_desde_envio INTEGER,
-            created_at       TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE(campana_id, cotizacion_id)
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_crm_attr_campana ON crm_campana_atribuciones(campana_id)",
-    ]
+    # Migraciones por empresa via Alembic (versionadas en web_app/migrations/versions/)
+    from web_app.migrations import aplicar_migraciones, build_db_url
     for emp in get_empresas():
         db = emp.get("pg_database") or emp.get("empresa_db") or emp.get("db")
         if not db:
             continue
-        for sql in _MIGRACIONES:
-            try:
-                with get_pool_empresa(db).conexion() as (_, cur):
-                    cur.execute(sql)
-            except Exception as e:
-                _log.warning(f"Migracion en {db}: {e}")
-    # Migración global: jwt_blacklist (en clf_usuarios)
+        try:
+            aplicar_migraciones(build_db_url(db), _log)
+        except Exception as e:
+            _log.error(f"Migraciones fallidas para {db}: {e}")
+
+    # Migración global: jwt_blacklist (en clf_usuarios — fuera del scope Alembic por empresa)
     try:
         with pool_usuarios.conexion() as (_, cur):
             cur.execute("""
@@ -434,6 +230,7 @@ app.include_router(herramientas_router.router)
 app.include_router(api_dashboard_router.router)
 app.include_router(api_cotizaciones_router.router)
 app.include_router(api_catalogos_router.router)
+app.include_router(api_catalogos_router.historial_router)
 app.include_router(api_compras_router.router)
 app.include_router(api_stock_router.router)
 app.include_router(api_facturas_router.router)

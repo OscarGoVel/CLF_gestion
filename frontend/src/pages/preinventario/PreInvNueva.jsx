@@ -6,7 +6,7 @@ import { api } from '../../lib/apiClient';
 export default function PreInvNueva() {
   const navigate = useNavigate();
 
-  const { data } = useFetch('/api/preinventario/sesiones');
+  const { data } = useFetch('/api/inventario/conteos/sesiones');
   const sucursales = data?.sucursales ?? [];
 
   const [nombre, setNombre]           = useState('');
@@ -32,13 +32,13 @@ export default function PreInvNueva() {
     setSaving(true);
     setError('');
     try {
-      const res = await api.post('/api/preinventario/sesiones', {
+      const res = await api.post('/api/inventario/conteos/sesiones', {
         nombre: nombre.trim(),
         tipo,
         sucursal_id: sucursalId ? Number(sucursalId) : null,
         area_ids: areaIds,
       });
-      navigate(`/preinventario/${res.id}`);
+      navigate(`/inventario/conteos/${res.id}`);
     } catch (e) {
       setError(e.message);
       setSaving(false);
@@ -48,9 +48,9 @@ export default function PreInvNueva() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/preinventario')}>Pre-inventario</a>
+        <a onClick={() => navigate('/inventario/conteos')}>Pre-inventario</a>
         <span className="sep">/</span>
         <span>Nueva sesión</span>
       </div>
@@ -139,7 +139,7 @@ export default function PreInvNueva() {
           )}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button type="button" className="btn" onClick={() => navigate('/preinventario')}>
+            <button type="button" className="btn" onClick={() => navigate('/inventario/conteos')}>
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>

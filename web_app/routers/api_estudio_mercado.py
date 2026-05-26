@@ -13,7 +13,7 @@ from typing import Optional
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/estudio-mercado", tags=["api"])
+router = APIRouter(prefix="/api/abastecimiento/estudios", tags=["api"])
 
 _tablas_ok: set[str] = set()
 

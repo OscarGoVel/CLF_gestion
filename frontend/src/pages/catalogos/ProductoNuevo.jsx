@@ -75,7 +75,7 @@ export default function ProductoNuevo() {
         clave_unidad_sat: form.clave_unidad_sat.trim() || null,
       });
       toast.success('Producto creado');
-      navigate('/catalogos/productos');
+      navigate('/inventario/productos');
     } catch (err) {
       if (err.status === 409) setFieldErrors((e) => ({ ...e, codigo: 'Este código ya existe' }));
       else setError(err.message ?? 'Error al guardar');
@@ -87,9 +87,9 @@ export default function ProductoNuevo() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/catalogos/productos')}>Productos</a>
+        <a onClick={() => navigate('/inventario/productos')}>Productos</a>
         <span className="sep">/</span>
         <span>Nuevo producto</span>
       </div>
@@ -100,7 +100,7 @@ export default function ProductoNuevo() {
             <div className="page-title">Nuevo producto</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn" onClick={() => navigate('/catalogos/productos')}>
+            <button type="button" className="btn" onClick={() => navigate('/inventario/productos')}>
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>

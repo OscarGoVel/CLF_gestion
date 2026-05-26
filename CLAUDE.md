@@ -43,7 +43,8 @@ C:\Users\oscar\OneDrive\Documentos\Obsidian Vault\ai\context\architecture-overvi
 ### React
 - Wireframe-first: HTML funcional con datos reales antes que estilos
 - Usar React Router v7: `<Link>`, `useNavigate()` — nunca `window.location`
-- Reutilizar componentes existentes: `Pill.jsx`, `Stepper.jsx`, `NextRibbon.jsx`, `DataTable.jsx`, `SidePreview.jsx`, `FilterChips.jsx`, `KpiCard.jsx`, `Modal.jsx`, `TableStates.jsx`, `MobileNav.jsx`
+- Reutilizar componentes existentes: `StatusBadge.jsx`, `EmptyState.jsx`, `SectionCard.jsx`, `KpiCard.jsx`, `DataTable.jsx`, `SidePreview.jsx`, `FilterChips.jsx`, `Modal.jsx`, `ConfirmModal.jsx`, `TableStates.jsx`, `Historial.jsx`, `Stepper.jsx`, `NextRibbon.jsx`
+- `Pill.jsx` y `MobileNav.jsx` están deprecados — no usar
 - No crear abstracciones sin necesidad explícita
 
 ### FastAPI
@@ -66,13 +67,16 @@ CLF_gestion/
 ├── frontend/
 │   └── src/
 │       ├── pages/          ← páginas React (una por módulo)
-│       ├── components/     ← Pill, Stepper, NextRibbon, DataTable, SidePreview, FilterChips, KpiCard, Modal, TableStates, MobileNav
-│       └── App.jsx         ← rutas principales
+│       ├── components/     ← StatusBadge, EmptyState, SectionCard, KpiCard, DataTable, SidePreview,
+│       │                      FilterChips, Modal, ConfirmModal, TableStates, Historial, Stepper, NextRibbon
+│       └── App.jsx         ← rutas principales (estructura /panel, /comercial/*, /abastecimiento/*, etc.)
 ├── web_app/
 │   ├── routers/
 │   │   ├── api_*.py        ← API REST activa (React)
 │   │   └── *.py            ← routers Jinja legacy (no modificar)
+│   ├── migrations/         ← Alembic: versiones en versions/NNNN_*.py
 │   ├── core/               ← lógica de negocio
+│   ├── historial.py        ← registro de eventos por entidad
 │   ├── auth.py, rbac.py    ← autenticación y roles
 │   └── database.py         ← conexiones PostgreSQL
 └── CLAUDE.md               ← este archivo
@@ -80,19 +84,35 @@ CLF_gestion/
 
 ---
 
-## Estado actual (Fase 5 — Nuevos KPIs)
+## Estado actual (Fases 1–17 completas — Fase 15 casi lista)
 
-Todos los módulos React están en producción. Fases 1–4 completadas.
+Todos los módulos React en producción. Sidebar colapsable (Fase 16) y sistema de diseño (Fase 17) completos.
 
-Pendiente de Fase 4: migrar validación de montos al cambiar estado de cotización a PATCH endpoint
-en `api_cotizaciones.py` (actualmente solo en router Jinja legacy `cotizaciones.py:782`).
+**Rutas actuales (post Fase 16):**
 
-KPIs pendientes para Fase 5 (ver `CLF_Plan_Maestro.md`):
-1. Tasa de conversión (`resultado` + `motivo_perdida`) → requiere campo nuevo en `cotizaciones`
-2. DSO por cliente → `api_estado_cuenta.py`
-3. Días de inventario por producto → `api_stock.py`
-4. Aging de cartera global en Análisis
-5. Alertas de margen negativo (líneas con `costo_compra > costo_snapshot`)
+- `/panel` — Dashboard
+- `/comercial/cotizaciones*` — Cotizaciones
+- `/comercial/crm*` — CRM / Pipeline
+- `/comercial/clientes` — Clientes
+- `/comercial/devoluciones*` — Devoluciones
+- `/abastecimiento/compras*` — Compras
+- `/abastecimiento/proveedores` — Proveedores
+- `/abastecimiento/estudios*` — Estudio de mercado
+- `/inventario/stock*` — Stock
+- `/inventario/conteos*` — Pre-inventario
+- `/inventario/productos*` — Productos
+- `/documentos/cfdi*` — Facturas / CFDI
+- `/finanzas/cobranza*` — Estado de Cuenta (API: `/api/finanzas/cobranza`)
+- `/finanzas/cuentas-pagar` — Cuentas por Pagar
+- `/finanzas/costos-fijos*` — Costos Fijos
+- `/reportes` — Análisis
+- `/admin` — Admin
+
+**Pendiente único (Fase 15):**
+
+- Notificaciones automáticas al cambiar estado de cotización (SendGrid/Twilio)
+
+**Migraciones:** Usar Alembic. Nuevas migraciones en `web_app/migrations/versions/NNNN_*.py`. NO poner SQL en `main.py`.
 
 ---
 

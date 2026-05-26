@@ -34,7 +34,7 @@ export default function CostosFijosList() {
   async function handleEliminar() {
     setDeleting(true);
     try {
-      await api.delete(`/api/costos-fijos/${deleteId}`);
+      await api.delete(`/api/finanzas/costos-fijos/${deleteId}`);
       setDeleteId(null);
       await refetch();
       toast.success('Costo eliminado');
@@ -48,7 +48,7 @@ export default function CostosFijosList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Costos Fijos</span>
       </div>
@@ -120,7 +120,7 @@ export default function CostosFijosList() {
                     <button
                       className="btn"
                       style={{ padding: '2px 8px', fontSize: 12 }}
-                      onClick={() => navigate(`/costos-fijos/${item.id}/editar`)}
+                      onClick={() => navigate(`/finanzas/costos-fijos/${item.id}/editar`)}
                     >Editar</button>
                     <button
                       className="btn"
@@ -183,7 +183,7 @@ function CostoFijoModal({ periodoDefault, onClose, onSaved, initialData = null }
     setSaving(true); setError('');
     try {
       if (initialData?.id) {
-        await api.put(`/api/costos-fijos/${initialData.id}`, {
+        await api.put(`/api/finanzas/costos-fijos/${initialData.id}`, {
           periodo, categoria, descripcion: desc.trim(), monto: parseFloat(monto),
         });
       } else {

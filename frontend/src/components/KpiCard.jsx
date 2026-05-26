@@ -1,10 +1,20 @@
-export function KpiCard({ label, value, foot, warn, color }) {
+const TONE_COLOR = {
+  success: 'var(--color-success)',
+  info:    'var(--color-info)',
+  warning: 'var(--color-warning)',
+  danger:  'var(--color-danger)',
+  neutral: 'var(--color-neutral)',
+};
+
+export function KpiCard({ label, value, foot, warn, color, tone, delta }) {
+  const borderColor = color ?? (tone ? TONE_COLOR[tone] : undefined) ?? (warn ? 'var(--color-danger)' : undefined);
   return (
-    <div className="card kpi" style={color ? { borderLeft: `4px solid ${color}` } : undefined}>
+    <div className="card kpi" style={borderColor ? { borderLeft: `4px solid ${borderColor}` } : undefined}>
       <div className="k-label">{label}</div>
-      <div className="k-value" style={{ color: color ?? (warn ? 'var(--danger)' : undefined) }}>
+      <div className="k-value">
         {value ?? '—'}
       </div>
+      {delta && <div className="k-foot k-delta">{delta}</div>}
       {foot && <div className="k-foot">{foot}</div>}
     </div>
   );

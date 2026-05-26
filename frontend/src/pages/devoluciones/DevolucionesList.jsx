@@ -29,7 +29,7 @@ export default function DevolucionesList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Devoluciones</span>
       </div>
@@ -39,7 +39,7 @@ export default function DevolucionesList() {
           <div className="page-title">Devoluciones</div>
           <div className="page-sub">{total} registros</div>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/devoluciones/nueva')}>
+        <button className="btn btn-primary" onClick={() => navigate('/comercial/devoluciones/nueva')}>
           + Nueva devolución
         </button>
       </div>
@@ -76,7 +76,7 @@ export default function DevolucionesList() {
             ) : rows.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <Link to={`/devoluciones/${r.id}`} style={{ fontFamily: 'var(--mono)', fontWeight: 500 }}>
+                  <Link to={`/comercial/devoluciones/${r.id}`} style={{ fontFamily: 'var(--mono)', fontWeight: 500 }}>
                     {r.folio}
                   </Link>
                 </td>
@@ -84,7 +84,7 @@ export default function DevolucionesList() {
                 <td style={{ fontSize: 13 }}>{r.cliente}</td>
                 <td style={{ fontSize: 12 }}>
                   {r.cot_folio
-                    ? <Link to={`/cotizaciones/${r.cotizacion_id}`} style={{ fontFamily: 'var(--mono)' }}>{r.cot_folio}</Link>
+                    ? <Link to={`/comercial/cotizaciones/${r.cotizacion_id}`} style={{ fontFamily: 'var(--mono)' }}>{r.cot_folio}</Link>
                     : <span style={{ color: 'var(--ink-400)' }}>—</span>}
                 </td>
                 <td style={{ fontSize: 12, color: 'var(--ink-600)' }}>{r.motivo ?? '—'}</td>

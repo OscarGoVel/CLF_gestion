@@ -15,7 +15,7 @@ const TIPO_COLOR = {
 
 export default function Secuencias() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/secuencias');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/secuencias');
   const secuencias = data?.secuencias ?? [];
   const [showModal,  setShowModal]  = useState(false);
   const [detalle,    setDetalle]    = useState(null);
@@ -24,7 +24,7 @@ export default function Secuencias() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Secuencias</span>
       </div>
@@ -70,7 +70,7 @@ export default function Secuencias() {
             <div style={{ display: 'flex', gap: 6 }}>
               <button className="btn" style={{ padding: '2px 10px', fontSize: 12 }}
                 onClick={async () => {
-                  const r = await api.get(`/api/crm/secuencias/${s.id}`);
+                  const r = await api.get(`/api/comercial/crm/secuencias/${s.id}`);
                   setDetalle(r);
                 }}>
                 Ver pasos
@@ -161,7 +161,7 @@ function InscribirModal({ secuencia, onClose, onSaved }) {
     if (seleccionados.length === 0) return;
     setSaving(true);
     try {
-      await api.post(`/api/crm/secuencias/${secuencia.id}/inscribir`,
+      await api.post(`/api/comercial/crm/secuencias/${secuencia.id}/inscribir`,
         { cliente_ids: seleccionados });
       onSaved();
     } catch (e) {
@@ -211,7 +211,7 @@ function InscribirModal({ secuencia, onClose, onSaved }) {
 }
 
 function SecuenciaModal({ onClose, onSaved }) {
-  const { data } = useFetch('/api/crm/plantillas');
+  const { data } = useFetch('/api/comercial/crm/plantillas');
   const plantillas = data?.plantillas ?? [];
 
   const [nombre, setNombre] = useState('');
@@ -250,7 +250,7 @@ function SecuenciaModal({ onClose, onSaved }) {
     if (pasosValidos.length === 0) { setError('Al menos un paso con asunto'); return; }
     setSaving(true); setError('');
     try {
-      await api.post('/api/crm/secuencias', {
+      await api.post('/api/comercial/crm/secuencias', {
         nombre: nombre.trim(), tipo, descripcion: desc.trim() || null,
         pasos: pasosValidos.map(p => ({
           orden: p.orden,

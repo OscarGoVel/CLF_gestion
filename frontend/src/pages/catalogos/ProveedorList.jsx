@@ -15,9 +15,9 @@ const FORM_EMPTY = {
 };
 
 const TABS = [
-  { label: 'Clientes',    path: '/catalogos/clientes' },
-  { label: 'Productos',   path: '/catalogos/productos' },
-  { label: 'Proveedores', path: '/catalogos/proveedores' },
+  { label: 'Clientes',    path: '/comercial/clientes' },
+  { label: 'Productos',   path: '/inventario/productos' },
+  { label: 'Proveedores', path: '/abastecimiento/proveedores' },
 ];
 
 const COLUMNS = [
@@ -108,7 +108,7 @@ export default function ProveedorList() {
     <>
       <div className="page">
         <div className="crumbs">
-          <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+          <a onClick={() => navigate('/panel')}>CLF Gestión</a>
           <span className="sep">/</span>
           <span>Catálogos</span>
           <span className="sep">/</span>
@@ -119,9 +119,9 @@ export default function ProveedorList() {
           {TABS.map((t) => (
             <button key={t.path} onClick={() => navigate(t.path)} style={{
               padding: '7px 18px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-              fontWeight: t.path === '/catalogos/proveedores' ? 500 : 400,
-              color: t.path === '/catalogos/proveedores' ? 'var(--ink-900)' : 'var(--ink-500)',
-              borderBottom: t.path === '/catalogos/proveedores' ? '2px solid var(--accent)' : '2px solid transparent',
+              fontWeight: t.path === '/abastecimiento/proveedores' ? 500 : 400,
+              color: t.path === '/abastecimiento/proveedores' ? 'var(--ink-900)' : 'var(--ink-500)',
+              borderBottom: t.path === '/abastecimiento/proveedores' ? '2px solid var(--accent)' : '2px solid transparent',
               marginBottom: -1,
             }}>{t.label}</button>
           ))}

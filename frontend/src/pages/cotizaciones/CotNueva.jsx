@@ -52,7 +52,7 @@ function ProductoSearch({ linea, onSelect, onChange, onQuickAdd }) {
     if (q.length < 2) { setResults([]); setSearched(false); return; }
     debounce.current = setTimeout(async () => {
       try {
-        const data = await api.get(`/api/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
+        const data = await api.get(`/api/comercial/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
         setResults(data.resultados ?? []);
         setSearched(true);
         setOpen(true);
@@ -325,9 +325,9 @@ export default function CotNueva() {
           aplica_iva: l.aplica_iva,
         })),
       };
-      const res = await api.post('/api/cotizaciones', payload);
+      const res = await api.post('/api/comercial/cotizaciones', payload);
       toast.success('Cotización creada');
-      navigate(`/cotizaciones/${res.id}`);
+      navigate(`/comercial/cotizaciones/${res.id}`);
     } catch (e) {
       setError(e.message ?? 'Error al guardar');
     } finally {
@@ -345,7 +345,7 @@ export default function CotNueva() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const data = await api.upload('/api/cotizaciones/importar-plantilla', formData);
+      const data = await api.upload('/api/comercial/cotizaciones/importar-plantilla', formData);
       const mappings = {};
       (data.unmatched ?? []).forEach((_, idx) => { mappings[idx] = null; });
       setImportModal({ matched: data.matched ?? [], unmatched: data.unmatched ?? [], mappings });
@@ -405,7 +405,7 @@ export default function CotNueva() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/cotizaciones')}>Cotizaciones</a>
+        <a onClick={() => navigate('/comercial/cotizaciones')}>Cotizaciones</a>
         <span className="sep">/</span>
         <span>Nueva</span>
       </div>
@@ -416,7 +416,7 @@ export default function CotNueva() {
           <div className="page-sub">Fecha: {fecha}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate('/cotizaciones')}>Cancelar</button>
+          <button className="btn" onClick={() => navigate('/comercial/cotizaciones')}>Cancelar</button>
           <button className="btn" onClick={() => handleGuardar('Borrador')} disabled={saving}>
             Guardar borrador
           </button>
@@ -584,11 +584,11 @@ export default function CotNueva() {
                 onClick={() => setLineas((ls) => [...ls, { ...newLine(), no_catalogado: true }])}>
                 + Descripción manual
               </button>
-              <a href="/api/cotizaciones/plantilla-import"
+              <a href="/api/comercial/cotizaciones/plantilla-import"
                  onClick={(e) => {
                    e.preventDefault();
                    const token = sessionStorage.getItem('clf_token');
-                   fetch('/api/cotizaciones/plantilla-import', { headers: { Authorization: `Bearer ${token}` } })
+                   fetch('/api/comercial/cotizaciones/plantilla-import', { headers: { Authorization: `Bearer ${token}` } })
                      .then(r => r.blob()).then(blob => {
                        const a = document.createElement('a');
                        a.href = URL.createObjectURL(blob);

@@ -42,11 +42,11 @@ export default function CostosFijosEditar() {
     if (!desc.trim() || !monto || !periodo) { setError('Todos los campos son requeridos'); return; }
     setSaving(true); setError('');
     try {
-      await api.put(`/api/costos-fijos/${id}`, {
+      await api.put(`/api/finanzas/costos-fijos/${id}`, {
         periodo, categoria, descripcion: desc.trim(), monto: parseFloat(monto),
       });
       toast.success('Costo actualizado');
-      navigate('/costos-fijos');
+      navigate('/finanzas/costos-fijos');
     } catch (e) {
       setError(e.message);
       setSaving(false);
@@ -56,9 +56,9 @@ export default function CostosFijosEditar() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/costos-fijos')}>Costos Fijos</a>
+        <a onClick={() => navigate('/finanzas/costos-fijos')}>Costos Fijos</a>
         <span className="sep">/</span>
         <span>Editar</span>
       </div>
@@ -97,7 +97,7 @@ export default function CostosFijosEditar() {
               onChange={e => setMonto(e.target.value)} min="0.01" step="0.01" />
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button type="button" className="btn" onClick={() => navigate('/costos-fijos')}>Cancelar</button>
+            <button type="button" className="btn" onClick={() => navigate('/finanzas/costos-fijos')}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? 'Guardando…' : 'Guardar'}
             </button>

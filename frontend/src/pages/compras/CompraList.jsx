@@ -22,7 +22,7 @@ const COLUMNS = [
 const INSUMO_EMPTY = { nombre: '', unidad: 'pza', cantidad: 1, costo: 0 };
 
 function PresupuestoModal({ onClose }) {
-  const { data, loading } = useFetch('/api/compras/presupuesto/faltantes');
+  const { data, loading } = useFetch('/api/abastecimiento/compras/presupuesto/faltantes');
   const pedidos = data?.pedidos ?? [];
 
   const [selIds, setSelIds]     = useState([]);
@@ -51,7 +51,7 @@ function PresupuestoModal({ onClose }) {
     setGenerando(true);
     setError('');
     try {
-      await api.downloadPost('/api/compras/presupuesto/pdf', 'PresupuestoCompra.pdf', {
+      await api.downloadPost('/api/abastecimiento/compras/presupuesto/pdf', 'PresupuestoCompra.pdf', {
         cotizacion_ids: selIds,
         insumos,
       });
@@ -179,8 +179,8 @@ export default function CompraList() {
   const params = new URLSearchParams({ pagina });
   if (q) params.set('q', q);
 
-  const { data, loading }   = useFetch(`/api/compras?${params}`);
-  const { data: detData }   = useFetch(sel ? `/api/compras/${sel}` : null);
+  const { data, loading }   = useFetch(`/api/abastecimiento/compras?${params}`);
+  const { data: detData }   = useFetch(sel ? `/api/abastecimiento/compras/${sel}` : null);
 
   const compras    = data?.compras    ?? [];
   const total      = data?.total      ?? 0;
@@ -194,7 +194,7 @@ export default function CompraList() {
 
       <div className="page">
         <div className="crumbs">
-          <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+          <a onClick={() => navigate('/panel')}>CLF Gestión</a>
           <span className="sep">/</span>
           <span>Compras</span>
         </div>
@@ -215,7 +215,7 @@ export default function CompraList() {
             <button className="btn" onClick={() => setShowPresupuesto(true)}>
               Presupuesto
             </button>
-            <button className="btn btn-primary" onClick={() => navigate('/compras/nueva')}>
+            <button className="btn btn-primary" onClick={() => navigate('/abastecimiento/compras/nueva')}>
               Nueva compra
             </button>
           </div>
@@ -240,7 +240,7 @@ export default function CompraList() {
               onRowClick={(row) => setSel(sel === row.id ? null : row.id)}
               getContextMenuItems={(compra) => [
                 { type: 'item', label: 'Abrir detalle',
-                  onClick: () => navigate(`/compras/${compra.id}`) },
+                  onClick: () => navigate(`/abastecimiento/compras/${compra.id}`) },
               ]}
               footer={
                 <>
@@ -321,7 +321,7 @@ export default function CompraList() {
                   </table>
 
                   <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm" onClick={() => navigate(`/compras/${sel}`)}>Abrir</button>
+                    <button className="btn btn-sm" onClick={() => navigate(`/abastecimiento/compras/${sel}`)}>Abrir</button>
                     <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
                   </div>
                 </>

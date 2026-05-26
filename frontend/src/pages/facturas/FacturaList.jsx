@@ -6,6 +6,7 @@ import { api } from '../../lib/apiClient';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { ContextMenu } from '../../components/ContextMenu';
 import { toast } from '../../lib/toast';
+import { useAuth } from '../../hooks/useAuth';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -17,8 +18,18 @@ const TIPO_COLOR = {
   T: { bg: '#fef9c3', color: '#854d0e' },
 };
 
+const TIPO_OPCIONES = [
+  { value: 'I', label: 'I — Ingreso' },
+  { value: 'E', label: 'E — Egreso' },
+  { value: 'P', label: 'P — Pago' },
+  { value: 'N', label: 'N — Nómina' },
+  { value: 'T', label: 'T — Traslado' },
+];
+
 export default function FacturaList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Administrador';
   const [q, setQ]             = useState('');
   const [tipoFiltro, setTipoFiltro] = useState([]);
   const [sinVincular, setSinVincular] = useState(false);
@@ -30,15 +41,23 @@ export default function FacturaList() {
   const [ctxMenu, setCtxMenu] = useState(null);
   const longPressTimer = useRef(null);
 
+  const [cotQ, setCotQ] = useState('');
+  const [cotResults, setCotResults] = useState(null);
+  const [cotBuscando, setCotBuscando] = useState(false);
+  const [vinculandoCot, setVinculandoCot] = useState(null);
+
+  const [nuevoTipo, setNuevoTipo] = useState('');
+  const [guardandoTipo, setGuardandoTipo] = useState(false);
+
   const params = new URLSearchParams({ pagina });
   if (q) params.set('q', q);
   if (sinVincular) params.set('sin_vincular', 'true');
   tipoFiltro.forEach((t) => params.append('tipo', t));
 
-  const { data, loading, refetch } = useFetch(`/api/facturas?${params}`);
-  const { data: detData, refetch: refetchDet } = useFetch(sel ? `/api/facturas/${sel}` : null);
+  const { data, loading, refetch } = useFetch(`/api/documentos/cfdi?${params}`);
+  const { data: detData, refetch: refetchDet } = useFetch(sel ? `/api/documentos/cfdi/${sel}` : null);
   const { data: sugData } = useFetch(
-    sel && detData?.factura?.tipo === 'I' ? `/api/facturas/${sel}/sugerencias?_k=${sugKey}` : null
+    sel && detData?.factura?.tipo === 'I' ? `/api/documentos/cfdi/${sel}/sugerencias?_k=${sugKey}` : null
   );
 
   const facturas   = data?.facturas   ?? [];
@@ -54,7 +73,7 @@ export default function FacturaList() {
   async function handleVincular(cotizacionId) {
     setVinculando(cotizacionId);
     try {
-      await api.post(`/api/facturas/${sel}/vincular`, { cotizacion_id: cotizacionId });
+      await api.post(`/api/documentos/cfdi/${sel}/vincular`, { cotizacion_id: cotizacionId });
       setSugKey((k) => k + 1);
       refetchDet();
       refetch();
@@ -64,7 +83,39 @@ export default function FacturaList() {
   }
 
   function handleSelToggle(id) {
+    if (sel !== id) { setCotQ(''); setCotResults(null); setNuevoTipo(''); }
     setSel(sel === id ? null : id);
+  }
+
+  async function buscarCotizaciones(texto) {
+    setCotQ(texto);
+    setCotBuscando(true);
+    try {
+      const params = new URLSearchParams();
+      if (texto.trim()) params.set('q', texto.trim());
+      const data = await api.get(`/api/comercial/cotizaciones?${params}`);
+      setCotResults(data.cotizaciones ?? []);
+    } catch {
+      setCotResults([]);
+    } finally {
+      setCotBuscando(false);
+    }
+  }
+
+  async function handleVincularCot(cotizacionId) {
+    setVinculandoCot(cotizacionId);
+    try {
+      await api.post(`/api/documentos/cfdi/${sel}/vincular`, { cotizacion_id: cotizacionId });
+      setSugKey((k) => k + 1);
+      setCotResults(null);
+      setCotQ('');
+      refetchDet();
+      refetch();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setVinculandoCot(null);
+    }
   }
 
   function startLongPress(e, f) {
@@ -77,10 +128,10 @@ export default function FacturaList() {
     if (f.tipo === 'E') {
       if (f.compra_id) {
         items.push({ type: 'item', label: 'Ver compra',
-          onClick: () => navigate(`/compras/${f.compra_id}`) });
+          onClick: () => navigate(`/abastecimiento/compras/${f.compra_id}`) });
       } else {
         items.push({ type: 'item', label: 'Registrar compra',
-          onClick: () => navigate('/compras/nueva', { state: { prefill: {
+          onClick: () => navigate('/abastecimiento/compras/nueva', { state: { prefill: {
             factura_id: f.id, fecha: f.fecha, rfc_emisor: f.rfc_emisor, nombre_emisor: f.nombre_emisor,
           }}}) });
       }
@@ -95,7 +146,7 @@ export default function FacturaList() {
 
   async function handleCancelar() {
     try {
-      await api.patch(`/api/facturas/${sel}/cancelar`, {});
+      await api.patch(`/api/documentos/cfdi/${sel}/cancelar`, {});
       toast.success('Factura marcada como cancelada');
       setConfirmCancelar(false);
       refetchDet();
@@ -105,11 +156,27 @@ export default function FacturaList() {
     }
   }
 
+  async function handleCambiarTipo() {
+    if (!nuevoTipo || nuevoTipo === factura?.tipo) return;
+    setGuardandoTipo(true);
+    try {
+      await api.patch(`/api/documentos/cfdi/${sel}/tipo`, { tipo: nuevoTipo });
+      toast.success(`Tipo cambiado a ${nuevoTipo}`);
+      setNuevoTipo('');
+      refetchDet();
+      refetch();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setGuardandoTipo(false);
+    }
+  }
+
   return (
     <>
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Facturas</span>
       </div>
@@ -119,7 +186,7 @@ export default function FacturaList() {
           <div className="page-title">Facturas CFDI</div>
           <div className="page-sub">{total} facturas importadas</div>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/facturas/importar')}>
+        <button className="btn btn-primary" onClick={() => navigate('/documentos/cfdi/importar')}>
           Importar XML
         </button>
       </div>
@@ -308,7 +375,7 @@ export default function FacturaList() {
                           <span style={{ color: 'var(--ink-500)', marginLeft: 8 }}>{c.cliente}</span>
                         </div>
                         <a className="linkish" style={{ fontSize: 11 }}
-                          onClick={() => navigate(`/cotizaciones/${c.id}`)}>Abrir →</a>
+                          onClick={() => navigate(`/comercial/cotizaciones/${c.id}`)}>Abrir →</a>
                       </div>
                     ))}
                   </>
@@ -358,6 +425,74 @@ export default function FacturaList() {
                   </>
                 )}
 
+                {factura.tipo === 'I' && (
+                  <>
+                    <div className="eyebrow" style={{ marginTop: 14 }}>Vincular cotización</div>
+                    <input
+                      className="input"
+                      style={{ fontSize: 11.5, marginBottom: 6 }}
+                      placeholder="Buscar por folio o cliente…"
+                      value={cotQ}
+                      onChange={(e) => buscarCotizaciones(e.target.value)}
+                    />
+                    {cotBuscando && (
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-400)', padding: '4px 0' }}>Buscando…</div>
+                    )}
+                    {!cotBuscando && cotResults !== null && cotResults.length === 0 && (
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-400)', padding: '4px 0' }}>Sin resultados.</div>
+                    )}
+                    {!cotBuscando && cotResults && cotResults.length > 0 && cotResults.map((c) => (
+                      <div key={c.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '6px 0', borderBottom: '1px solid var(--ink-100)', gap: 8,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>
+                            <span className="folio">{c.folio}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-500)', marginTop: 1 }}>
+                            {c.cliente} · {c.total != null ? MXN.format(c.total) : '—'} · {c.estado}
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          style={{ fontSize: 10.5, whiteSpace: 'nowrap' }}
+                          disabled={vinculandoCot === c.id}
+                          onClick={() => handleVincularCot(c.id)}
+                        >
+                          {vinculandoCot === c.id ? '…' : 'Vincular'}
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {isAdmin && !factura.cancelada && (
+                  <>
+                    <div className="eyebrow" style={{ marginTop: 14 }}>Corrección de tipo</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <select
+                        className="input"
+                        style={{ fontSize: 11.5, flex: 1 }}
+                        value={nuevoTipo || factura.tipo}
+                        onChange={(e) => setNuevoTipo(e.target.value)}
+                      >
+                        {TIPO_OPCIONES.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                        disabled={guardandoTipo || !nuevoTipo || nuevoTipo === factura.tipo}
+                        onClick={handleCambiarTipo}
+                      >
+                        {guardandoTipo ? '…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
                 <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
                   {factura.tipo === 'I' && !factura.cancelada && (
@@ -369,14 +504,14 @@ export default function FacturaList() {
                     factura.compra_id ? (
                       <button
                         className="btn btn-sm btn-primary"
-                        onClick={() => navigate(`/compras/${factura.compra_id}`)}
+                        onClick={() => navigate(`/abastecimiento/compras/${factura.compra_id}`)}
                       >
                         Ver compra →
                       </button>
                     ) : (
                       <button
                         className="btn btn-sm btn-primary"
-                        onClick={() => navigate('/compras/nueva', {
+                        onClick={() => navigate('/abastecimiento/compras/nueva', {
                           state: {
                             prefill: {
                               factura_id: factura.id,

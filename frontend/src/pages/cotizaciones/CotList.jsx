@@ -9,6 +9,7 @@ import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview } from '../../components/SidePreview';
+import { Historial } from '../../components/Historial';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
@@ -22,6 +23,7 @@ const FILTROS = [
   { label: 'Entregada',              value: 'Entregada' },
   { label: 'Facturada',              value: 'Facturada' },
   { label: 'Pagada',                 value: 'Pagada' },
+  { label: 'Cancelada',              value: 'Cancelada' },
 ];
 
 const COLUMNS = [
@@ -53,7 +55,7 @@ export default function CotList() {
   if (fechaHasta) params.set('fecha_hasta', fechaHasta);
   if (buscar) params.set('q', buscar);
 
-  const { data, loading } = useFetch(`/api/cotizaciones?${params}`);
+  const { data, loading } = useFetch(`/api/comercial/cotizaciones?${params}`);
   const cotizaciones  = data?.cotizaciones   ?? [];
   const conteoEstado  = data?.conteo_estado  ?? {};
   const clientesLista = data?.clientes       ?? [];
@@ -106,23 +108,31 @@ export default function CotList() {
   }
 
   async function handleExportCsv() {
-    const { cotizaciones: rows, totales } = await api.get('/api/comercial/cotizaciones/export');
-    const filas = rows.map((c) => ({
-      Folio:           c.folio          ?? '',
-      Fecha:           c.fecha          ?? '',
-      Cliente:         c.cliente        ?? '',
-      Monto:           c.total          ?? 0,
-      Estado:          c.estado         ?? '',
-      'Orden de Compra': c.orden_compra ?? '',
-      Factura:         c.numero_factura ?? '',
+    const COLS = ['Folio', 'Fecha', 'Cliente', 'Estado', 'OC', 'Factura', 'Código', 'Concepto', 'Unidad', 'Cantidad', 'Precio Unitario', 'Subtotal', 'IVA', 'Total Partida'];
+    const { partidas: rows, totales } = await api.get('/api/comercial/cotizaciones/export');
+    const filas = rows.map((r) => ({
+      Folio:             r.folio              ?? '',
+      Fecha:             r.fecha              ?? '',
+      Cliente:           r.cliente            ?? '',
+      Estado:            r.estado             ?? '',
+      OC:                r.orden_compra       ?? '',
+      Factura:           r.numero_factura     ?? '',
+      'Código':          r.codigo             ?? '',
+      Concepto:          r.concepto           ?? '',
+      Unidad:            r.unidad             ?? '',
+      Cantidad:          r.cantidad           ?? '',
+      'Precio Unitario': r.precio_unitario    ?? '',
+      Subtotal:          r.subtotal           ?? '',
+      IVA:               r.iva                ?? '',
+      'Total Partida':   r.total_partida      ?? '',
     }));
-    const empty = { Folio: '', Fecha: '', Cliente: '', Monto: '', Estado: '', 'Orden de Compra': '', Factura: '' };
+    const empty = Object.fromEntries(COLS.map((k) => [k, '']));
     filas.push(empty);
-    filas.push({ ...empty, Cliente: 'Monto solicitado', Monto: totales.solicitado });
-    filas.push({ ...empty, Cliente: 'Monto entregado',  Monto: totales.entregado  });
-    filas.push({ ...empty, Cliente: 'Monto facturado',  Monto: totales.facturado  });
-    filas.push({ ...empty, Cliente: 'Monto pagado',     Monto: totales.pagado     });
-    exportCSV(['Folio', 'Fecha', 'Cliente', 'Monto', 'Estado', 'Orden de Compra', 'Factura'], filas, 'Cotizaciones');
+    filas.push({ ...empty, Concepto: 'Monto solicitado', 'Total Partida': totales.solicitado });
+    filas.push({ ...empty, Concepto: 'Monto entregado',  'Total Partida': totales.entregado  });
+    filas.push({ ...empty, Concepto: 'Monto facturado',  'Total Partida': totales.facturado  });
+    filas.push({ ...empty, Concepto: 'Monto pagado',     'Total Partida': totales.pagado     });
+    exportCSV(COLS, filas, 'Cotizaciones');
   }
 
   return (
@@ -154,32 +164,41 @@ export default function CotList() {
           placeholder="Buscar folio o cliente…"
           value={buscar} onChange={handleBuscar}
         />
-        <MultiSelectDropdown
-          options={FILTROS.filter((o) => o.value !== '')}
-          values={filtros}
-          onChange={handleFiltro}
-          counts={conteoEstado}
-          placeholder="Estado…"
-          labelPlural="estados"
-        />
-        <MultiSelectDropdown
-          options={clientesLista.map((c) => ({ label: c.nombre, value: String(c.id) }))}
-          values={clientesFiltro}
-          onChange={handleClientesFiltro}
-          placeholder="Cliente…"
-          labelPlural="clientes"
-        />
-        <input
-          className="input" type="date" style={{ maxWidth: 150 }}
-          title="Fecha desde"
-          value={fechaDesde} onChange={handleFechaDesde}
-        />
-        <span style={{ fontSize: 12, color: 'var(--ink-400)' }}>—</span>
-        <input
-          className="input" type="date" style={{ maxWidth: 150 }}
-          title="Fecha hasta"
-          value={fechaHasta} onChange={handleFechaHasta}
-        />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Estado</span>
+          <MultiSelectDropdown
+            options={FILTROS.filter((o) => o.value !== '')}
+            values={filtros}
+            onChange={handleFiltro}
+            counts={conteoEstado}
+            placeholder="Todos…"
+            labelPlural="estados"
+          />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Cliente</span>
+          <MultiSelectDropdown
+            options={clientesLista.map((c) => ({ label: c.nombre, value: String(c.id) }))}
+            values={clientesFiltro}
+            onChange={handleClientesFiltro}
+            placeholder="Todos…"
+            labelPlural="clientes"
+          />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Fecha</span>
+          <input
+            className="input" type="date" style={{ maxWidth: 150 }}
+            title="Fecha desde"
+            value={fechaDesde} onChange={handleFechaDesde}
+          />
+          <span style={{ fontSize: 12, color: 'var(--ink-400)' }}>—</span>
+          <input
+            className="input" type="date" style={{ maxWidth: 150 }}
+            title="Fecha hasta"
+            value={fechaHasta} onChange={handleFechaHasta}
+          />
+        </label>
       </div>
 
       <div style={{
@@ -287,6 +306,7 @@ export default function CotList() {
                   ))}
                 </div>
               )}
+              <Historial entidad="cotizacion" entidadId={sel?.id} />
             </SidePreview>
           </div>
         )}

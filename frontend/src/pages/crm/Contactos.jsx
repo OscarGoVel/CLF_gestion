@@ -7,7 +7,7 @@ import { ContextMenu } from '../../components/ContextMenu';
 
 export default function Contactos() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/contactos');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/contactos');
   const contactos = data?.contactos ?? [];
   const [showModal, setShowModal] = useState(false);
   const [q, setQ] = useState('');
@@ -32,7 +32,7 @@ export default function Contactos() {
 
   async function handleOptOut(id, actual) {
     try {
-      await api.patch(`/api/crm/contactos/${id}`, { opt_out: !actual });
+      await api.patch(`/api/comercial/crm/contactos/${id}`, { opt_out: !actual });
       refetch();
       toast.success(!actual ? 'Opt-out registrado' : 'Reactivado');
     } catch (e) {
@@ -43,7 +43,7 @@ export default function Contactos() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Contactos</span>
       </div>
@@ -164,7 +164,7 @@ function ContactoModal({ onClose, onSaved }) {
     }
     setSaving(true); setError('');
     try {
-      await api.post('/api/crm/contactos', {
+      await api.post('/api/comercial/crm/contactos', {
         cliente_id:  parseInt(clienteId),
         nombre:      nombre.trim(),
         cargo:       cargo.trim() || null,

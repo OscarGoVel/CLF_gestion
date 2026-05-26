@@ -6,7 +6,7 @@ import { toast } from '../../lib/toast';
 
 export default function Segmentos() {
   const navigate = useNavigate();
-  const { data, loading, refetch } = useFetch('/api/crm/segmentos');
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/segmentos');
   const segmentos = data?.segmentos ?? [];
 
   const [showModal, setShowModal]     = useState(false);
@@ -31,7 +31,7 @@ export default function Segmentos() {
   async function handleEliminar(s) {
     if (!confirm(`¿Eliminar el segmento "${s.nombre}"? Se perderán todas las asignaciones.`)) return;
     try {
-      await api.delete(`/api/crm/segmentos/${s.id}`);
+      await api.delete(`/api/comercial/crm/segmentos/${s.id}`);
       toast.success('Segmento eliminado');
       refetch();
     } catch (e) {
@@ -42,7 +42,7 @@ export default function Segmentos() {
   return (
     <div className="page" onClick={() => setCtxMenu(null)}>
       <div className="crumbs">
-        <a onClick={() => navigate('/crm')}>CRM</a>
+        <a onClick={() => navigate('/comercial/crm')}>CRM</a>
         <span className="sep">/</span>
         <span>Segmentos</span>
       </div>
@@ -201,12 +201,12 @@ function SegmentoModal({ segmento, onClose, onSaved }) {
     setSaving(true); setError('');
     try {
       if (isEdit) {
-        await api.patch(`/api/crm/segmentos/${segmento.id}`, {
+        await api.patch(`/api/comercial/crm/segmentos/${segmento.id}`, {
           nombre: nombre.trim(), tipo, descripcion: desc.trim() || null,
         });
         onSaved();
       } else {
-        const res = await api.post('/api/crm/segmentos', {
+        const res = await api.post('/api/comercial/crm/segmentos', {
           nombre: nombre.trim(), tipo, descripcion: desc.trim() || null,
         });
         onSaved({ id: res.id, nombre: nombre.trim(), tipo, descripcion: desc.trim() || null, num_clientes: 0 });
@@ -268,7 +268,7 @@ function AsignarClientesModal({ segmento, onClose, onSaved }) {
     if (seleccionados.length === 0) return;
     setSaving(true);
     try {
-      await api.post(`/api/crm/segmentos/${segmento.id}/clientes`, { cliente_ids: seleccionados });
+      await api.post(`/api/comercial/crm/segmentos/${segmento.id}/clientes`, { cliente_ids: seleccionados });
       onSaved();
     } catch (e) {
       toast.error(e.message);

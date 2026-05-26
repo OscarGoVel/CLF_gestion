@@ -5,13 +5,15 @@ import { useFetch } from '../../hooks/useFetch';
 import { toast } from '../../lib/toast';
 
 let _nextId = 1;
-const newLinea = () => ({
+const newLinea = (cotizacion_id = null) => ({
   _id: _nextId++,
   producto_id: null,
   nombre: '',
   cantidad: 1,
   costo_unitario: '',
   aplica_iva: false,
+  cotizacion_id,
+  cotizacion_folio: cotizacion_id ? `#${cotizacion_id}` : null,
 });
 
 function fmt(n) {
@@ -143,7 +145,7 @@ function ProductoSearch({ linea, onSelect, onChange }) {
     if (q.length < 2) { setResults([]); return; }
     debounce.current = setTimeout(async () => {
       try {
-        const data = await api.get(`/api/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
+        const data = await api.get(`/api/comercial/cotizaciones/buscar-producto?q=${encodeURIComponent(q)}`);
         setResults(data.resultados ?? []);
         setOpen(true);
       } catch { setResults([]); }
@@ -223,6 +225,87 @@ function ProductoSearch({ linea, onSelect, onChange }) {
   );
 }
 
+function CotizacionSearch({ linea, onSelect, onClear }) {
+  const [q, setQ] = useState(linea.cotizacion_folio ?? '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const debounce = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(debounce.current);
+    if (q.length < 1) { setResults([]); return; }
+    debounce.current = setTimeout(async () => {
+      try {
+        const data = await api.get(`/api/comercial/cotizaciones?q=${encodeURIComponent(q)}&estado=Entregada&estado=Facturada&estado=Pagada&pagina=1`);
+        setResults(data.cotizaciones ?? []);
+        setOpen(true);
+      } catch { setResults([]); }
+    }, 300);
+    return () => clearTimeout(debounce.current);
+  }, [q]);
+
+  useEffect(() => {
+    function handle(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  function handleClear() {
+    setQ('');
+    setResults([]);
+    onClear();
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', minWidth: 140 }}>
+      {linea.cotizacion_id ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: '#f0fdf4', border: '1px solid #16a34a',
+          borderRadius: 4, padding: '4px 8px', fontSize: 12, whiteSpace: 'nowrap',
+        }}>
+          <span style={{ fontFamily: 'var(--mono)', color: '#166534' }}>{linea.cotizacion_folio}</span>
+          <span style={{ cursor: 'pointer', color: 'var(--ink-300)', marginLeft: 2 }} onClick={handleClear}>×</span>
+        </div>
+      ) : (
+        <>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onFocus={() => results.length > 0 && setOpen(true)}
+            placeholder="Cotización…"
+            style={{ width: '100%', fontSize: 12 }}
+          />
+          {open && results.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+              background: '#fff', border: '1px solid var(--ink-200)', borderRadius: 4,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 180, overflowY: 'auto', minWidth: 240,
+            }}>
+              {results.map((c) => (
+                <div key={c.id}
+                  style={{ padding: '7px 12px', cursor: 'pointer', borderBottom: '1px solid var(--ink-100)', fontSize: 12 }}
+                  onMouseDown={() => {
+                    onSelect(c);
+                    setQ(c.folio);
+                    setOpen(false);
+                  }}
+                >
+                  <span style={{ fontFamily: 'var(--mono)', fontWeight: 500 }}>{c.folio}</span>
+                  <span style={{ color: 'var(--ink-500)', marginLeft: 6 }}>{c.cliente}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CompraNueva() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -244,10 +327,12 @@ export default function CompraNueva() {
           cantidad: qty,
           costo_unitario: costoUnit,
           aplica_iva: false,
+          cotizacion_id: cotizacionId,
+          cotizacion_folio: cotizacionId ? `#${cotizacionId}` : null,
         };
       });
     }
-    return [newLinea()];
+    return [newLinea(cotizacionId)];
   });
 
   const [proveedorId, setProveedorId] = useState('');
@@ -272,6 +357,17 @@ export default function CompraNueva() {
 
   const { data: provData } = useFetch('/api/catalogos/proveedores');
   const proveedores = provData?.proveedores ?? [];
+
+  // Resolver folio real cuando viene de URL param ?cotizacion_id=
+  useEffect(() => {
+    if (!cotizacionId) return;
+    api.get(`/api/comercial/cotizaciones/${cotizacionId}`).then((d) => {
+      const folio = d.cot?.folio ?? `#${cotizacionId}`;
+      setLineas((ls) => ls.map((l) =>
+        l.cotizacion_id === cotizacionId ? { ...l, cotizacion_folio: folio } : l
+      ));
+    }).catch(() => {});
+  }, [cotizacionId]);
 
   // Match proveedor por RFC (reacciona tanto al prefill inicial como a importación dinámica)
   useEffect(() => {
@@ -312,6 +408,22 @@ export default function CompraNueva() {
     setLineas((ls) => ls.filter((l) => l._id !== id));
   }, []);
 
+  const selectCotizacion = useCallback((id, cot) => {
+    setLineas((ls) => ls.map((l) => l._id === id ? {
+      ...l,
+      cotizacion_id: cot.id,
+      cotizacion_folio: cot.folio,
+    } : l));
+  }, []);
+
+  const clearCotizacion = useCallback((id) => {
+    setLineas((ls) => ls.map((l) => l._id === id ? {
+      ...l,
+      cotizacion_id: null,
+      cotizacion_folio: null,
+    } : l));
+  }, []);
+
   function applyFactura(data) {
     setFacturaId(data.id);
     setRfcEmisor(data.rfc_emisor ?? null);
@@ -347,7 +459,7 @@ export default function CompraNueva() {
       const formData = new FormData();
       formData.append('archivo', file);
       const token = sessionStorage.getItem('clf_token');
-      const res = await fetch('/api/facturas/importar', {
+      const res = await fetch('/api/documentos/cfdi/importar', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -401,12 +513,12 @@ export default function CompraNueva() {
           cantidad: parseFloat(l.cantidad) || 1,
           costo_unitario: parseFloat(l.costo_unitario) || 0,
           aplica_iva: l.aplica_iva,
-          cotizacion_id: cotizacionId,
+          cotizacion_id: l.cotizacion_id ?? null,
         })),
       };
-      await api.post('/api/compras', payload);
+      await api.post('/api/abastecimiento/compras', payload);
       toast.success('Compra registrada');
-      navigate('/compras');
+      navigate('/abastecimiento/compras');
     } catch (e) {
       setError(e.message ?? 'Error al guardar');
     } finally {
@@ -419,7 +531,7 @@ export default function CompraNueva() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/compras')}>Compras</a>
+        <a onClick={() => navigate('/abastecimiento/compras')}>Compras</a>
         <span className="sep">/</span>
         <span>Nueva compra</span>
       </div>
@@ -435,7 +547,7 @@ export default function CompraNueva() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => navigate(prefill ? '/facturas' : '/compras')}>Cancelar</button>
+          <button className="btn" onClick={() => navigate(prefill ? '/documentos/cfdi' : '/abastecimiento/compras')}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleGuardar} disabled={saving}>
             {saving ? 'Guardando…' : 'Registrar compra'}
           </button>
@@ -550,9 +662,10 @@ export default function CompraNueva() {
               )}
             </div>
 
-            <div className="qb-line" style={{ background: 'var(--ink-50)', fontSize: 11, color: 'var(--ink-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div className="qb-line" style={{ gridTemplateColumns: '24px 1fr 155px 65px 95px 90px 90px 28px', background: 'var(--ink-50)', fontSize: 11, color: 'var(--ink-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               <span></span>
               <span>Producto</span>
+              <span>Cotización</span>
               <span style={{ textAlign: 'right' }}>Cant.</span>
               <span style={{ textAlign: 'right' }}>Costo unit.</span>
               <span style={{ textAlign: 'center' }}>IVA</span>
@@ -561,12 +674,17 @@ export default function CompraNueva() {
             </div>
 
             {lineas.map((l) => (
-              <div key={l._id} className="qb-line">
+              <div key={l._id} className="qb-line" style={{ gridTemplateColumns: '24px 1fr 155px 65px 95px 90px 90px 28px' }}>
                 <span className="grip">⠿⠿</span>
                 <ProductoSearch
                   linea={l}
                   onSelect={(p) => selectProducto(l._id, p)}
                   onChange={(field, val) => updateLinea(l._id, field, val)}
+                />
+                <CotizacionSearch
+                  linea={l}
+                  onSelect={(cot) => selectCotizacion(l._id, cot)}
+                  onClear={() => clearCotizacion(l._id)}
                 />
                 <input
                   className="num"

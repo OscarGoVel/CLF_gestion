@@ -11,7 +11,7 @@ export default function MercadoDetalle() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const { data, loading, refetch } = useFetch(`/api/estudio-mercado/${id}`);
+  const { data, loading, refetch } = useFetch(`/api/abastecimiento/estudios/${id}`);
 
   const estudio    = data?.estudio    ?? {};
   const items      = data?.items      ?? [];
@@ -42,7 +42,7 @@ export default function MercadoDetalle() {
   async function handleGuardarMargen(e) {
     e.preventDefault();
     try {
-      await api.put(`/api/estudio-mercado/${id}/margen`, { margen_pct: parseFloat(margenEdit) / 100 });
+      await api.put(`/api/abastecimiento/estudios/${id}/margen`, { margen_pct: parseFloat(margenEdit) / 100 });
       setEditingMargen(false);
       await refetch();
       toast.success('Margen actualizado');
@@ -54,7 +54,7 @@ export default function MercadoDetalle() {
     if (!itemNombre.trim()) return;
     setSavingItem(true);
     try {
-      await api.post(`/api/estudio-mercado/${id}/items`, {
+      await api.post(`/api/abastecimiento/estudios/${id}/items`, {
         nombre_articulo: itemNombre.trim(),
         cantidad: parseFloat(itemCant) || 1,
         unidad: itemUnidad,
@@ -70,7 +70,7 @@ export default function MercadoDetalle() {
   async function handleEliminarItem() {
     setDeleting(true);
     try {
-      await api.delete(`/api/estudio-mercado/items/${deleteItemId}`);
+      await api.delete(`/api/abastecimiento/estudios/items/${deleteItemId}`);
       setDeleteItemId(null);
       await refetch();
       toast.success('Ítem eliminado');
@@ -83,7 +83,7 @@ export default function MercadoDetalle() {
     if (!cotProv.trim() || !cotPrecio) return;
     setSavingCot(true);
     try {
-      await api.post(`/api/estudio-mercado/items/${cotItemId}/cotizaciones`, {
+      await api.post(`/api/abastecimiento/estudios/items/${cotItemId}/cotizaciones`, {
         nombre_proveedor: cotProv.trim(),
         precio_unitario: parseFloat(cotPrecio),
         notas: cotNotas,
@@ -98,7 +98,7 @@ export default function MercadoDetalle() {
   async function handleEliminarCot() {
     setDeleting(true);
     try {
-      await api.delete(`/api/estudio-mercado/cotizaciones/${deleteCotId}`);
+      await api.delete(`/api/abastecimiento/estudios/cotizaciones/${deleteCotId}`);
       setDeleteCotId(null);
       await refetch();
       toast.success('Precio eliminado');
@@ -115,9 +115,9 @@ export default function MercadoDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
-        <a onClick={() => navigate('/estudio-mercado')}>Estudio de Mercado</a>
+        <a onClick={() => navigate('/abastecimiento/estudios')}>Estudio de Mercado</a>
         <span className="sep">/</span>
         <span>{estudio.nombre}</span>
       </div>

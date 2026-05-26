@@ -71,7 +71,7 @@ async def _procesar_envios_pendientes(pool_fn, empresas_fn):
         try:
             with pool_fn(db).conexion() as (_, cur):
                 cur.execute("""
-                    SELECT e.id, e.email_destino, e.asunto,
+                    SELECT e.id, e.contacto_id, e.email_destino, e.asunto,
                            ct.contacto, ct.nombre_comercial,
                            p.html_body
                     FROM crm_envios e
@@ -80,16 +80,18 @@ async def _procesar_envios_pendientes(pool_fn, empresas_fn):
                     LEFT JOIN crm_contactos co ON co.id = e.contacto_id
                     LEFT JOIN clientes ct      ON ct.id = co.cliente_id
                     WHERE e.estado = 'pendiente'
-                      AND e.fecha_programada <= NOW()
-                    ORDER BY e.fecha_programada
+                      AND (e.fecha_programada IS NULL OR e.fecha_programada <= NOW())
+                    ORDER BY e.fecha_programada NULLS FIRST
                     LIMIT 50
                 """)
                 cols  = [d[0] for d in cur.description]
                 filas = [dict(zip(cols, r)) for r in cur.fetchall()]
 
             for fila in filas:
+                from core.crm.tokens import unsub_url
                 ctx  = {'nombre_comercial': fila.get('nombre_comercial', ''),
-                        'contacto':         fila.get('contacto', '')}
+                        'contacto':         fila.get('contacto', ''),
+                        'unsubscribe_url':  unsub_url(db, fila['contacto_id'])}
                 html = renderizar(fila.get('html_body') or '', ctx)
                 ok, msg_id = enviar_correo(
                     to_email=fila['email_destino'],

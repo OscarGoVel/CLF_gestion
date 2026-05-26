@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
 import { exportCSV } from '../../lib/exportCSV';
+import { api } from '../../lib/apiClient';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -15,6 +16,7 @@ export default function EstadoCuentaList() {
   const [tipo, setTipo]                   = useState('');
   const [desde, setDesde]                 = useState('');
   const [hasta, setHasta]                 = useState('');
+  const [exportando, setExportando]       = useState(false);
 
   const params = new URLSearchParams();
   if (corporativoId) params.set('corporativo_id', corporativoId);
@@ -22,8 +24,8 @@ export default function EstadoCuentaList() {
   if (desde)         params.set('desde', desde);
   if (hasta)         params.set('hasta', hasta);
 
-  const { data, loading } = useFetch(`/api/estado-cuenta?${params}`);
-  const { data: corpsData } = useFetch('/api/estado-cuenta/corporativos');
+  const { data, loading } = useFetch(`/api/finanzas/cobranza?${params}`);
+  const { data: corpsData } = useFetch('/api/finanzas/cobranza/corporativos');
 
   const clientes     = data?.clientes ?? [];
   const kpis         = data?.kpis     ?? {};
@@ -32,7 +34,7 @@ export default function EstadoCuentaList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/dashboard')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
         <span className="sep">/</span>
         <span>Estado de Cuenta</span>
       </div>
@@ -42,14 +44,37 @@ export default function EstadoCuentaList() {
           <div className="page-title">Estado de Cuenta</div>
           <div className="page-sub">Cartera activa de clientes</div>
         </div>
-        <button className="btn" disabled={clientes.length === 0}
-          onClick={() => exportCSV(
-            ['nombre', 'tipo', 'rfc', 'corporativo', 'cartera', 'cobrado', 'pendiente', 'dso'],
-            clientes,
-            'estado_cuenta'
-          )}>
-          Exportar CSV
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" disabled={clientes.length === 0}
+            onClick={() => exportCSV(
+              ['nombre', 'tipo', 'rfc', 'corporativo', 'cartera', 'cobrado', 'pendiente', 'dso'],
+              clientes,
+              'estado_cuenta'
+            )}>
+            Exportar CSV
+          </button>
+          <button className="btn" disabled={clientes.length === 0 || exportando}
+            onClick={async () => {
+              setExportando(true);
+              try {
+                const q = new URLSearchParams();
+                if (corporativoId) q.set('corporativo_id', corporativoId);
+                if (tipo)          q.set('tipo', tipo);
+                if (desde)         q.set('desde', desde);
+                if (hasta)         q.set('hasta', hasta);
+                await api.download(
+                  `/api/finanzas/cobranza/export-pdf?${q}`,
+                  'aging_cartera.pdf'
+                );
+              } catch (e) {
+                alert(e.message);
+              } finally {
+                setExportando(false);
+              }
+            }}>
+            {exportando ? 'Generando…' : 'Exportar PDF'}
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -141,7 +166,7 @@ export default function EstadoCuentaList() {
             {clientes.map(cl => (
               <tr
                 key={cl.cliente_id}
-                onClick={() => navigate(`/estado-cuenta/${cl.cliente_id}`)}
+                onClick={() => navigate(`/finanzas/cobranza/${cl.cliente_id}`)}
                 style={{ borderBottom: '1px solid var(--ink-100)', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--ink-50)'}
                 onMouseLeave={e => e.currentTarget.style.background = ''}

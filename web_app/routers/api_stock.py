@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/stock", tags=["api"])
+router = APIRouter(prefix="/api/inventario/stock", tags=["api"])
 
 
 def _serial(v):
