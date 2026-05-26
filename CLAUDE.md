@@ -84,7 +84,7 @@ CLF_gestion/
 
 ---
 
-## Estado actual (Fases 1–17 completas — Fase 15 casi lista)
+## Estado actual (Fases 1–17 completas)
 
 Todos los módulos React en producción. Sidebar colapsable (Fase 16) y sistema de diseño (Fase 17) completos.
 
@@ -108,7 +108,7 @@ Todos los módulos React en producción. Sidebar colapsable (Fase 16) y sistema 
 - `/reportes` — Análisis
 - `/admin` — Admin
 
-**Pendiente único (Fase 15):**
+**Diferido (sin fecha):**
 
 - Notificaciones automáticas al cambiar estado de cotización (SendGrid/Twilio)
 

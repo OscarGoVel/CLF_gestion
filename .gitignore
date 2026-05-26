@@ -40,6 +40,15 @@ logs/*.log.*
 output/
 facturas_xml/
 
+# Backups SQL locales
+backup_*.sql
+
+# Cloud SQL Proxy y binarios locales
+cloud-sql-proxy*
+
+# Firebase cache
+.firebase/
+
 # Claude Code
 .claude/settings.local.json
 
