@@ -9,34 +9,20 @@ import { DataTable } from '../../components/DataTable';
 import { SidePreview, FieldGrid } from '../../components/SidePreview';
 import { Modal } from '../../components/Modal';
 
-const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
-
-function StockBadge({ actual, minimo }) {
-  const a = actual ?? 0;
-  const m = minimo ?? 0;
-  if (a < 0) return <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{a}</span>;
-  if (m > 0 && a < m) return <span style={{ color: 'var(--warn)', fontWeight: 500 }}>{a}</span>;
-  return <span style={{ color: 'var(--ink-700)' }}>{a}</span>;
-}
-
 const COLUMNS = [
-  { header: 'Código',      key: 'codigo',        width: 100, style: { fontFamily: 'var(--mono)', fontSize: 11.5 } },
-  { header: 'Nombre',      key: 'nombre',        sortKey: 'nombre' },
-  { header: 'Categoría',   key: 'categoria',     width: 100, style: { fontSize: 11.5, color: 'var(--ink-500)' } },
-  { header: 'U/M',         key: 'unidad_medida', width: 60,  style: { fontSize: 11.5, color: 'var(--ink-500)' } },
-  { header: 'Stock',       className: 'num', width: 80, sortKey: 'stock_actual',
-    render: (p) => <StockBadge actual={p.stock_actual} minimo={p.stock_minimo} /> },
-  { header: 'Mín.',        key: 'stock_minimo',  className: 'num', width: 70,
+  { header: 'Código',      key: 'codigo',              width: 100, style: { fontFamily: 'var(--mono)', fontSize: 11.5 } },
+  { header: 'Nombre',      key: 'nombre',              sortKey: 'nombre' },
+  { header: 'Categoría',   key: 'categoria',           width: 100, style: { fontSize: 11.5, color: 'var(--ink-500)' } },
+  { header: 'U/M',         key: 'unidad_medida',       width: 60,  style: { fontSize: 11.5, color: 'var(--ink-500)' } },
+  { header: 'Mín.',        key: 'stock_minimo',        className: 'num', width: 70,
     style: { color: 'var(--ink-400)', fontSize: 12 } },
-  { header: 'Costo prom.', className: 'num', width: 100, sortKey: 'costo_prom',
-    render: (p) => p.costo_prom ? MXN.format(p.costo_prom) : '—' },
+  { header: 'Proveedor',   key: 'proveedor_principal', style: { fontSize: 11.5, color: 'var(--ink-500)' } },
 ];
 
 export default function ProductoList() {
   const navigate = useNavigate();
   const [q, setQ]               = useState('');
   const [catFiltro, setCatFiltro] = useState([]);
-  const [bajoMin, setBajoMin]   = useState('');
   const [sel, setSel]           = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [editData, setEditData] = useState({});
@@ -82,7 +68,6 @@ export default function ProductoList() {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   catFiltro.forEach((c) => params.append('categoria', c));
-  if (bajoMin) params.set('bajo_minimo', bajoMin);
 
   if (refetch) params.set('_r', refetch);
   const { data, loading } = useFetch(`/api/catalogos/productos?${params}`);
@@ -121,12 +106,12 @@ export default function ProductoList() {
         <div>
           <div className="page-title">Productos</div>
           <div className="page-sub">
-            {stats.total ?? 0} productos · {stats.bajo_minimo ?? 0} bajo mínimo · {stats.sin_stock ?? 0} sin stock
+            {stats.total ?? 0} productos
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => exportCSV(
-            ['codigo', 'nombre', 'categoria', 'unidad_medida', 'stock_actual', 'stock_minimo', 'costo_prom'],
+            ['codigo', 'nombre', 'categoria', 'subcategoria', 'unidad_medida', 'stock_minimo', 'precio_base', 'proveedor_principal'],
             productos, 'productos'
           )}>Exportar CSV</button>
           <button className="btn btn-primary" onClick={() => navigate('/inventario/productos/nuevo')}>Nuevo producto</button>
@@ -136,10 +121,9 @@ export default function ProductoList() {
       <div style={{ display: 'flex', gap: 0, marginBottom: 20,
         border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden' }}>
         {[
-          ['Valor inventario', stats.total_valor != null ? MXN.format(stats.total_valor) : '—'],
-          ['Bajo mínimo',  stats.bajo_minimo ?? 0],
-          ['Sin stock',    stats.sin_stock   ?? 0],
-          ['Total prods.', stats.total       ?? 0],
+          ['Total prods.',    stats.total          ?? 0],
+          ['Sin precio base', stats.sin_precio      ?? 0],
+          ['Sin proveedor',   stats.sin_proveedor   ?? 0],
         ].map(([k, v], i, arr) => (
           <div key={k} style={{ flex: 1, padding: '14px 18px',
             borderRight: i < arr.length - 1 ? '1px solid var(--ink-200)' : 'none' }}>
@@ -159,10 +143,6 @@ export default function ProductoList() {
           onChange={setCatFiltro}
           placeholder="Categoría…"
         />
-        <span className={`chip${bajoMin === '1' ? ' active' : ''}`}
-          onClick={() => setBajoMin(bajoMin === '1' ? '' : '1')}>
-          ⚠ Bajo mínimo
-        </span>
       </div>
 
       <div style={{
@@ -194,14 +174,12 @@ export default function ProductoList() {
             <div style={{ fontSize: 16, fontWeight: 500, marginTop: 4 }}>{selected.nombre}</div>
 
             <FieldGrid fields={[
-              ['Categoría',   selected.categoria],
-              ['Subcategoría', selected.subcategoria],
-              ['U/M',         selected.unidad_medida],
-              ['IVA',         selected.aplica_iva ? 'Sí' : 'No'],
-              ['Stock actual', selected.stock_actual],
-              ['Stock mínimo', selected.stock_minimo],
-              ['Costo prom. real', selected.costo_prom != null ? MXN.format(selected.costo_prom) : '—'],
-              ['Costo base (catálogo)', selected.precio_base != null ? MXN.format(selected.precio_base) : '—'],
+              ['Categoría',            selected.categoria],
+              ['Subcategoría',         selected.subcategoria],
+              ['U/M',                  selected.unidad_medida],
+              ['IVA',                  selected.aplica_iva ? 'Sí' : 'No'],
+              ['Stock mínimo',         selected.stock_minimo],
+              ['Costo base (catálogo)', selected.precio_base != null ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(selected.precio_base) : '—'],
             ]} />
 
             {selected.proveedor_principal && (
@@ -211,8 +189,9 @@ export default function ProductoList() {
               </div>
             )}
 
-            <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
+            <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <button className="btn btn-sm" onClick={() => openEdit(selected)}>Editar</button>
+              <button className="btn btn-sm" onClick={() => navigate(`/inventario/stock?q=${encodeURIComponent(selected.codigo ?? selected.nombre)}`)}>Ver en stock →</button>
               <button className="btn btn-sm" onClick={() => setSel(null)}>Cerrar ×</button>
             </div>
           </SidePreview>

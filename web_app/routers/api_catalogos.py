@@ -204,19 +204,17 @@ async def listar_productos(
         cur.execute("SELECT nombre FROM categorias ORDER BY nombre")
         categorias = [r[0] for r in cur.fetchall()]
 
-    # stats
-    total_valor   = sum((p["stock_actual"] or 0) * (p["costo_prom"] or p["precio_base"] or 0) for p in productos)
-    bajo_min_cnt  = sum(1 for p in productos if (p["stock_minimo"] or 0) > 0 and (p["stock_actual"] or 0) < (p["stock_minimo"] or 0))
-    sin_stock_cnt = sum(1 for p in productos if (p["stock_actual"] or 0) == 0)
+    # stats de calidad del catálogo
+    sin_precio_cnt    = sum(1 for p in productos if not p["precio_base"])
+    sin_proveedor_cnt = sum(1 for p in productos if not p["proveedor_principal"])
 
     return JSONResponse({
         "productos": productos,
         "categorias": categorias,
         "stats": {
-            "total": len(productos),
-            "total_valor": round(total_valor, 2),
-            "bajo_minimo": bajo_min_cnt,
-            "sin_stock": sin_stock_cnt,
+            "total":          len(productos),
+            "sin_precio":     sin_precio_cnt,
+            "sin_proveedor":  sin_proveedor_cnt,
         },
     })
 
