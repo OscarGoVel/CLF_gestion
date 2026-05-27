@@ -157,9 +157,10 @@ export default function MercadoDetalle() {
             </span>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowItem(true)}>
-          + Ítem
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => navigate('/abastecimiento/estudios')}>← Volver</button>
+          <button className="btn btn-primary" onClick={() => setShowItem(true)}>+ Ítem</button>
+        </div>
       </div>
 
       {/* Formulario agregar ítem */}

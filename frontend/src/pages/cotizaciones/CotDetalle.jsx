@@ -200,6 +200,7 @@ export default function CotDetalle() {
           {/* Acciones + navegación */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end', flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button className="btn btn-sm" onClick={() => navigate('/comercial/cotizaciones')}>← Volver</button>
               {ids.length > 0 && (
                 <>
                   <button className="btn btn-sm" disabled={!prevId}

@@ -162,6 +162,7 @@ export default function PreInvDetalle() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => navigate('/inventario/conteos')}>← Volver</button>
           {isAbierta && (
             <button className="btn btn-primary" onClick={() => setConfirmCerrar(true)} disabled={cerrando}>
               Finalizar sesión

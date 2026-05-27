@@ -112,6 +112,7 @@ export default function EstadoCuentaDetalle() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => navigate('/finanzas/cobranza')}>← Volver</button>
           <button className="btn" onClick={handlePdf}>Exportar PDF</button>
         </div>
       </div>
