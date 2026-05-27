@@ -4,6 +4,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { Pill } from '../../components/Pill';
 import { exportCSV } from '../../lib/exportCSV';
 import { api } from '../../lib/apiClient';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -11,6 +12,7 @@ const TIPOS = ['Empresa', 'Gobierno', 'Persona'];
 
 export default function EstadoCuentaList() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
 
   const [corporativoId, setCorporativoId] = useState('');
   const [tipo, setTipo]                   = useState('');
@@ -23,6 +25,7 @@ export default function EstadoCuentaList() {
   if (tipo)          params.set('tipo', tipo);
   if (desde)         params.set('desde', desde);
   if (hasta)         params.set('hasta', hasta);
+  if (activeRS != null) params.set('razon_social_id', activeRS);
 
   const { data, loading } = useFetch(`/api/finanzas/cobranza?${params}`);
   const { data: corpsData } = useFetch('/api/finanzas/cobranza/corporativos');
@@ -34,7 +37,7 @@ export default function EstadoCuentaList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>Estado de Cuenta</span>
       </div>

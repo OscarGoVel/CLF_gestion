@@ -69,7 +69,7 @@ export default function CompraDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <a onClick={() => navigate('/abastecimiento/compras')}>Compras</a>
         <span className="sep">/</span>

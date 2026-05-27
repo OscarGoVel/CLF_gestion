@@ -38,6 +38,7 @@ async def listar(
     q: str = Query(""),
     estado: str = Query(""),
     pagina: int = Query(1, ge=1),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     if user.get("rol") == "Almacenista":
@@ -45,6 +46,9 @@ async def listar(
 
     empresa_db = user["empresa_db"]
     where, params = [], []
+    if razon_social_id is not None:
+        where.append("d.razon_social_id = %s")
+        params.append(razon_social_id)
     if q:
         where.append("(d.folio ILIKE %s OR COALESCE(cl.nombre_comercial,'') ILIKE %s)")
         params += [f"%{q}%", f"%{q}%"]
@@ -136,6 +140,7 @@ class DevolucionIn(BaseModel):
     motivo: Optional[str] = None
     notas: Optional[str] = None
     lineas: List[LineaDevIn]
+    razon_social_id: Optional[int] = None
 
 
 @router.post("", status_code=201)
@@ -154,10 +159,10 @@ async def crear(body: DevolucionIn, user: dict = Depends(get_usuario_api)):
         total = sum(l.cantidad * l.precio_unitario for l in body.lineas)
 
         cur.execute("""
-            INSERT INTO devoluciones (folio, cotizacion_id, cliente_id, fecha, motivo, notas, total)
-            VALUES (%s, %s, %s, %s::date, %s, %s, %s)
+            INSERT INTO devoluciones (folio, cotizacion_id, cliente_id, fecha, motivo, notas, total, razon_social_id)
+            VALUES (%s, %s, %s, %s::date, %s, %s, %s, %s)
         """, (folio, body.cotizacion_id, body.cliente_id, body.fecha,
-              body.motivo or None, body.notas or None, total))
+              body.motivo or None, body.notas or None, total, body.razon_social_id))
         dev_id = cur.lastrowid
 
         for l in body.lineas:

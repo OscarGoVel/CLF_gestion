@@ -40,7 +40,7 @@ export default function CrmDashboard() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>CRM</span>
       </div>

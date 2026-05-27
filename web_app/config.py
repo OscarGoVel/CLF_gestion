@@ -36,9 +36,9 @@ class Settings:
 
     # CRM / Email
     SENDGRID_API_KEY: str = os.environ.get("SENDGRID_API_KEY", "")
-    CRM_FROM_EMAIL:   str = os.environ.get("CRM_FROM_EMAIL", "noreply@clf-gestion.com")
-    CRM_FROM_NAME:    str = os.environ.get("CRM_FROM_NAME",  "CLF Gestión")
-    CRM_BASE_URL:     str = os.environ.get("CRM_BASE_URL",   "https://clf-gestion.web.app")
+    CRM_FROM_EMAIL:   str = os.environ.get("CRM_FROM_EMAIL", "noreply@logos-gestion.web.app")
+    CRM_FROM_NAME:    str = os.environ.get("CRM_FROM_NAME",  "LOGOS")
+    CRM_BASE_URL:     str = os.environ.get("CRM_BASE_URL",   "https://logos-gestion.web.app")
 
     # Almacenamiento Cloud (XMLs de facturas)
     GCS_XML_BUCKET: str = os.environ.get("GCS_XML_BUCKET", "")

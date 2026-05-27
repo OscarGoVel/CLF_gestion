@@ -11,6 +11,7 @@ import { DataTable } from '../../components/DataTable';
 import { SidePreview } from '../../components/SidePreview';
 import { Historial } from '../../components/Historial';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -38,6 +39,7 @@ const COLUMNS = [
 
 export default function CotList() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
   const [filtros, setFiltros]       = useState([]);
   const [clientesFiltro, setClientesFiltro] = useState([]);
   const [fechaDesde, setFechaDesde] = useState('');
@@ -54,6 +56,7 @@ export default function CotList() {
   if (fechaDesde) params.set('fecha_desde', fechaDesde);
   if (fechaHasta) params.set('fecha_hasta', fechaHasta);
   if (buscar) params.set('q', buscar);
+  if (activeRS != null) params.set('razon_social_id', activeRS);
 
   const { data, loading } = useFetch(`/api/comercial/cotizaciones?${params}`);
   const cotizaciones  = data?.cotizaciones   ?? [];
@@ -138,7 +141,7 @@ export default function CotList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>Cotizaciones</span>
       </div>

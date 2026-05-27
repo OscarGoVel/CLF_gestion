@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthState } from './hooks/useAuth';
 import { Shell } from './components/Shell';
+import { RazonSocialProvider } from './contexts/RazonSocialContext';
 
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
@@ -56,10 +57,11 @@ import Pipeline     from './pages/crm/Pipeline';
 import CuentasPagarList from './pages/cuentas-pagar/CuentasPagarList';
 
 // Admin
-import AdminUsuarios   from './pages/admin/AdminUsuarios';
-import AdminPermisos   from './pages/admin/AdminPermisos';
-import AdminUbicaciones from './pages/admin/AdminUbicaciones';
-import AdminAuditoria  from './pages/admin/AdminAuditoria';
+import AdminUsuarios        from './pages/admin/AdminUsuarios';
+import AdminPermisos        from './pages/admin/AdminPermisos';
+import AdminUbicaciones     from './pages/admin/AdminUbicaciones';
+import AdminAuditoria       from './pages/admin/AdminAuditoria';
+import AdminRazonesSociales from './pages/admin/AdminRazonesSociales';
 
 const Placeholder = ({ title }) => (
   <div className="page">
@@ -83,6 +85,7 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={auth}>
+      <RazonSocialProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -156,11 +159,12 @@ export default function App() {
                     <Route path="/ajustes"                                     element={<Ajustes />} />
 
                     {/* Admin */}
-                    <Route path="/admin/usuarios"    element={<AdminUsuarios />} />
-                    <Route path="/admin/permisos"    element={<AdminPermisos />} />
-                    <Route path="/admin/ubicaciones" element={<AdminUbicaciones />} />
-                    <Route path="/admin/auditoria"   element={<AdminAuditoria />} />
-                    <Route path="/admin/*"           element={<Placeholder title="Administración" />} />
+                    <Route path="/admin/usuarios"         element={<AdminUsuarios />} />
+                    <Route path="/admin/permisos"         element={<AdminPermisos />} />
+                    <Route path="/admin/ubicaciones"      element={<AdminUbicaciones />} />
+                    <Route path="/admin/auditoria"        element={<AdminAuditoria />} />
+                    <Route path="/admin/razones-sociales" element={<AdminRazonesSociales />} />
+                    <Route path="/admin/*"                element={<Placeholder title="Administración" />} />
 
                     <Route path="*" element={<Navigate to="/panel" replace />} />
                   </Routes>
@@ -170,6 +174,7 @@ export default function App() {
           />
         </Routes>
       </BrowserRouter>
+      </RazonSocialProvider>
     </AuthContext.Provider>
   );
 }

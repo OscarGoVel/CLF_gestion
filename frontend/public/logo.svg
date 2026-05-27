@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
+  <!-- Anillo exterior -->
+  <circle cx="72" cy="72" r="68" fill="none" stroke="#2563EB" stroke-width="4"/>
+  <!-- Anillo interior -->
+  <circle cx="72" cy="72" r="57" fill="none" stroke="#2563EB" stroke-width="1.5"/>
+  <!-- Nodo 12h -->
+  <circle cx="72"  cy="4"   r="8" fill="#2563EB"/>
+  <!-- Nodo 7-8h -->
+  <circle cx="24"  cy="120" r="8" fill="#2563EB"/>
+  <!-- Nodo 3h -->
+  <circle cx="140" cy="72"  r="8" fill="#2563EB"/>
+  <!-- L -->
+  <polygon points="34,20 54,20 54,108 110,108 110,128 34,128" fill="#1D4ED8"/>
+  <!-- Barras ascendentes -->
+  <rect x="57"  y="83" width="13" height="27" fill="#60A5FA"/>
+  <rect x="73"  y="67" width="13" height="43" fill="#60A5FA"/>
+  <rect x="89"  y="48" width="13" height="62" fill="#60A5FA"/>
+</svg>

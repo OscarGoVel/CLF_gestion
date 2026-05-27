@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { ToastContainer } from './ToastContainer';
 import { api } from '../lib/apiClient';
+import { useRazonSocial } from '../contexts/RazonSocialContext';
 
 function Icon({ name, size = 16 }) {
   const paths = {
@@ -266,6 +267,7 @@ function useGlobalSearch(navigate) {
 
 export function Shell({ children }) {
   const { user, logout } = useAuth();
+  const { razonSociales, activeRS, setActiveRS } = useRazonSocial();
   const location = useLocation();
   const navigate = useNavigate();
   const role = ROLE_KEY[user?.role] ?? 'lectura';
@@ -352,7 +354,20 @@ export function Shell({ children }) {
     <>
       <div className="sb-brand">
         <Link to="/panel" className="sb-brand-link">
-          CLF<span>Gestión</span>
+          {collapsed ? (
+            <img src="/logo.svg" alt="LOGOS" style={{ width: 28, height: 28 }} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 8px' }}>
+              <img src="/logo.svg" alt="LOGOS" style={{ width: 32, height: 32 }} />
+              <span style={{
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontWeight: 500,
+                fontSize: '15px',
+                letterSpacing: '3px',
+                color: '#1E40AF'
+              }}>LOGOS</span>
+            </div>
+          )}
         </Link>
         {!collapsed && (
           <button className="sb-toggle" onClick={() => setCollapsed(true)} title="Colapsar">
@@ -360,6 +375,20 @@ export function Shell({ children }) {
           </button>
         )}
       </div>
+
+      {!collapsed && razonSociales.length > 1 && (
+        <div className="sb-rs-selector">
+          <select
+            value={activeRS ?? ''}
+            onChange={e => setActiveRS(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Todas las RS</option>
+            {razonSociales.filter(rs => rs.activa).map(rs => (
+              <option key={rs.id} value={rs.id}>{rs.nombre}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button
         className={`sb-search ${collapsed ? 'sb-search--icon' : ''}`}
@@ -430,14 +459,25 @@ export function Shell({ children }) {
 
       <div className="sb-footer">
         {role === 'admin' && (
-          <Link
-            to="/admin/usuarios"
-            className={`sb-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}
-            title={collapsed ? 'Administración' : undefined}
-          >
-            <span className="sb-icon"><Icon name="admin" size={15} /></span>
-            {!collapsed && <span className="sb-label">Administración</span>}
-          </Link>
+          <>
+            <Link
+              to="/admin/usuarios"
+              className={`sb-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}
+              title={collapsed ? 'Administración' : undefined}
+            >
+              <span className="sb-icon"><Icon name="admin" size={15} /></span>
+              {!collapsed && <span className="sb-label">Administración</span>}
+            </Link>
+            {!collapsed && location.pathname.startsWith('/admin') && (
+              <div className="sb-admin-sub">
+                <Link to="/admin/usuarios"         className={`sb-admin-link ${location.pathname === '/admin/usuarios' ? 'active' : ''}`}>Usuarios</Link>
+                <Link to="/admin/permisos"         className={`sb-admin-link ${location.pathname === '/admin/permisos' ? 'active' : ''}`}>Permisos</Link>
+                <Link to="/admin/ubicaciones"      className={`sb-admin-link ${location.pathname === '/admin/ubicaciones' ? 'active' : ''}`}>Ubicaciones</Link>
+                <Link to="/admin/razones-sociales" className={`sb-admin-link ${location.pathname === '/admin/razones-sociales' ? 'active' : ''}`}>Razones Sociales</Link>
+                <Link to="/admin/auditoria"        className={`sb-admin-link ${location.pathname === '/admin/auditoria' ? 'active' : ''}`}>Auditoría</Link>
+              </div>
+            )}
+          </>
         )}
         {!collapsed ? (
           <div className="sb-user">
@@ -445,7 +485,7 @@ export function Shell({ children }) {
             <div className="sb-user-meta">
               <span className="role-tag">{ROLE_LABEL[role] ?? role}</span>
               <span style={{ color: 'var(--ink-400)' }}>·</span>
-              <span>{user?.empresa ?? 'CLF'}</span>
+              <span>{user?.empresa ?? 'LOGOS'}</span>
             </div>
             <button className="btn btn-ghost btn-sm" onClick={logout}>Salir</button>
           </div>
@@ -483,7 +523,9 @@ export function Shell({ children }) {
           <button className="btn btn-ghost btn-sm" onClick={() => setMobileOpen(true)}>
             <Icon name="menu" size={17} />
           </button>
-          <Link to="/panel" className="sb-brand-link">CLF<span>Gestión</span></Link>
+          <Link to="/panel" className="sb-brand-link">
+            <img src="/logo.svg" alt="LOGOS" style={{ width: 28, height: 28 }} />
+          </Link>
           <button className="btn btn-ghost btn-sm" onClick={() => search.setOpen(true)} title="Buscar">
             <Icon name="search" size={17} />
           </button>

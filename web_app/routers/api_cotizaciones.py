@@ -69,6 +69,7 @@ class CotizacionIn(BaseModel):
     notas: Optional[str] = None
     utilidad_pct: float = 0.0
     partidas: List[PartidaIn]
+    razon_social_id: Optional[int] = None
 
 
 # ── GET /api/cotizaciones ─────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ async def listar(
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
     pagina: int = Query(1, ge=1),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     if user.get("rol") == "Almacenista":
@@ -88,6 +90,9 @@ async def listar(
 
     empresa_db = user["empresa_db"]
     clauses, params = [], []
+    if razon_social_id is not None:
+        clauses.append("c.razon_social_id = %s")
+        params.append(razon_social_id)
     if estado:
         placeholders = ",".join(["%s"] * len(estado))
         clauses.append(f"c.estado IN ({placeholders})")
@@ -766,13 +771,13 @@ async def crear(body: CotizacionIn, user: dict = Depends(get_usuario_api)):
             """
             INSERT INTO cotizaciones
               (folio, fecha, cliente_id, comprador_id, subtotal, iva, total,
-               notas, estado, aplica_iva, orden_compra, utilidad_pct)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s)
+               notas, estado, aplica_iva, orden_compra, utilidad_pct, razon_social_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s, %s)
             """,
             (folio, body.fecha, body.cliente_id, body.comprador_id,
              float(subtotal_global), float(iva_global), float(total_global),
              body.notas, 1 if hay_iva else 0,
-             body.orden_compra, body.utilidad_pct),
+             body.orden_compra, body.utilidad_pct, body.razon_social_id),
         )
         cot_id = cur.lastrowid
 

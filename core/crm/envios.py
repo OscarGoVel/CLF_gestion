@@ -14,8 +14,8 @@ import urllib.error
 _log = logging.getLogger('clf.crm.envios')
 
 _SENDGRID_URL = 'https://api.sendgrid.com/v3/mail/send'
-_FROM_EMAIL   = os.getenv('CRM_FROM_EMAIL', 'noreply@clf-gestion.com')
-_FROM_NAME    = os.getenv('CRM_FROM_NAME',  'CLF Gestión')
+_FROM_EMAIL   = os.getenv('CRM_FROM_EMAIL', 'noreply@logos-gestion.web.app')
+_FROM_NAME    = os.getenv('CRM_FROM_NAME',  'LOGOS')
 
 
 def enviar_correo(

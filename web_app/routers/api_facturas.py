@@ -7,7 +7,7 @@ web_app/routers/api_facturas.py
 from decimal import Decimal
 from pathlib import Path
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -62,6 +62,7 @@ async def listar(
     tipo: List[str] = Query([]),
     sin_vincular: bool = Query(False),
     pagina: int = Query(1, ge=1),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     from fastapi import HTTPException
@@ -81,6 +82,9 @@ async def listar(
         params.extend(tipo)
     if sin_vincular:
         where.append("f.tipo = 'I' AND (SELECT COUNT(*) FROM factura_cotizaciones fc2 WHERE fc2.factura_id = f.id) = 0")
+    if razon_social_id is not None:
+        where.append("f.razon_social_id = %s")
+        params.append(razon_social_id)
     filtro = ("WHERE " + " AND ".join(where)) if where else ""
     offset = (pagina - 1) * POR_PAGINA
 
@@ -186,6 +190,21 @@ async def importar_xml(
         datos["tipo"] = "E"
 
     empresa_db = user["empresa_db"]
+
+    # Auto-detect razon_social by RFC receptor
+    razon_social_id: Optional[int] = None
+    rs_no_encontrada = False
+    if rfc_receptor:
+        with get_pool_empresa(empresa_db).conexion() as (_, _cur_rs):
+            _cur_rs.execute(
+                "SELECT id FROM razones_sociales WHERE rfc = %s AND activa",
+                (rfc_receptor,)
+            )
+            _rs = _cur_rs.fetchone()
+            if _rs:
+                razon_social_id = _rs[0]
+            else:
+                rs_no_encontrada = True
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         cur.execute("SELECT id FROM facturas WHERE uuid = %s", (uuid,))
         existing = cur.fetchone()
@@ -226,12 +245,12 @@ async def importar_xml(
                 uuid, serie, folio_factura, fecha, fecha_timbrado, no_cert_sat,
                 rfc_emisor, nombre_emisor, rfc_receptor, nombre_receptor, uso_cfdi,
                 tipo, metodo_pago, forma_pago, moneda,
-                subtotal, descuento, iva, total, ruta_xml
+                subtotal, descuento, iva, total, ruta_xml, razon_social_id
             ) VALUES (
                 %s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,
-                %s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,%s
             ) RETURNING id
         """, (
             uuid, datos["serie"], datos["folio"], datos["fecha"],
@@ -240,7 +259,7 @@ async def importar_xml(
             datos["rfc_receptor"], datos["nombre_receptor"], datos["uso_cfdi"],
             datos["tipo"], datos["metodo_pago"], datos["forma_pago"], datos["moneda"],
             datos["subtotal"], datos["descuento"], datos["iva"], datos["total"],
-            ruta_relativa,
+            ruta_relativa, razon_social_id,
         ))
         factura_id = cur.fetchone()[0]
 
@@ -269,6 +288,8 @@ async def importar_xml(
         "tipo": datos["tipo"],
         "tipo_label": TIPO_LABEL.get(datos["tipo"], datos["tipo"]),
         "uuid": uuid,
+        "razon_social_id": razon_social_id,
+        "rs_no_encontrada": rs_no_encontrada,
         "conceptos": [
             {
                 "descripcion": c["descripcion"],

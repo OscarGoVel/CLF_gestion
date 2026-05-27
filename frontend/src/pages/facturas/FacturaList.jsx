@@ -7,6 +7,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { ContextMenu } from '../../components/ContextMenu';
 import { toast } from '../../lib/toast';
 import { useAuth } from '../../hooks/useAuth';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
@@ -30,6 +31,7 @@ export default function FacturaList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'Administrador';
+  const { activeRS } = useRazonSocial();
   const [q, setQ]             = useState('');
   const [tipoFiltro, setTipoFiltro] = useState([]);
   const [sinVincular, setSinVincular] = useState(false);
@@ -53,6 +55,7 @@ export default function FacturaList() {
   if (q) params.set('q', q);
   if (sinVincular) params.set('sin_vincular', 'true');
   tipoFiltro.forEach((t) => params.append('tipo', t));
+  if (activeRS != null) params.set('razon_social_id', activeRS);
 
   const { data, loading, refetch } = useFetch(`/api/documentos/cfdi?${params}`);
   const { data: detData, refetch: refetchDet } = useFetch(sel ? `/api/documentos/cfdi/${sel}` : null);
@@ -176,7 +179,7 @@ export default function FacturaList() {
     <>
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>Facturas</span>
       </div>

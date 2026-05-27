@@ -73,11 +73,16 @@ async def listar(
     estado: str = Query(""),
     proveedor_id: int = Query(0),
     vencidas: bool = Query(False),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     hoy = date.today()
     empresa_db = user["empresa_db"]
     where, params = ["1=1"], []
+
+    if razon_social_id is not None:
+        where.append("cxp.razon_social_id = %s")
+        params.append(razon_social_id)
 
     if estado:
         where.append("cxp.estado = %s")

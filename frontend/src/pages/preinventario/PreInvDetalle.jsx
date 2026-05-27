@@ -145,7 +145,7 @@ export default function PreInvDetalle() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <a onClick={() => navigate('/inventario/conteos')}>Pre-inventario</a>
         <span className="sep">/</span>

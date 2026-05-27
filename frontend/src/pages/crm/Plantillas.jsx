@@ -161,10 +161,10 @@ function PlantillaModal({ initial, onClose, onSaved }) {
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px">
-  <h2 style="color:#0f7b5e">Hola {{nombre_comercial}},</h2>
+  <h2 style="color:#2563EB">Hola {{nombre_comercial}},</h2>
   <p>Escribe tu mensaje aquí.</p>
   <p style="color:#888;font-size:12px">
-    CLF Gestión — <a href="#">Cancelar suscripción</a>
+    LOGOS — <a href="#">Cancelar suscripción</a>
   </p>
 </body>
 </html>`;
@@ -219,7 +219,7 @@ function PlantillaModal({ initial, onClose, onSaved }) {
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Asunto predeterminado</label>
             <input className="input" style={{ width: '100%' }} value={asunto}
-              onChange={e => setAsunto(e.target.value)} placeholder="Ej. Novedades de CLF para {{nombre_comercial}}" />
+              onChange={e => setAsunto(e.target.value)} placeholder="Ej. Novedades de LOGOS para {{nombre_comercial}}" />
           </div>
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>

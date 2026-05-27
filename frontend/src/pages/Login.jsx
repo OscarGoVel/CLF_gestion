@@ -41,8 +41,18 @@ export default function Login() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
-        <div className="brand-title">CLF Gestión</div>
-        <div className="brand-sub">Sistema de gestión comercial</div>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <img src="/logo.svg" alt="LOGOS" style={{ width: 64, height: 64, display: 'block', margin: '0 auto 12px' }} />
+          <h1 style={{
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+            fontWeight: 500,
+            fontSize: '22px',
+            letterSpacing: '5px',
+            color: '#1E40AF',
+            margin: 0
+          }}>LOGOS</h1>
+          <p style={{ color: '#64748B', fontSize: '13px', marginTop: 6 }}>Sistema de gestión</p>
+        </div>
 
         {empresas.length > 1 && (
           <div style={{ marginBottom: 14 }}>

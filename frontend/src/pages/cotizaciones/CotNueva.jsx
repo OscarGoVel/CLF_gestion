@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { useFetch } from '../../hooks/useFetch';
 import { toast } from '../../lib/toast';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 let _nextId = 1;
 const newLine = () => ({
@@ -251,6 +252,7 @@ function QuickAddModal({ nombre: nombreInicial, onConfirm, onClose }) {
 
 export default function CotNueva() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
   const [lineas, setLineas] = useState([newLine()]);
   const [clienteId, setClienteId] = useState('');
   const [comprador, setComprador] = useState('');
@@ -317,6 +319,7 @@ export default function CotNueva() {
         fecha,
         notas: notas || null,
         utilidad_pct: 0,
+        razon_social_id: activeRS ?? null,
         partidas: lineas.map((l) => ({
           producto_id: l.no_catalogado ? null : (l.producto_id ?? null),
           descripcion_libre: (l.no_catalogado || !l.producto_id) ? l.descripcion : null,

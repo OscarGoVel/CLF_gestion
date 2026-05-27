@@ -87,7 +87,7 @@ export default function ProductoNuevo() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <a onClick={() => navigate('/inventario/productos')}>Productos</a>
         <span className="sep">/</span>

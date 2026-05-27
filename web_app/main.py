@@ -56,6 +56,7 @@ from web_app.routers import api_estudio_mercado as api_estudio_mercado_router
 from web_app.routers import api_crm as api_crm_router
 from web_app.routers import api_devoluciones as api_devoluciones_router
 from web_app.routers import api_cuentas_pagar as api_cuentas_pagar_router
+from web_app.routers import api_razones_sociales as api_razones_sociales_router
 from web_app.dependencies import get_usuario_actual
 from web_app import audit, logger
 from web_app.database import pool_empresa, pool_usuarios, get_pool_empresa, get_empresas, cerrar_todos_pools_empresa
@@ -72,7 +73,7 @@ async def lifespan(app: FastAPI):
     # startup
     logger.configurar()
     _log = logger.get("clf.startup")
-    _log.info("Iniciando CLF Gestion Web...")
+    _log.info("Iniciando LOGOS...")
     audit._asegurar_tabla()
     try:
         pool_usuarios._init()
@@ -131,7 +132,7 @@ async def lifespan(app: FastAPI):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="CLF Gestion Web",
+    title="LOGOS",
     docs_url=None if settings.es_produccion else "/docs",
     redoc_url=None if settings.es_produccion else "/redoc",
     lifespan=lifespan,
@@ -243,6 +244,7 @@ app.include_router(api_estudio_mercado_router.router)
 app.include_router(api_crm_router.router)
 app.include_router(api_devoluciones_router.router)
 app.include_router(api_cuentas_pagar_router.router)
+app.include_router(api_razones_sociales_router.router)
 
 
 # ── Manejadores de error ──────────────────────────────────────────────────────
@@ -299,25 +301,25 @@ async def handler_500(request: Request, exc: Exception):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "app": "CLF Gestión"}
+    return {"status": "ok", "app": "LOGOS"}
 
 
 @app.get("/manifest.json")
 async def manifest():
     return JSONResponse({
-        "name":             "CLF Gestión",
-        "short_name":       "CLF",
-        "description":      "Sistema de gestión comercial CLF",
-        "start_url":        "/dashboard",
+        "name":             "LOGOS",
+        "short_name":       "LOGOS",
+        "description":      "Sistema de gestión comercial",
+        "start_url":        "/panel",
         "display":          "standalone",
-        "background_color": "#141f30",
-        "theme_color":      "#0f7b5e",
+        "background_color": "#F8FAFC",
+        "theme_color":      "#2563EB",
         "orientation":      "portrait-primary",
         "icons": [
             {
-                "src":   "/static/logo_clf.jpg",
-                "sizes": "any",
-                "type":  "image/jpeg",
+                "src":     "/static/logo.svg",
+                "sizes":   "any",
+                "type":    "image/svg+xml",
                 "purpose": "any maskable",
             }
         ],

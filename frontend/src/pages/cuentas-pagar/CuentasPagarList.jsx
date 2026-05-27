@@ -3,6 +3,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { Modal } from '../../components/Modal';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 const today = new Date().toISOString().slice(0, 10);
@@ -36,12 +37,14 @@ const BLANK_CXP = {
 };
 
 export default function CuentasPagarList() {
+  const { activeRS } = useRazonSocial();
   const [filtroEstado,    setFiltroEstado]   = useState('');
   const [filtroProveedor, setFiltroProveedor] = useState(0);
 
   const params = new URLSearchParams();
   if (filtroEstado)    params.set('estado', filtroEstado);
   if (filtroProveedor) params.set('proveedor_id', filtroProveedor);
+  if (activeRS != null) params.set('razon_social_id', activeRS);
   const { data, loading, refetch } = useFetch(`/api/cuentas-pagar?${params}`);
 
   const [modalNueva,  setModalNueva]  = useState(false);

@@ -15,7 +15,7 @@ export default function AdminAuditoria() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>Administración</span>
         <span className="sep">/</span>

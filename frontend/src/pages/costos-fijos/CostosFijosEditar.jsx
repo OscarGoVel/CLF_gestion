@@ -56,7 +56,7 @@ export default function CostosFijosEditar() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <a onClick={() => navigate('/finanzas/costos-fijos')}>Costos Fijos</a>
         <span className="sep">/</span>

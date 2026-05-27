@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { useFetch } from '../../hooks/useFetch';
 import { toast } from '../../lib/toast';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 let _nextId = 1;
 const newLinea = (cotizacion_id = null) => ({
@@ -308,6 +309,7 @@ function CotizacionSearch({ linea, onSelect, onClear }) {
 
 export default function CompraNueva() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const cotizacionId = searchParams.get('cotizacion_id') ? parseInt(searchParams.get('cotizacion_id')) : null;
@@ -508,6 +510,7 @@ export default function CompraNueva() {
         ticket_referencia: ticket || null,
         notas: notas || null,
         factura_xml_id: facturaId ?? prefill?.factura_id ?? null,
+        razon_social_id: activeRS ?? null,
         lineas: lineas.map((l) => ({
           producto_id: l.producto_id,
           cantidad: parseFloat(l.cantidad) || 1,

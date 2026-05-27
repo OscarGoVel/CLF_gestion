@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 export default function DevolucionNueva() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
   const [search] = useSearchParams();
 
   const [clienteQ,   setClienteQ]   = useState('');
@@ -70,6 +72,7 @@ export default function DevolucionNueva() {
         fecha,
         motivo: motivo || null,
         notas: notas || null,
+        razon_social_id: activeRS ?? null,
         lineas: lineasValidas.map((l) => ({
           producto_id: l.producto_id,
           cantidad: parseFloat(l.cantidad),

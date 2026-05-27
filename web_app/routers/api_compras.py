@@ -35,6 +35,7 @@ class CompraIn(BaseModel):
     notas: Optional[str] = None
     factura_xml_id: Optional[int] = None
     lineas: List[LineaIn]
+    razon_social_id: Optional[int] = None
 
 
 class InsumoIn(BaseModel):
@@ -69,6 +70,7 @@ def _rows(cur):
 async def listar(
     q: str = Query(""),
     pagina: int = Query(1, ge=1),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     from fastapi import HTTPException
@@ -77,6 +79,9 @@ async def listar(
 
     empresa_db = user["empresa_db"]
     where, params = [], []
+    if razon_social_id is not None:
+        where.append("c.razon_social_id = %s")
+        params.append(razon_social_id)
     if q:
         where.append("(c.folio ILIKE %s OR p.nombre ILIKE %s OR c.ticket_referencia ILIKE %s)")
         like = f"%{q}%"
@@ -277,13 +282,13 @@ async def crear_compra(body: CompraIn, user: dict = Depends(get_usuario_api)):
         cur.execute("""
             INSERT INTO compras
               (folio, proveedor_id, fecha_compra, subtotal, iva, total,
-               ticket_referencia, notas, factura_xml_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ticket_referencia, notas, factura_xml_id, razon_social_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             folio, body.proveedor_id, body.fecha_compra,
             float(subtotal_g), float(iva_g), float(total_g),
             body.ticket_referencia or None, body.notas or None,
-            body.factura_xml_id or None,
+            body.factura_xml_id or None, body.razon_social_id,
         ))
         compra_id = cur.lastrowid
 

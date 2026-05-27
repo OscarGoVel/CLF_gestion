@@ -596,7 +596,7 @@ async def test_correo(request: Request, user: dict = Depends(get_usuario_api)):
         raise HTTPException(422, "No se pudo determinar el correo del destinatario")
 
     html = """
-    <h2>Correo de prueba — CLF Gestión CRM</h2>
+    <h2>Correo de prueba — LOGOS CRM</h2>
     <p>Si recibes este correo, el sistema de envío está funcionando correctamente.</p>
     <p>SENDGRID_API_KEY: <strong>{}</strong></p>
     """.format("configurada ✓" if os.getenv("SENDGRID_API_KEY") else "NO configurada ✗")
@@ -604,7 +604,7 @@ async def test_correo(request: Request, user: dict = Depends(get_usuario_api)):
     ok, msg_id = enviar_correo(
         to_email=destinatario,
         to_name=user.get("nombre", destinatario),
-        subject="Prueba CRM — CLF Gestión",
+        subject="Prueba CRM — LOGOS",
         html_content=html,
     )
     return JSONResponse({

@@ -1,5 +1,6 @@
-/* ─── CLF Gestión · Design System ─── */
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+/* ─── LOGOS · Design System ─── */
+@import '@fontsource/plus-jakarta-sans/latin-400.css';
+@import '@fontsource/plus-jakarta-sans/latin-500.css';
 
 :root {
   --ink-900: #18181b;
@@ -15,9 +16,13 @@
   --paper:   #ffffff;
   --canvas:  #f6f6f6;
 
-  --accent:      #2d5a45;
-  --accent-soft: #ecf0ed;
-  --accent-ink:  #1a3a2c;
+  --accent:      #2563EB;
+  --accent-soft: #DBEAFE;
+  --accent-ink:  #1E40AF;
+
+  --color-bg-app:     #F8FAFC;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-muted:   #F1F5F9;
 
   --warn:        #92400e;
   --warn-soft:   #fef3c7;
@@ -40,9 +45,7 @@
   --sb-width:     240px;
   --sb-collapsed: 56px;
 
-  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --sans:  "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --mono:  "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -93,6 +96,23 @@ html, body, #root {
 }
 .sb-brand-link span { color: var(--ink-400); font-weight: 400; margin-left: 5px; }
 .shell--collapsed .sb-brand { justify-content: center; padding: 0; }
+.sb-rs-selector {
+  padding: 4px 12px 6px;
+}
+.sb-rs-selector select {
+  width: 100%;
+  font-size: 11px;
+  font-family: var(--sans);
+  color: var(--ink-600);
+  background: var(--ink-50);
+  border: 1px solid var(--ink-200);
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  outline: none;
+}
+.sb-rs-selector select:focus { border-color: var(--accent); }
+
 .sb-toggle {
   background: none; border: none; cursor: pointer; color: var(--ink-400);
   padding: 4px; border-radius: 3px; line-height: 0;
@@ -141,6 +161,22 @@ html, body, #root {
 }
 .sb-child:hover { color: var(--ink-900); background: var(--ink-50); }
 .sb-child.active { color: var(--accent-ink); font-weight: 500; background: var(--accent-soft); }
+
+.sb-admin-sub {
+  padding: 2px 12px 6px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-admin-link {
+  font-size: 11.5px;
+  color: var(--ink-500);
+  text-decoration: none;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+.sb-admin-link:hover { background: var(--ink-100); color: var(--ink-800); }
+.sb-admin-link.active { color: var(--accent); font-weight: 500; }
 
 .sb-footer {
   border-top: 1px solid var(--ink-100); padding: 8px 0;

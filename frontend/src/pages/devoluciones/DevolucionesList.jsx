@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { FilterChips } from '../../components/FilterChips';
+import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -9,6 +10,7 @@ const ESTADOS = ['Abierta', 'Cerrada'];
 
 export default function DevolucionesList() {
   const navigate = useNavigate();
+  const { activeRS } = useRazonSocial();
   const [q, setQ]         = useState('');
   const [estado, setEst]  = useState('');
   const [pagina, setPag]  = useState(1);
@@ -16,6 +18,7 @@ export default function DevolucionesList() {
   const params = new URLSearchParams({ pagina });
   if (q) params.set('q', q);
   if (estado) params.set('estado', estado);
+  if (activeRS != null) params.set('razon_social_id', activeRS);
 
   const { data, loading } = useFetch(`/api/devoluciones?${params}`);
 
@@ -29,7 +32,7 @@ export default function DevolucionesList() {
   return (
     <div className="page">
       <div className="crumbs">
-        <a onClick={() => navigate('/panel')}>CLF Gestión</a>
+        <a onClick={() => navigate('/panel')}>LOGOS</a>
         <span className="sep">/</span>
         <span>Devoluciones</span>
       </div>
