@@ -27,7 +27,8 @@ def _db_url() -> str:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(_db_url(), poolclass=pool.NullPool)
+    url = context.config.get_main_option("sqlalchemy.url") or _db_url()
+    engine = create_engine(url, poolclass=pool.NullPool)
     with engine.connect() as connection:
         context.configure(
             connection=connection,
