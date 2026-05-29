@@ -39,6 +39,7 @@ async def listar(
     tipo: str = Query(""),
     desde: str = Query(""),
     hasta: str = Query(""),
+    razon_social_id: Optional[int] = Query(None),
     user: dict = Depends(get_usuario_api),
 ):
     _ph = ", ".join(["%s"] * len(_ESTADOS_ACTIVOS))
@@ -57,6 +58,9 @@ async def listar(
     if hasta:
         where.append("c.fecha_entrega <= %s")
         params.append(hasta)
+    if razon_social_id is not None:
+        where.append("c.razon_social_id = %s")
+        params.append(razon_social_id)
 
     w = " AND ".join(where)
 

@@ -27,19 +27,27 @@ const FILTROS = [
   { label: 'Cancelada',              value: 'Cancelada' },
 ];
 
-const COLUMNS = [
-  { header: 'Folio',   key: 'folio',         className: 'folio', sortKey: 'folio' },
-  { header: 'Fecha',   key: 'fecha',         sortKey: 'fecha',   style: { color: 'var(--ink-500)' } },
-  { header: 'Cliente', key: 'cliente',       sortKey: 'cliente' },
-  { header: 'Total',   className: 'num',     sortKey: 'total',
-    render: (c) => c.total != null ? MXN.format(c.total) : '—' },
-  { header: 'Estado',  render: (c) => <StatusBadge status={c.estado} /> },
-  { header: 'Prods.',  key: 'num_productos', width: 80, style: { color: 'var(--ink-500)', textAlign: 'center' } },
-];
+function RsBadge({ nombre }) {
+  if (!nombre || nombre === '—') return <span style={{ color: 'var(--ink-400)' }}>—</span>;
+  const label = nombre.length > 18 ? nombre.slice(0, 18) + '…' : nombre;
+  return <span title={nombre} style={{ fontSize: 11, color: 'var(--ink-500)' }}>{label}</span>;
+}
 
 export default function CotList() {
   const navigate = useNavigate();
-  const { activeRS } = useRazonSocial();
+  const { activeRS, razonSociales } = useRazonSocial();
+  const multiRS = razonSociales.length > 1;
+
+  const COLUMNS = [
+    { header: 'Folio',   key: 'folio',         className: 'folio', sortKey: 'folio' },
+    { header: 'Fecha',   key: 'fecha',         sortKey: 'fecha',   style: { color: 'var(--ink-500)' } },
+    { header: 'Cliente', key: 'cliente',       sortKey: 'cliente' },
+    { header: 'Total',   className: 'num',     sortKey: 'total',
+      render: (c) => c.total != null ? MXN.format(c.total) : '—' },
+    { header: 'Estado',  render: (c) => <StatusBadge status={c.estado} /> },
+    { header: 'Prods.',  key: 'num_productos', width: 80, style: { color: 'var(--ink-500)', textAlign: 'center' } },
+    ...(multiRS ? [{ header: 'RS', width: 140, render: (c) => <RsBadge nombre={c.razon_social_nombre} /> }] : []),
+  ];
   const [filtros, setFiltros]       = useState([]);
   const [clientesFiltro, setClientesFiltro] = useState([]);
   const [fechaDesde, setFechaDesde] = useState('');
@@ -204,7 +212,7 @@ export default function CotList() {
         </label>
       </div>
 
-      <div style={{
+      <div className="list-layout" style={{
         display: 'grid',
         gridTemplateColumns: sel ? '1fr 380px' : '1fr',
         gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'clip',

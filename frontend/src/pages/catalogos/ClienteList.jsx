@@ -171,7 +171,7 @@ export default function ClienteList() {
           <MultiSelectDropdown options={tipoOptions} values={tipoFiltro} onChange={setTipoFiltro} placeholder="Tipo…" />
         </div>
 
-        <div style={{
+        <div className="list-layout" style={{
           display: 'grid', gridTemplateColumns: selected ? '1fr 360px' : '1fr',
           gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
         }}>

@@ -137,7 +137,7 @@ export default function AdminRazonesSociales() {
       )}
 
       {modal && (
-        <Modal title={modal === 'nueva' ? 'Nueva razón social' : 'Editar razón social'} onClose={cerrar}>
+        <Modal open={!!modal} title={modal === 'nueva' ? 'Nueva razón social' : 'Editar razón social'} onClose={cerrar}>
           <form onSubmit={handleGuardar}>
             <div style={{ display: 'grid', gap: 14 }}>
               <div>

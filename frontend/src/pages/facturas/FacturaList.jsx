@@ -31,7 +31,8 @@ export default function FacturaList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'Administrador';
-  const { activeRS } = useRazonSocial();
+  const { activeRS, razonSociales } = useRazonSocial();
+  const multiRS = razonSociales.length > 1;
   const [q, setQ]             = useState('');
   const [tipoFiltro, setTipoFiltro] = useState([]);
   const [sinVincular, setSinVincular] = useState(false);
@@ -213,7 +214,7 @@ export default function FacturaList() {
         </button>
       </div>
 
-      <div style={{
+      <div className="list-layout" style={{
         display: 'grid', gridTemplateColumns: sel ? '1fr 400px' : '1fr',
         gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
       }}>
@@ -228,6 +229,7 @@ export default function FacturaList() {
                 <th>Receptor</th>
                 <th className="num" style={{ width: 120 }}>Total</th>
                 <th style={{ width: 55 }}>Cots.</th>
+                {multiRS && <th style={{ width: 140 }}>RS</th>}
                 <th className="ctx-col" />
               </tr>
             </thead>
@@ -235,7 +237,7 @@ export default function FacturaList() {
               {loading ? (
                 <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
               ) : facturas.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
+                <tr><td colSpan={multiRS ? 9 : 8} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
               ) : facturas.map((f) => (
                 <tr key={f.id} className={sel === f.id ? 'sel' : ''} style={{ cursor: 'pointer' }}
                     onClick={() => handleSelToggle(f.id)}
@@ -277,6 +279,13 @@ export default function FacturaList() {
                   <td style={{ textAlign: 'center', color: f.num_cotizaciones > 0 ? 'var(--accent)' : 'var(--ink-300)' }}>
                     {f.num_cotizaciones}
                   </td>
+                  {multiRS && (
+                    <td style={{ fontSize: 11, color: 'var(--ink-500)' }} title={f.razon_social_nombre}>
+                      {(f.razon_social_nombre ?? '—').length > 18
+                        ? f.razon_social_nombre.slice(0, 18) + '…'
+                        : f.razon_social_nombre ?? '—'}
+                    </td>
+                  )}
                   <td className="ctx-col" onClick={(e) => { e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, row: f }); }}>
                     <button className="ctx-kebab" aria-label="Acciones">⋮</button>
                   </td>

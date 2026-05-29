@@ -104,13 +104,15 @@ async def listar(
                    c.ticket_referencia,
                    COALESCE(p.nombre, '— sin proveedor —') AS proveedor,
                    COUNT(DISTINCT cd.id)  AS num_lineas,
-                   COUNT(DISTINCT cdc.cotizacion_id) AS num_cotizaciones
+                   COUNT(DISTINCT cdc.cotizacion_id) AS num_cotizaciones,
+                   COALESCE(rs.nombre, '—') AS razon_social_nombre
             FROM compras c
             LEFT JOIN proveedores p ON p.id = c.proveedor_id
             LEFT JOIN compra_detalle cd ON cd.compra_id = c.id
             LEFT JOIN compra_detalle_cotizacion cdc ON cdc.compra_detalle_id = cd.id
+            LEFT JOIN razones_sociales rs ON rs.id = c.razon_social_id
             {filtro}
-            GROUP BY c.id, p.nombre
+            GROUP BY c.id, p.nombre, rs.nombre
             ORDER BY c.id DESC
             LIMIT {POR_PAGINA} OFFSET {offset}
         """, params or None)

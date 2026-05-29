@@ -96,22 +96,6 @@ html, body, #root {
 }
 .sb-brand-link span { color: var(--ink-400); font-weight: 400; margin-left: 5px; }
 .shell--collapsed .sb-brand { justify-content: center; padding: 0; }
-.sb-rs-selector {
-  padding: 4px 12px 6px;
-}
-.sb-rs-selector select {
-  width: 100%;
-  font-size: 11px;
-  font-family: var(--sans);
-  color: var(--ink-600);
-  background: var(--ink-50);
-  border: 1px solid var(--ink-200);
-  border-radius: 4px;
-  padding: 4px 6px;
-  cursor: pointer;
-  outline: none;
-}
-.sb-rs-selector select:focus { border-color: var(--accent); }
 
 .sb-toggle {
   background: none; border: none; cursor: pointer; color: var(--ink-400);
@@ -199,11 +183,55 @@ html, body, #root {
   display: flex; flex-direction: column;
   height: 100%; overflow: hidden;
 }
-.mobile-topbar {
-  display: none; align-items: center; gap: 12px;
-  padding: 0 16px; height: 52px; border-bottom: 1px solid var(--ink-200);
+
+/* ─── App topbar (RS chip + mobile nav) ─── */
+.app-topbar {
+  display: flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 24px;
+  border-bottom: 1px solid var(--ink-100);
   background: var(--paper); flex-shrink: 0;
 }
+.app-topbar-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: none; background: none;
+  cursor: pointer; color: var(--ink-600); border-radius: 4px; flex-shrink: 0; line-height: 0;
+}
+.app-topbar-btn:hover { background: var(--ink-100); color: var(--ink-900); }
+.app-topbar-logo { display: none; }
+
+/* RS chip */
+.rs-chip-wrap { position: relative; }
+.rs-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid var(--ink-200); border-radius: 20px;
+  background: var(--ink-50); color: var(--ink-700);
+  font-size: 12px; font-family: var(--sans);
+  cursor: pointer; white-space: nowrap;
+  transition: background 120ms, border-color 120ms;
+}
+.rs-chip:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.rs-chip:hover .rs-chip-dot { background: var(--accent); }
+.rs-chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-success); flex-shrink: 0;
+}
+.rs-chip-chevron { line-height: 0; color: var(--ink-400); }
+.rs-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0;
+  min-width: 220px; background: var(--paper);
+  border: 1px solid var(--ink-200); border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1); z-index: 200; overflow: hidden;
+}
+.rs-dropdown-item {
+  display: block; width: 100%; text-align: left;
+  padding: 9px 14px; font-size: 12.5px; font-family: var(--sans);
+  color: var(--ink-700); background: none; border: none; cursor: pointer;
+  border-bottom: 1px solid var(--ink-100);
+}
+.rs-dropdown-item:last-child { border-bottom: none; }
+.rs-dropdown-item:hover { background: var(--ink-50); color: var(--ink-900); }
+.rs-dropdown-item.active { color: var(--accent-ink); font-weight: 500; background: var(--accent-soft); }
 
 /* ─── Legacy topbar/subnav (kept for reference, no longer rendered) ─── */
 .topbar .role-tag {
@@ -476,10 +504,46 @@ html, body, #root {
   }
   .shell--collapsed .sidebar { transform: translateX(-100%); }
 
-  .mobile-topbar { display: flex; }
+  .app-topbar { height: 52px; padding: 0 16px; border-bottom-color: var(--ink-200); }
+  .app-topbar-btn { display: flex; }
+  .app-topbar-logo { display: flex; flex: 1; justify-content: center; }
 
   .scroll { padding-bottom: 16px; }
+
+  /* ── Página ── */
+  .page { padding: 14px 12px; }
+
+  /* ── Page header: botones apilados ── */
+  .page-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .page-header > *:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+  .page-header .btn { flex: 1; min-width: 120px; justify-content: center; }
+
+  /* ── Panel lateral: pasa a columna única ── */
+  .list-layout { grid-template-columns: 1fr !important; }
 }
+
+/* ─── Mobile card view (renderizado por DataTable cuando isMobile) ─── */
+.mob-cards { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.mob-card {
+  background: var(--paper);
+  border: 1px solid var(--ink-200);
+  border-radius: 6px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.mob-card.sel { border-color: var(--brand); background: var(--brand-soft, #eef2ff); }
+.mob-card__field {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3px 0; font-size: 12.5px; gap: 10px;
+  border-bottom: 1px solid var(--ink-100);
+}
+.mob-card__field:last-of-type { border-bottom: none; }
+.mob-card__label {
+  color: var(--ink-500); font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.04em; flex-shrink: 0;
+}
+.mob-card__val { text-align: right; flex: 1; }
+.mob-card__actions { margin-top: 10px; width: 100%; }
 
 /* ─── Toast ─── */
 .toast-wrap {

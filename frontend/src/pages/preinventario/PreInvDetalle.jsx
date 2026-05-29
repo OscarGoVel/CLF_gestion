@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../lib/apiClient';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Modal } from '../../components/Modal';
 import { toast } from '../../lib/toast';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 
 export default function PreInvDetalle() {
   const { id }   = useParams();
@@ -34,7 +35,9 @@ export default function PreInvDetalle() {
   const [showRechazar, setShowRechazar] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
   const [rechazando, setRechazando]     = useState(false);
-  const busqTimer = useRef(null);
+  const [scanOpen, setScanOpen]         = useState(false);
+  const busqTimer   = useRef(null);
+  const cantidadRef = useRef(null);
 
   const isAbierta = sesion.estado === 'abierta';
   const isCerrada = sesion.estado === 'cerrada';
@@ -90,6 +93,22 @@ export default function PreInvDetalle() {
       toast.error(e.message);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleScanDetected(code) {
+    setScanOpen(false);
+    try {
+      const res = await api.get(`/api/inventario/conteos/buscar?q=${encodeURIComponent(code)}`);
+      const resultados = res.resultados ?? [];
+      if (resultados.length === 0) {
+        toast.error('Producto no encontrado con ese código de barras');
+        return;
+      }
+      selProd(resultados[0]);
+      setTimeout(() => cantidadRef.current?.focus(), 50);
+    } catch (e) {
+      toast.error(e.message ?? 'Error al buscar el producto');
     }
   }
 
@@ -156,7 +175,7 @@ export default function PreInvDetalle() {
         <div>
           <div className="page-title">{sesion.nombre}</div>
           <div className="page-sub" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Pill label={sesion.estado} />
+            <StatusBadge status={sesion.estado} />
             <span style={{ fontSize: 13, color: 'var(--ink-400)' }}>{sesion.tipo} · {sesion.creado_por}</span>
             <span style={{ fontSize: 13, color: 'var(--ink-400)' }}>{items.length} ítems</span>
           </div>
@@ -182,17 +201,21 @@ export default function PreInvDetalle() {
         <div className="card" style={{ padding: 20, marginBottom: 24 }}>
           <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 14 }}>Agregar producto</div>
           <form onSubmit={handleAgregar}>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
+            <div style={{ position: 'relative', marginBottom: 12, display: 'flex', gap: 6 }}>
               <input
                 className="input"
-                style={{ width: '100%' }}
-                placeholder="Buscar por SKU o nombre…"
+                style={{ flex: 1 }}
+                placeholder="Buscar por SKU, nombre o código de barras…"
                 value={busq}
                 onChange={handleBuscar}
               />
+              <button type="button" className="btn" title="Escanear código de barras"
+                onClick={() => setScanOpen(true)}>
+                📷
+              </button>
               {sugerencias.length > 0 && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                  position: 'absolute', top: '100%', left: 0, right: 44, zIndex: 20,
                   background: '#fff', border: '1px solid var(--ink-200)', borderRadius: 6,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
                 }}>
@@ -221,6 +244,7 @@ export default function PreInvDetalle() {
                     Cantidad física *
                   </label>
                   <input
+                    ref={cantidadRef}
                     className="input"
                     type="number"
                     inputMode="numeric"
@@ -252,6 +276,12 @@ export default function PreInvDetalle() {
           </form>
         </div>
       )}
+
+      <BarcodeScanner
+        open={scanOpen}
+        onDetected={handleScanDetected}
+        onClose={() => setScanOpen(false)}
+      />
 
       {/* Tabla de ítems */}
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>

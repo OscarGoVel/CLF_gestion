@@ -123,12 +123,14 @@ async def listar(
                EXISTS(
                    SELECT 1 FROM compra_detalle_cotizacion cdc
                    WHERE cdc.cotizacion_id = c.id
-               )                                   AS tiene_costo_real
+               )                                   AS tiene_costo_real,
+               COALESCE(rs.nombre, '—')            AS razon_social_nombre
         FROM cotizaciones c
         LEFT JOIN clientes          cl ON cl.id = c.cliente_id
         LEFT JOIN cotizacion_detalle cd ON cd.cotizacion_id = c.id
+        LEFT JOIN razones_sociales  rs ON rs.id = c.razon_social_id
         {where}
-        GROUP BY c.id, cl.nombre_comercial, cl.tipo
+        GROUP BY c.id, cl.nombre_comercial, cl.tipo, rs.nombre
         ORDER BY c.fecha DESC, c.id DESC
         LIMIT {POR_PAGINA} OFFSET {offset}
     """
@@ -389,8 +391,10 @@ async def importar_plantilla(
     Retorna filas matched (producto encontrado en catálogo) y unmatched.
     """
     raw = await file.read()
-    # Tolerar BOM UTF-8
-    texto = raw.decode("utf-8-sig").strip()
+    try:
+        texto = raw.decode("utf-8-sig").strip()
+    except UnicodeDecodeError:
+        texto = raw.decode("latin-1").strip()
     if not texto:
         raise HTTPException(status_code=400, detail="El archivo está vacío.")
 

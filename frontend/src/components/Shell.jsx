@@ -277,7 +277,18 @@ export function Shell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set(currentModule ? [currentModule] : []));
+  const [rsDropdown, setRsDropdown] = useState(false);
+  const rsRef = useRef(null);
   const search = useGlobalSearch(navigate);
+
+  useEffect(() => {
+    if (!rsDropdown) return;
+    function handler(e) {
+      if (!rsRef.current?.contains(e.target)) setRsDropdown(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [rsDropdown]);
 
   useEffect(() => {
     if (currentModule) setExpanded(prev => new Set([...prev, currentModule]));
@@ -375,20 +386,6 @@ export function Shell({ children }) {
           </button>
         )}
       </div>
-
-      {!collapsed && razonSociales.length > 1 && (
-        <div className="sb-rs-selector">
-          <select
-            value={activeRS ?? ''}
-            onChange={e => setActiveRS(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">Todas las RS</option>
-            {razonSociales.filter(rs => rs.activa).map(rs => (
-              <option key={rs.id} value={rs.id}>{rs.nombre}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       <button
         className={`sb-search ${collapsed ? 'sb-search--icon' : ''}`}
@@ -519,14 +516,54 @@ export function Shell({ children }) {
       </aside>
 
       <div className="shell-main">
-        <div className="mobile-topbar">
-          <button className="btn btn-ghost btn-sm" onClick={() => setMobileOpen(true)}>
+        <div className="app-topbar">
+          <button className="app-topbar-btn" onClick={() => setMobileOpen(true)} title="Menú">
             <Icon name="menu" size={17} />
           </button>
-          <Link to="/panel" className="sb-brand-link">
+          <Link to="/panel" className="app-topbar-logo">
             <img src="/logo.svg" alt="LOGOS" style={{ width: 28, height: 28 }} />
           </Link>
-          <button className="btn btn-ghost btn-sm" onClick={() => search.setOpen(true)} title="Buscar">
+          {razonSociales.length > 0 && (
+            <div className="rs-chip-wrap" ref={rsRef}>
+              <button
+                className="rs-chip"
+                onClick={() => razonSociales.length > 1 && setRsDropdown(v => !v)}
+                style={razonSociales.length === 1 ? { cursor: 'default' } : undefined}
+              >
+                <span className="rs-chip-dot" />
+                <span className="rs-chip-label">
+                  {activeRS
+                    ? (razonSociales.find(r => r.id === activeRS)?.nombre ?? '—')
+                    : razonSociales.length === 1
+                      ? razonSociales[0].nombre
+                      : 'Todas las RS'}
+                </span>
+                {razonSociales.length > 1 && (
+                  <span className="rs-chip-chevron"><Icon name="chevron" size={11} /></span>
+                )}
+              </button>
+              {rsDropdown && (
+                <div className="rs-dropdown">
+                  <button
+                    className={`rs-dropdown-item ${!activeRS ? 'active' : ''}`}
+                    onClick={() => { setActiveRS(null); setRsDropdown(false); }}
+                  >
+                    Todas las RS
+                  </button>
+                  {razonSociales.filter(rs => rs.activa).map(rs => (
+                    <button
+                      key={rs.id}
+                      className={`rs-dropdown-item ${activeRS === rs.id ? 'active' : ''}`}
+                      onClick={() => { setActiveRS(rs.id); setRsDropdown(false); }}
+                    >
+                      {rs.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <button className="app-topbar-btn" onClick={() => search.setOpen(true)} title="Buscar">
             <Icon name="search" size={17} />
           </button>
         </div>

@@ -10,15 +10,11 @@ import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 });
 
-const COLUMNS = [
-  { header: 'Folio',    key: 'folio',           className: 'folio', sortKey: 'folio', width: 120 },
-  { header: 'Fecha',    key: 'fecha_compra',     width: 100, style: { color: 'var(--ink-500)', fontSize: 12 } },
-  { header: 'Proveedor', key: 'proveedor',       sortKey: 'proveedor' },
-  { header: 'Líneas',   key: 'num_lineas',       width: 60,  style: { textAlign: 'center', color: 'var(--ink-500)' } },
-  { header: 'Cots.',    key: 'num_cotizaciones', width: 70,  style: { textAlign: 'center', color: 'var(--ink-500)' } },
-  { header: 'Total',    className: 'num', width: 120, sortKey: 'total',
-    render: (c) => c.total != null ? MXN.format(c.total) : '—', style: { fontWeight: 500 } },
-];
+function RsBadge({ nombre }) {
+  if (!nombre || nombre === '—') return <span style={{ color: 'var(--ink-400)' }}>—</span>;
+  const label = nombre.length > 18 ? nombre.slice(0, 18) + '…' : nombre;
+  return <span title={nombre} style={{ fontSize: 11, color: 'var(--ink-500)' }}>{label}</span>;
+}
 
 const INSUMO_EMPTY = { nombre: '', unidad: 'pza', cantidad: 1, costo: 0 };
 
@@ -172,7 +168,19 @@ function PresupuestoModal({ onClose }) {
 
 export default function CompraList() {
   const navigate = useNavigate();
-  const { activeRS } = useRazonSocial();
+  const { activeRS, razonSociales } = useRazonSocial();
+  const multiRS = razonSociales.length > 1;
+
+  const COLUMNS = [
+    { header: 'Folio',    key: 'folio',           className: 'folio', sortKey: 'folio', width: 120 },
+    { header: 'Fecha',    key: 'fecha_compra',     width: 100, style: { color: 'var(--ink-500)', fontSize: 12 } },
+    { header: 'Proveedor', key: 'proveedor',       sortKey: 'proveedor' },
+    { header: 'Líneas',   key: 'num_lineas',       width: 60,  style: { textAlign: 'center', color: 'var(--ink-500)' } },
+    { header: 'Cots.',    key: 'num_cotizaciones', width: 70,  style: { textAlign: 'center', color: 'var(--ink-500)' } },
+    { header: 'Total',    className: 'num', width: 120, sortKey: 'total',
+      render: (c) => c.total != null ? MXN.format(c.total) : '—', style: { fontWeight: 500 } },
+    ...(multiRS ? [{ header: 'RS', width: 140, render: (c) => <RsBadge nombre={c.razon_social_nombre} /> }] : []),
+  ];
   const [q, setQ]       = useState('');
   const [pagina, setPag] = useState(1);
   const [sel, setSel]   = useState(null);
@@ -230,7 +238,7 @@ export default function CompraList() {
             value={q} onChange={(e) => { setQ(e.target.value); setPag(1); }} />
         </div>
 
-        <div style={{
+        <div className="list-layout" style={{
           display: 'grid', gridTemplateColumns: sel ? '1fr 380px' : '1fr',
           gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
         }}>

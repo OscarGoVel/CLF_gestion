@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthContext, useAuthState } from './hooks/useAuth';
 import { Shell } from './components/Shell';
 import { RazonSocialProvider } from './contexts/RazonSocialContext';
+import { authEvents } from './lib/apiClient';
 
 import Login       from './pages/Login';
 import Dashboard   from './pages/Dashboard';
@@ -74,6 +76,18 @@ const Placeholder = ({ title }) => (
   </div>
 );
 
+function AuthGuard({ children }) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    function handleUnauthorized() {
+      navigate('/login', { replace: true });
+    }
+    authEvents.addEventListener('unauthorized', handleUnauthorized);
+    return () => authEvents.removeEventListener('unauthorized', handleUnauthorized);
+  }, [navigate]);
+  return children;
+}
+
 function RequireAuth({ children }) {
   const token = sessionStorage.getItem('clf_token');
   if (!token) return <Navigate to="/login" replace />;
@@ -85,8 +99,8 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={auth}>
-      <RazonSocialProvider>
       <BrowserRouter>
+        <AuthGuard>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -94,6 +108,7 @@ export default function App() {
             path="/*"
             element={
               <RequireAuth>
+                <RazonSocialProvider>
                 <Shell>
                   <Routes>
                     <Route path="/"       element={<Navigate to="/panel" replace />} />
@@ -169,12 +184,13 @@ export default function App() {
                     <Route path="*" element={<Navigate to="/panel" replace />} />
                   </Routes>
                 </Shell>
+                </RazonSocialProvider>
               </RequireAuth>
             }
           />
         </Routes>
+        </AuthGuard>
       </BrowserRouter>
-      </RazonSocialProvider>
     </AuthContext.Provider>
   );
 }

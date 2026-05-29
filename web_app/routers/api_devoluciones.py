@@ -66,10 +66,12 @@ async def listar(
         cur.execute(f"""
             SELECT d.id, d.folio, d.fecha, d.estado, d.total, d.motivo,
                    COALESCE(cl.nombre_comercial, '—') AS cliente,
-                   cot.folio AS cot_folio
+                   cot.folio AS cot_folio,
+                   COALESCE(rs.nombre, '—') AS razon_social_nombre
             FROM devoluciones d
             LEFT JOIN clientes cl ON cl.id = d.cliente_id
             LEFT JOIN cotizaciones cot ON cot.id = d.cotizacion_id
+            LEFT JOIN razones_sociales rs ON rs.id = d.razon_social_id
             {filtro}
             ORDER BY d.fecha DESC, d.id DESC
             LIMIT {POR_PAGINA} OFFSET {offset}

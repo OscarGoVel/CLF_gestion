@@ -203,6 +203,8 @@ app.add_middleware(MonitorMiddleware)
 _CORS_ORIGINS = settings.cors_origins if hasattr(settings, "cors_origins") else [
     "http://localhost:5173",   # Vite dev server
     "http://localhost:4173",   # Vite preview
+    "https://logos-gestion.web.app",
+    "https://logos-gestion.firebaseapp.com",
     "https://clf-gestion.web.app",
     "https://clf-gestion.firebaseapp.com",
 ]
@@ -250,6 +252,8 @@ app.include_router(api_razones_sociales_router.router)
 # ── Manejadores de error ──────────────────────────────────────────────────────
 @app.exception_handler(401)
 async def handler_401(request: Request, exc: HTTPException):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": getattr(exc, "detail", "No autorizado")}, status_code=401)
     return RedirectResponse("/?next=" + str(request.url.path))
 
 
@@ -347,9 +351,15 @@ self.addEventListener('activate', evt => {
     self.clients.claim();
 });
 
-/* Network-first: siempre intenta la red; usa caché solo si falla */
+/* Peticiones API: siempre red, nunca cache */
 self.addEventListener('fetch', evt => {
     if (evt.request.method !== 'GET') return;
+    const url = evt.request.url;
+    if (url.includes('/api/')) {
+        evt.respondWith(fetch(evt.request));
+        return;
+    }
+    /* Network-first para assets estáticos; usa caché solo si falla */
     evt.respondWith(
         fetch(evt.request)
             .then(resp => {

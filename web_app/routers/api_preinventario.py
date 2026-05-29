@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 web_app/routers/api_preinventario.py
-/api/preinventario — endpoints JSON para el SPA React.
+/api/inventario/conteos — endpoints JSON para el SPA React.
 """
 
 from decimal import Decimal
@@ -14,7 +14,7 @@ from typing import Optional
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
 
-router = APIRouter(prefix="/api/preinventario", tags=["api"])
+router = APIRouter(prefix="/api/inventario/conteos", tags=["api"])
 
 # Empresas con tablas ya inicializadas en esta ejecución
 _tablas_ok: set[str] = set()
@@ -436,7 +436,7 @@ async def aprobar_sesion(
         )
         row = cur.fetchone()
     if not row or not verificar_password(body.clave, row[0]):
-        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+        raise HTTPException(status_code=403, detail="Contraseña incorrecta")
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(

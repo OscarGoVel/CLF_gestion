@@ -37,7 +37,8 @@ const BLANK_CXP = {
 };
 
 export default function CuentasPagarList() {
-  const { activeRS } = useRazonSocial();
+  const { activeRS, razonSociales } = useRazonSocial();
+  const multiRS = razonSociales.length > 1;
   const [filtroEstado,    setFiltroEstado]   = useState('');
   const [filtroProveedor, setFiltroProveedor] = useState(0);
 
@@ -172,15 +173,16 @@ export default function CuentasPagarList() {
               <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>Saldo</th>
               <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Vencimiento</th>
               <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 13 }}>Estado</th>
+              {multiRS && <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, fontSize: 13, width: 140 }}>RS</th>}
               <th style={{ padding: '10px 12px', width: 120 }}></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
+              <tr><td colSpan={multiRS ? 9 : 8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Cargando…</td></tr>
             )}
             {!loading && items.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Sin cuentas por pagar</td></tr>
+              <tr><td colSpan={multiRS ? 9 : 8} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-400)' }}>Sin cuentas por pagar</td></tr>
             )}
             {items.map(item => {
               const alerta = item.alerta ?? 'ok';
@@ -217,6 +219,14 @@ export default function CuentasPagarList() {
                       {ALERTA_LABEL[alerta]}
                     </span>
                   </td>
+                  {multiRS && (
+                    <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--ink-500)' }}
+                        title={item.razon_social_nombre}>
+                      {(item.razon_social_nombre ?? '—').length > 18
+                        ? item.razon_social_nombre.slice(0, 18) + '…'
+                        : item.razon_social_nombre ?? '—'}
+                    </td>
+                  )}
                   <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {item.estado !== 'Pagada' && (
                       <button

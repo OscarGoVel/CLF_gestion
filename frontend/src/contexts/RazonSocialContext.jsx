@@ -11,6 +11,7 @@ export function RazonSocialProvider({ children }) {
   });
 
   useEffect(() => {
+    if (!sessionStorage.getItem('clf_token')) return;
     api.get('/api/razones-sociales')
       .then(data => setRazonSociales(data.razones_sociales ?? []))
       .catch(() => {});

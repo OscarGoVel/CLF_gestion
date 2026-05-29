@@ -1,5 +1,7 @@
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
+export const authEvents = new EventTarget();
+
 function getToken() {
   return sessionStorage.getItem('clf_token');
 }
@@ -18,7 +20,7 @@ async function request(method, path, body) {
   if (res.status === 401) {
     sessionStorage.removeItem('clf_token');
     sessionStorage.removeItem('clf_user');
-    window.location.href = '/login';
+    authEvents.dispatchEvent(new CustomEvent('unauthorized'));
     throw new Error('No autorizado');
   }
 
@@ -50,7 +52,7 @@ async function downloadPost(path, fallbackFilename, body) {
   if (res.status === 401) {
     sessionStorage.removeItem('clf_token');
     sessionStorage.removeItem('clf_user');
-    window.location.href = '/login';
+    authEvents.dispatchEvent(new CustomEvent('unauthorized'));
     throw new Error('No autorizado');
   }
 
@@ -85,7 +87,7 @@ async function download(path, fallbackFilename) {
   if (res.status === 401) {
     sessionStorage.removeItem('clf_token');
     sessionStorage.removeItem('clf_user');
-    window.location.href = '/login';
+    authEvents.dispatchEvent(new CustomEvent('unauthorized'));
     throw new Error('No autorizado');
   }
 
@@ -118,7 +120,7 @@ async function upload(path, formData) {
   if (res.status === 401) {
     sessionStorage.removeItem('clf_token');
     sessionStorage.removeItem('clf_user');
-    window.location.href = '/login';
+    authEvents.dispatchEvent(new CustomEvent('unauthorized'));
     throw new Error('No autorizado');
   }
   if (!res.ok) {

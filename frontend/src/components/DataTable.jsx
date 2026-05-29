@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { LoadingRow, EmptyRow } from './TableStates';
 import { ContextMenu } from './ContextMenu';
+import { useMobile } from '../hooks/useMobile';
 
 export function DataTable({
   columns,
@@ -13,6 +14,7 @@ export function DataTable({
   emptyLabel,
   getContextMenuItems,
 }) {
+  const isMobile = useMobile();
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [ctxMenu, setCtxMenu] = useState(null);
@@ -55,6 +57,57 @@ export function DataTable({
       return sortDir === 'asc' ? cmp : -cmp;
     });
   }, [data, sortKey, sortDir]);
+
+  if (isMobile) {
+    const visibleCols = columns.filter((c) => !c.mobileHide);
+    return (
+      <>
+        {loading ? (
+          <div className="mob-cards"><div className="mob-card" style={{ color: 'var(--ink-400)', textAlign: 'center' }}>Cargando…</div></div>
+        ) : !sorted.length ? (
+          <div className="mob-cards"><div className="mob-card" style={{ color: 'var(--ink-400)', textAlign: 'center' }}>{emptyLabel ?? 'Sin registros'}</div></div>
+        ) : (
+          <div className="mob-cards">
+            {sorted.map((row) => (
+              <div
+                key={row[keyField]}
+                className={`mob-card${selectedId === row[keyField] ? ' sel' : ''}`}
+                onClick={() => onRowClick?.(row)}
+              >
+                {visibleCols.map((col, i) => (
+                  <div key={i} className="mob-card__field">
+                    <span className="mob-card__label">{col.header}</span>
+                    <span className="mob-card__val">{col.render ? col.render(row) : (row[col.key] ?? '—')}</span>
+                  </div>
+                ))}
+                {getContextMenuItems && (
+                  <button
+                    className="btn btn-sm mob-card__actions"
+                    onClick={(e) => { e.stopPropagation(); openCtxMenu(e.clientX, e.clientY, row); }}
+                  >
+                    Acciones ⋮
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {ctxMenu && (
+          <ContextMenu
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            items={getContextMenuItems(ctxMenu.row)}
+            onClose={() => setCtxMenu(null)}
+          />
+        )}
+        {footer && (
+          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--ink-100)', fontSize: 11.5, color: 'var(--ink-500)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {footer}
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>

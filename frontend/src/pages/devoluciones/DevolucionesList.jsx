@@ -10,7 +10,8 @@ const ESTADOS = ['Abierta', 'Cerrada'];
 
 export default function DevolucionesList() {
   const navigate = useNavigate();
-  const { activeRS } = useRazonSocial();
+  const { activeRS, razonSociales } = useRazonSocial();
+  const multiRS = razonSociales.length > 1;
   const [q, setQ]         = useState('');
   const [estado, setEst]  = useState('');
   const [pagina, setPag]  = useState(1);
@@ -69,13 +70,14 @@ export default function DevolucionesList() {
               <th>Motivo</th>
               <th className="num" style={{ width: 110 }}>Total</th>
               <th style={{ width: 90 }}>Estado</th>
+              {multiRS && <th style={{ width: 140 }}>RS</th>}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
+              <tr><td colSpan={multiRS ? 8 : 7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Cargando…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
+              <tr><td colSpan={multiRS ? 8 : 7} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-400)' }}>Sin resultados</td></tr>
             ) : rows.map((r) => (
               <tr key={r.id}>
                 <td>
@@ -99,6 +101,14 @@ export default function DevolucionesList() {
                     color: r.estado === 'Cerrada' ? '#374151' : '#166534',
                   }}>{r.estado}</span>
                 </td>
+                {multiRS && (
+                  <td style={{ fontSize: 11, color: 'var(--ink-500)' }}
+                      title={r.razon_social_nombre}>
+                    {(r.razon_social_nombre ?? '—').length > 18
+                      ? r.razon_social_nombre.slice(0, 18) + '…'
+                      : r.razon_social_nombre ?? '—'}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

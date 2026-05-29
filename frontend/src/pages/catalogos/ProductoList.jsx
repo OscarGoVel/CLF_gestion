@@ -8,6 +8,7 @@ import { exportCSV } from '../../lib/exportCSV';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview, FieldGrid } from '../../components/SidePreview';
 import { Modal } from '../../components/Modal';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 
 const COLUMNS = [
   { header: 'Código',      key: 'codigo',              width: 100, style: { fontFamily: 'var(--mono)', fontSize: 11.5 } },
@@ -29,16 +30,18 @@ export default function ProductoList() {
   const [saving, setSaving]     = useState(false);
   const [editErr, setEditErr]   = useState('');
   const [refetch, setRefetch]   = useState(0);
+  const [scanOpen, setScanOpen] = useState(false);
 
   function openEdit(p) {
     setEditData({
-      nombre:        p.nombre ?? '',
-      codigo:        p.codigo ?? '',
-      unidad_medida: p.unidad_medida ?? '',
-      precio_base:   p.precio_base ?? '',
-      stock_minimo:  p.stock_minimo ?? '',
-      aplica_iva:    p.aplica_iva ?? false,
-      maneja_lotes:  p.maneja_lotes ?? false,
+      nombre:         p.nombre ?? '',
+      codigo:         p.codigo ?? '',
+      unidad_medida:  p.unidad_medida ?? '',
+      precio_base:    p.precio_base ?? '',
+      stock_minimo:   p.stock_minimo ?? '',
+      aplica_iva:     p.aplica_iva ?? false,
+      maneja_lotes:   p.maneja_lotes ?? false,
+      codigo_barras:  p.codigo_barras ?? '',
     });
     setEditErr('');
     setEditItem(p);
@@ -51,8 +54,9 @@ export default function ProductoList() {
     try {
       await api.patch(`/api/catalogos/productos/${editItem.id}`, {
         ...editData,
-        precio_base:  editData.precio_base !== '' ? parseFloat(editData.precio_base) : null,
-        stock_minimo: editData.stock_minimo !== '' ? parseFloat(editData.stock_minimo) : null,
+        precio_base:   editData.precio_base  !== '' ? parseFloat(editData.precio_base)  : null,
+        stock_minimo:  editData.stock_minimo !== '' ? parseFloat(editData.stock_minimo) : null,
+        codigo_barras: editData.codigo_barras || null,
       });
       setEditItem(null);
       setSel(null);
@@ -145,7 +149,7 @@ export default function ProductoList() {
         />
       </div>
 
-      <div style={{
+      <div className="list-layout" style={{
         display: 'grid', gridTemplateColumns: selected ? '1fr 320px' : '1fr',
         gap: 0, border: '1px solid var(--ink-200)', borderRadius: 6, overflow: 'hidden',
       }}>
@@ -180,6 +184,7 @@ export default function ProductoList() {
               ['IVA',                  selected.aplica_iva ? 'Sí' : 'No'],
               ['Stock mínimo',         selected.stock_minimo],
               ['Costo base (catálogo)', selected.precio_base != null ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(selected.precio_base) : '—'],
+              ['Código de barras',     selected.codigo_barras || '—'],
             ]} />
 
             {selected.proveedor_principal && (
@@ -237,6 +242,19 @@ export default function ProductoList() {
                   onChange={(e) => setEditData((d) => ({ ...d, stock_minimo: e.target.value }))} />
               </div>
             </div>
+            <div>
+              <div className="note" style={{ marginBottom: 4 }}>CÓDIGO DE BARRAS</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input className="input" style={{ flex: 1 }}
+                  value={editData.codigo_barras ?? ''}
+                  placeholder="Escanear o escribir…"
+                  onChange={(e) => setEditData((d) => ({ ...d, codigo_barras: e.target.value }))} />
+                <button type="button" className="btn" title="Escanear con cámara"
+                  onClick={() => setScanOpen(true)}>
+                  📷
+                </button>
+              </div>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox"
                 checked={editData.aplica_iva ?? false}
@@ -259,6 +277,15 @@ export default function ProductoList() {
           </div>
         </form>
       </Modal>
+
+      <BarcodeScanner
+        open={scanOpen}
+        onDetected={(code) => {
+          setEditData((d) => ({ ...d, codigo_barras: code }));
+          setScanOpen(false);
+        }}
+        onClose={() => setScanOpen(false)}
+      />
     </div>
   );
 }

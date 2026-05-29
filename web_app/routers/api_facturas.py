@@ -104,11 +104,13 @@ async def listar(
                    f.metodo_pago, f.moneda, f.uuid,
                    COUNT(fc.cotizacion_id)  AS num_cotizaciones,
                    (SELECT id FROM compras WHERE factura_xml_id = f.id LIMIT 1) AS compra_id,
-                   COALESCE(f.cancelada, FALSE) AS cancelada
+                   COALESCE(f.cancelada, FALSE) AS cancelada,
+                   COALESCE(rs.nombre, '—') AS razon_social_nombre
             FROM facturas f
             LEFT JOIN factura_cotizaciones fc ON fc.factura_id = f.id
+            LEFT JOIN razones_sociales rs ON rs.id = f.razon_social_id
             {filtro}
-            GROUP BY f.id
+            GROUP BY f.id, rs.nombre
             ORDER BY f.fecha_timbrado DESC NULLS LAST, f.id DESC
             LIMIT {POR_PAGINA} OFFSET {offset}
         """, params or None)

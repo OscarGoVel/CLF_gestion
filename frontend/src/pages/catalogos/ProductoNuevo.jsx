@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
 import { useFetch } from '../../hooks/useFetch';
 import { toast } from '../../lib/toast';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 
 const UNIDADES = ['pza', 'kg', 'lt', 'mt', 'cja', 'par', 'set', 'srv'];
 
@@ -21,10 +22,12 @@ export default function ProductoNuevo() {
     stock_minimo: '',
     clave_sat: '',
     clave_unidad_sat: '',
+    codigo_barras: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [scanOpen, setScanOpen] = useState(false);
 
   const { data: catData } = useFetch('/api/catalogos/categorias');
   const categorias    = catData?.categorias    ?? [];
@@ -73,6 +76,7 @@ export default function ProductoNuevo() {
         stock_minimo:     form.stock_minimo !== '' ? parseFloat(form.stock_minimo) : 0,
         clave_sat:        form.clave_sat.trim() || null,
         clave_unidad_sat: form.clave_unidad_sat.trim() || null,
+        codigo_barras:    form.codigo_barras.trim() || null,
       });
       toast.success('Producto creado');
       navigate('/inventario/productos');
@@ -144,6 +148,21 @@ export default function ProductoNuevo() {
                   placeholder="P-001, SKU-XXX…"
                 />
                 {fieldErrors.codigo && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 3 }}>{fieldErrors.codigo}</div>}
+              </div>
+            </div>
+            <div>
+              <div className="note" style={{ marginBottom: 4 }}>CÓDIGO DE BARRAS</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  className="input" style={{ flex: 1 }}
+                  value={form.codigo_barras}
+                  onChange={(e) => set('codigo_barras', e.target.value)}
+                  placeholder="Escanear o escribir…"
+                />
+                <button type="button" className="btn" title="Escanear con cámara"
+                  onClick={() => setScanOpen(true)}>
+                  📷
+                </button>
               </div>
             </div>
           </div>
@@ -280,6 +299,12 @@ export default function ProductoNuevo() {
 
         </div>
       </form>
+
+      <BarcodeScanner
+        open={scanOpen}
+        onDetected={(code) => { set('codigo_barras', code); setScanOpen(false); }}
+        onClose={() => setScanOpen(false)}
+      />
     </div>
   );
 }

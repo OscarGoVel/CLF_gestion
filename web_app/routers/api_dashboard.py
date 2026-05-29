@@ -5,8 +5,9 @@ GET /api/dashboard — KPIs y bloques por rol para el SPA React.
 """
 
 from decimal import Decimal
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
+from typing import Optional
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
@@ -28,7 +29,10 @@ def _rows(cur):
 
 
 @router.get("")
-async def get_dashboard(user: dict = Depends(get_usuario_api)):
+async def get_dashboard(
+    razon_social_id: Optional[int] = Query(None),
+    user: dict = Depends(get_usuario_api),
+):
     rol = user.get("rol", "")
     empresa_db = user["empresa_db"]
 
@@ -36,10 +40,15 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
     bloques: dict = {}
     proximos_vencer: list = []
 
+    # fragmentos SQL reutilizables para filtrar por RS
+    rs_plain = "AND razon_social_id = %s" if razon_social_id else ""
+    rs_c     = "AND c.razon_social_id = %s" if razon_social_id else ""
+    rsp      = (razon_social_id,) if razon_social_id else ()
+
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
 
         if rol in ("Administrador", "Operador"):
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     COALESCE(SUM(total) FILTER (WHERE estado IN (
                         'Programada','Parcialmente Entregada',
@@ -54,7 +63,8 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                     COUNT(*) FILTER (WHERE estado = 'Pendiente')         AS num_pendientes,
                     COUNT(*) FILTER (WHERE estado = 'Programada')        AS num_programadas
                 FROM cotizaciones
-            """)
+                WHERE TRUE {rs_plain}
+            """, rsp)
             r = cur.fetchone()
             kpis = {
                 "monto_vendido":    _serial(r[0]),
@@ -64,19 +74,20 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
             }
 
             # sin_costo_real: entregadas sin compra vinculada
-            cur.execute("""
+            cur.execute(f"""
                 SELECT COUNT(DISTINCT id)
                 FROM cotizaciones
                 WHERE estado IN ('Entregada','Facturada','Pagada')
+                  {rs_plain}
                   AND NOT EXISTS (
                       SELECT 1 FROM compra_detalle_cotizacion
                       WHERE cotizacion_id = cotizaciones.id
                   )
-            """)
+            """, rsp)
             kpis["sin_costo_real"] = cur.fetchone()[0]
 
             # Aging de pendiente_cobro por antigüedad desde fecha_entrega
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     COALESCE(SUM(total - COALESCE(monto_pagado,0)) FILTER (
                         WHERE fecha_entrega IS NOT NULL
@@ -97,7 +108,8 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 FROM cotizaciones
                 WHERE estado IN ('Programada','Parcialmente Entregada','Entregada','Facturada')
                   AND (total - COALESCE(monto_pagado,0)) > 0.01
-            """)
+                  {rs_plain}
+            """, rsp)
             ar = cur.fetchone()
             kpis["aging"] = {
                 "dias_0_30":   _serial(ar[0]),
@@ -107,33 +119,35 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
             }
 
             # Comercial: sin respuesta + sin OC
-            cur.execute("""
+            cur.execute(f"""
                 SELECT c.id, c.folio, c.fecha,
                        COALESCE(cl.nombre_comercial,'—') AS cliente, c.total
                 FROM cotizaciones c
                 LEFT JOIN clientes cl ON cl.id = c.cliente_id
                 WHERE c.estado = 'Pendiente'
                   AND c.fecha < CURRENT_DATE - INTERVAL '15 days'
+                  {rs_c}
                 ORDER BY c.fecha ASC
                 LIMIT 20
-            """)
+            """, rsp)
             sin_respuesta = _rows(cur)
 
-            cur.execute("""
+            cur.execute(f"""
                 SELECT c.id, c.folio, c.fecha,
                        COALESCE(cl.nombre_comercial,'—') AS cliente, c.total
                 FROM cotizaciones c
                 LEFT JOIN clientes cl ON cl.id = c.cliente_id
                 WHERE c.estado = 'Programada'
                   AND (c.orden_compra IS NULL OR c.orden_compra = '')
+                  {rs_c}
                 ORDER BY c.fecha ASC
                 LIMIT 20
-            """)
+            """, rsp)
             sin_oc = _rows(cur)
             bloques["comercial"] = {"sin_respuesta": sin_respuesta, "sin_oc": sin_oc}
 
         if rol in ("Administrador", "Operador", "Almacenista"):
-            cur.execute("""
+            cur.execute(f"""
                 SELECT DISTINCT c.id, c.folio, c.fecha_entrega,
                        COALESCE(cl.nombre_comercial,'—') AS cliente, c.total
                 FROM cotizaciones c
@@ -142,28 +156,30 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 JOIN productos p ON p.id = cd.producto_id
                 WHERE c.estado = 'Programada'
                   AND cd.cantidad > COALESCE(p.stock_actual, 0)
+                  {rs_c}
                 ORDER BY c.fecha_entrega ASC NULLS LAST
                 LIMIT 20
-            """)
+            """, rsp)
             sin_stock = _rows(cur)
 
-            cur.execute("""
+            cur.execute(f"""
                 SELECT c.id, c.folio, c.fecha_entrega,
                        COALESCE(cl.nombre_comercial,'—') AS cliente,
                        c.total, c.estado
                 FROM cotizaciones c
                 LEFT JOIN clientes cl ON cl.id = c.cliente_id
                 WHERE c.estado IN ('Programada','Parcialmente Entregada')
+                  {rs_c}
                 ORDER BY c.fecha_entrega ASC NULLS LAST
                 LIMIT 20
-            """)
+            """, rsp)
             entregas_pendientes = _rows(cur)
             bloques["logistico"] = {
                 "sin_stock": sin_stock,
                 "entregas_pendientes": entregas_pendientes,
             }
 
-            cur.execute("""
+            cur.execute(f"""
                 SELECT c.id, c.folio, c.estado,
                        COALESCE(cl.nombre_comercial,'—') AS cliente,
                        c.total, c.fecha_entrega::text AS fecha_entrega,
@@ -173,13 +189,14 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 WHERE c.estado IN ('Programada', 'Parcialmente Entregada')
                   AND c.fecha_entrega IS NOT NULL
                   AND c.fecha_entrega::date <= CURRENT_DATE + INTERVAL '14 days'
+                  {rs_c}
                 ORDER BY c.fecha_entrega::date ASC
                 LIMIT 15
-            """)
+            """, rsp)
             proximos_vencer = _rows(cur)
 
         if rol == "Administrador":
-            cur.execute("""
+            cur.execute(f"""
                 SELECT c.id, c.folio, c.fecha,
                        COALESCE(cl.nombre_comercial,'—') AS cliente,
                        c.total, COALESCE(c.monto_pagado, 0) AS monto_pagado
@@ -187,23 +204,25 @@ async def get_dashboard(user: dict = Depends(get_usuario_api)):
                 LEFT JOIN clientes cl ON cl.id = c.cliente_id
                 WHERE c.estado = 'Entregada'
                   AND (c.monto_pagado IS NULL OR c.monto_pagado < c.total)
+                  {rs_c}
                   AND EXISTS (
                       SELECT 1 FROM facturas f WHERE f.cotizacion_id = c.id
                   )
                 ORDER BY c.fecha ASC
                 LIMIT 20
-            """)
+            """, rsp)
             facturas_sin_pago = _rows(cur)
             bloques["administrativo"] = {"facturas_sin_pago": facturas_sin_pago}
 
         # Embudo comercial: conteo y monto por estado (excluye Cancelada)
-        cur.execute("""
+        cur.execute(f"""
             SELECT estado, COUNT(*) AS cnt,
                    COALESCE(SUM(total), 0) AS monto
             FROM cotizaciones
             WHERE estado != 'Cancelada'
+              {rs_plain}
             GROUP BY estado
-        """)
+        """, rsp)
         _ORDEN = ['Borrador','Pendiente','Programada','Parcialmente Entregada',
                   'Entregada','Facturada','Pagada']
         _por_estado = {r[0]: {"count": r[1], "monto": _serial(r[2])} for r in cur.fetchall()}

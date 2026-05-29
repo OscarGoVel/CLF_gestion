@@ -120,10 +120,12 @@ async def listar(
                 WHEN cxp.fecha_vencimiento IS NOT NULL
                      AND cxp.fecha_vencimiento <= %s THEN 'proximo'
                 ELSE 'ok'
-            END                                    AS alerta
+            END                                    AS alerta,
+            COALESCE(rs.nombre, '—')               AS razon_social_nombre
         FROM cuentas_por_pagar cxp
         JOIN proveedores prov ON prov.id = cxp.proveedor_id
         LEFT JOIN compras comp ON comp.id = cxp.compra_id
+        LEFT JOIN razones_sociales rs ON rs.id = cxp.razon_social_id
         WHERE {" AND ".join(where)}
         ORDER BY
             CASE WHEN cxp.estado = 'Pagada' THEN 1 ELSE 0 END,

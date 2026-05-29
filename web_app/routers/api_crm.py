@@ -6,7 +6,7 @@ web_app/routers/api_crm.py
 
 from decimal import Decimal
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from web_app.database import get_pool_empresa
@@ -155,6 +155,33 @@ async def listar_plantillas(user: dict = Depends(get_usuario_api)):
             ORDER BY nombre
         """)
         return JSONResponse({"plantillas": _rows(cur)})
+
+
+# ── Imágenes de plantillas ────────────────────────────────────────────────────
+
+@router.post("/plantillas/imagenes", status_code=201)
+async def subir_imagen_plantilla(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_usuario_api),
+):
+    from core.crm.imagenes import subir_imagen
+    from web_app.config import settings
+    contenido = await file.read()
+    try:
+        url = subir_imagen(
+            contenido, file.filename or "imagen",
+            user["empresa_db"], settings.GCS_IMAGES_BUCKET,
+        )
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(422, str(e))
+    return JSONResponse({"url": url}, status_code=201)
+
+
+@router.get("/plantillas/imagenes")
+async def listar_imagenes_plantillas(user: dict = Depends(get_usuario_api)):
+    from core.crm.imagenes import listar_imagenes
+    from web_app.config import settings
+    return JSONResponse({"imagenes": listar_imagenes(user["empresa_db"], settings.GCS_IMAGES_BUCKET)})
 
 
 @router.get("/plantillas/{plantilla_id}")

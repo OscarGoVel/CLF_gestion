@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
@@ -156,6 +156,8 @@ function PlantillaModal({ initial, onClose, onSaved }) {
   const [html,     setHtml]     = useState(initial?.html_body ?? '');
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
+  const [showImgs, setShowImgs] = useState(false);
+  const textareaRef = useRef(null);
 
   const HTML_STARTER = `<!DOCTYPE html>
 <html>
@@ -224,18 +226,41 @@ function PlantillaModal({ initial, onClose, onSaved }) {
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 500 }}>HTML del correo</label>
-              {!html && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                {!html && (
+                  <button type="button" className="btn" style={{ padding: '2px 10px', fontSize: 12 }}
+                    onClick={() => setHtml(HTML_STARTER)}>Insertar plantilla base</button>
+                )}
                 <button type="button" className="btn" style={{ padding: '2px 10px', fontSize: 12 }}
-                  onClick={() => setHtml(HTML_STARTER)}>Insertar plantilla base</button>
-              )}
+                  onClick={() => setShowImgs(v => !v)}>
+                  {showImgs ? 'Ocultar imágenes' : 'Imágenes'}
+                </button>
+              </div>
             </div>
             <textarea
+              ref={textareaRef}
               className="input"
               style={{ width: '100%', minHeight: 280, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
               value={html}
               onChange={e => setHtml(e.target.value)}
               placeholder="HTML del correo. Usa {{nombre_comercial}}, {{contacto}}, etc."
             />
+            {showImgs && (
+              <ImagenUploader
+                onInsert={(url) => {
+                  const ta = textareaRef.current;
+                  const tag = `<img src="${url}" alt="" style="max-width:100%">`;
+                  if (!ta) { setHtml(h => h + tag); return; }
+                  const start = ta.selectionStart;
+                  const end   = ta.selectionEnd;
+                  setHtml(h => h.slice(0, start) + tag + h.slice(end));
+                  requestAnimationFrame(() => {
+                    ta.focus();
+                    ta.setSelectionRange(start + tag.length, start + tag.length);
+                  });
+                }}
+              />
+            )}
             <div style={{ fontSize: 11, color: 'var(--ink-400)', marginTop: 4 }}>
               Variables disponibles: {'{{nombre_comercial}} {{contacto}} {{razon_social}} {{rfc}} {{email}} {{telefono}}'}
             </div>
@@ -247,6 +272,73 @@ function PlantillaModal({ initial, onClose, onSaved }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ImagenUploader({ onInsert }) {
+  const { data, loading, refetch } = useFetch('/api/comercial/crm/plantillas/imagenes');
+  const imagenes   = data?.imagenes ?? [];
+  const [uploading, setUploading] = useState(false);
+  const inputRef   = useRef(null);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const r = await api.upload('/api/comercial/crm/plantillas/imagenes', form);
+      toast.success('Imagen subida');
+      refetch();
+      onInsert(r.url);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 8, padding: 12, background: '#f8fafc',
+                  border: '1px solid var(--ink-100)', borderRadius: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-600)' }}>
+          Imágenes disponibles
+        </span>
+        <button type="button" className="btn btn-primary"
+          style={{ padding: '2px 10px', fontSize: 12 }}
+          disabled={uploading} onClick={() => inputRef.current?.click()}>
+          {uploading ? 'Subiendo…' : 'Subir imagen'}
+        </button>
+        <input ref={inputRef} type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+          style={{ display: 'none' }} onChange={handleFile} />
+      </div>
+      {loading && <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>Cargando…</div>}
+      {!loading && imagenes.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>
+          Sin imágenes — sube una para insertarla en la plantilla.
+        </div>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 160, overflowY: 'auto' }}>
+        {imagenes.map(img => (
+          <div key={img.url} title={`${img.nombre} (${img.size_kb} KB) — clic para insertar`}
+            style={{ cursor: 'pointer', border: '1px solid var(--ink-100)',
+                     borderRadius: 4, padding: 4, background: '#fff' }}
+            onClick={() => onInsert(img.url)}>
+            <img src={img.url} alt={img.nombre}
+              style={{ width: 64, height: 48, objectFit: 'contain', display: 'block' }} />
+            <span style={{ fontSize: 10, color: 'var(--ink-400)', maxWidth: 70, display: 'block',
+                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {img.nombre}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

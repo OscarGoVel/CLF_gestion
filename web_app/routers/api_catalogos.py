@@ -184,7 +184,7 @@ async def listar_productos(
         cur.execute(f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_medida,
                    p.stock_actual, p.stock_minimo, p.precio_base,
-                   p.aplica_iva, p.maneja_lotes,
+                   p.aplica_iva, p.maneja_lotes, p.codigo_barras,
                    cat.nombre  AS categoria,
                    sub.nombre  AS subcategoria,
                    COALESCE(AVG(cd.costo_unitario), p.precio_base, 0) AS costo_prom,
@@ -341,9 +341,9 @@ async def editar_producto(producto_id: int, request: Request, user: dict = Depen
     if user.get("rol") not in ("Administrador", "Operador"):
         raise HTTPException(status_code=403, detail="Sin permiso")
     body = await request.json()
-    allowed = {"nombre", "codigo", "unidad_medida", "precio_base", "precio_venta", "stock_minimo", "aplica_iva", "maneja_lotes"}
+    allowed = {"nombre", "codigo", "unidad_medida", "precio_base", "precio_venta", "stock_minimo", "aplica_iva", "maneja_lotes", "codigo_barras"}
     data = {k: v for k, v in body.items() if k in allowed}
-    for str_field in ("nombre", "codigo", "unidad_medida"):
+    for str_field in ("nombre", "codigo", "unidad_medida", "codigo_barras"):
         if str_field in data:
             data[str_field] = (data[str_field] or "").strip() or None
     if "nombre" in data and not data["nombre"]:
@@ -512,6 +512,7 @@ async def crear_producto(request: Request, user: dict = Depends(get_usuario_api)
     unidad_medida = (body.get("unidad_medida") or "").strip() or None
     clave_sat = (body.get("clave_sat") or "").strip() or None
     clave_unidad_sat = (body.get("clave_unidad_sat") or "").strip() or None
+    codigo_barras = (body.get("codigo_barras") or "").strip() or None
     aplica_iva = 1 if body.get("aplica_iva") else 0
 
     try:
@@ -545,15 +546,15 @@ async def crear_producto(request: Request, user: dict = Depends(get_usuario_api)
             INSERT INTO productos
             (nombre, codigo, descripcion, categoria_id, subcategoria_id,
              unidad_medida, precio_base, aplica_iva, stock_minimo,
-             clave_sat, clave_unidad_sat, stock_actual)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
+             clave_sat, clave_unidad_sat, codigo_barras, stock_actual)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
             RETURNING id, nombre, codigo, descripcion, categoria_id, subcategoria_id,
                       unidad_medida, precio_base, aplica_iva, stock_minimo,
-                      clave_sat, clave_unidad_sat, stock_actual
+                      clave_sat, clave_unidad_sat, codigo_barras, stock_actual
         """, (
             nombre, codigo, descripcion, categoria_id, subcategoria_id,
             unidad_medida, precio_base, aplica_iva, stock_minimo,
-            clave_sat, clave_unidad_sat
+            clave_sat, clave_unidad_sat, codigo_barras
         ))
         row = cur.fetchone()
         new_id = row[0]

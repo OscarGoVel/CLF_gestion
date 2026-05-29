@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
 import { KpiGrid } from '../components/KpiCard';
+import { useRazonSocial } from '../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 
@@ -34,10 +35,15 @@ function PendientesSection({ titulo, items, urgencia, cta, navigate }) {
 }
 
 export default function Dashboard() {
-  const { data, loading } = useFetch('/api/dashboard');
+  const { activeRS, razonSociales } = useRazonSocial();
+  const rsParam = activeRS ? `?razon_social_id=${activeRS}` : '';
+  const { data, loading } = useFetch(`/api/dashboard${rsParam}`, [activeRS]);
   const { data: lotesData } = useFetch('/api/inventario/stock/lotes/alertas');
   const navigate = useNavigate();
   const lotesAlertas = lotesData?.alertas ?? [];
+  const rsNombre = activeRS
+    ? (razonSociales.find(rs => rs.id === activeRS)?.nombre ?? '')
+    : 'Todas las RS';
 
   const kpis    = data?.kpis ?? {};
   const bloques = data?.bloques ?? {};
@@ -58,7 +64,7 @@ export default function Dashboard() {
         <div>
           <div className="page-title">Resumen del día</div>
           <div className="page-sub">
-            {hoy} · {pendientes.length} pendientes · CLF
+            {hoy} · {pendientes.length} pendientes · {rsNombre}
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => navigate('/comercial/cotizaciones/nueva')}>

@@ -41,7 +41,9 @@ class Settings:
     CRM_BASE_URL:     str = os.environ.get("CRM_BASE_URL",   "https://logos-gestion.web.app")
 
     # Almacenamiento Cloud (XMLs de facturas)
-    GCS_XML_BUCKET: str = os.environ.get("GCS_XML_BUCKET", "")
+    GCS_XML_BUCKET:    str = os.environ.get("GCS_XML_BUCKET",    "")
+    # Almacenamiento Cloud (imágenes CRM)
+    GCS_IMAGES_BUCKET: str = os.environ.get("GCS_IMAGES_BUCKET", "")
 
     # Red
     HOST:       str = os.environ.get("CLF_HOST", "0.0.0.0")
