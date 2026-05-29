@@ -429,6 +429,8 @@ async def importar_plantilla(
     matched: list[dict] = []
     unmatched: list[dict] = []
 
+    _SIMILARITY_THRESHOLD = 0.30
+
     empresa_db = user["empresa_db"]
     with get_pool_empresa(empresa_db).conexion() as (_, cur):
         for fila in filas:
@@ -436,14 +438,20 @@ async def importar_plantilla(
             cur.execute("""
                 SELECT p.id, p.nombre, p.unidad_medida,
                        COALESCE(p.precio_venta, p.precio_base, 0) AS precio,
-                       p.aplica_iva
+                       p.aplica_iva,
+                       GREATEST(
+                           word_similarity(%s, p.nombre),
+                           CASE WHEN p.codigo ILIKE %s THEN 1.0 ELSE 0.0 END
+                       ) AS score
                 FROM productos p
-                WHERE p.nombre ILIKE %s OR p.codigo ILIKE %s
-                ORDER BY p.nombre
+                WHERE p.nombre ILIKE %s
+                   OR p.codigo ILIKE %s
+                   OR word_similarity(%s, p.nombre) > %s
+                ORDER BY score DESC
                 LIMIT 1
-            """, (desc_norm, desc_norm))
+            """, (desc_norm, desc_norm, f"%{desc_norm}%", desc_norm, desc_norm, _SIMILARITY_THRESHOLD))
             row = cur.fetchone()
-            if row:
+            if row and row[5] >= _SIMILARITY_THRESHOLD:
                 matched.append({
                     "descripcion_csv": fila["descripcion_csv"],
                     "producto_id":     row[0],
@@ -452,6 +460,7 @@ async def importar_plantilla(
                     "cantidad":        fila["cantidad"],
                     "precio":          _serial(row[3]),
                     "aplica_iva":      bool(row[4]),
+                    "score":           round(float(row[5]), 2),
                 })
             else:
                 unmatched.append({
@@ -501,10 +510,14 @@ async def buscar_producto(
             FROM productos p
             LEFT JOIN producto_proveedor pp ON pp.producto_id = p.id AND pp.es_principal = 1
             LEFT JOIN proveedores prov ON prov.id = pp.proveedor_id
-            WHERE p.nombre ILIKE %s OR p.codigo ILIKE %s
-            ORDER BY p.nombre
+            WHERE p.nombre ILIKE %s
+               OR p.codigo ILIKE %s
+               OR word_similarity(%s, p.nombre) > 0.25
+            ORDER BY
+                word_similarity(%s, p.nombre) DESC,
+                p.nombre
             LIMIT 12
-        """, (f"%{q}%", f"%{q}%"))
+        """, (f"%{q}%", f"%{q}%", q, q))
         resultados = _rows(cur)
     return JSONResponse({"resultados": resultados})
 

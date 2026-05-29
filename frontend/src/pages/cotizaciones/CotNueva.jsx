@@ -351,7 +351,7 @@ export default function CotNueva() {
       const data = await api.upload('/api/comercial/cotizaciones/importar-plantilla', formData);
       const mappings = {};
       (data.unmatched ?? []).forEach((_, idx) => { mappings[idx] = null; });
-      setImportModal({ matched: data.matched ?? [], unmatched: data.unmatched ?? [], mappings });
+      setImportModal({ matched: data.matched ?? [], unmatched: data.unmatched ?? [], mappings, matchedOverrides: {} });
     } catch (err) {
       setImportError(err.message ?? 'Error al procesar el archivo.');
     }
@@ -361,44 +361,32 @@ export default function CotNueva() {
     setImportModal((m) => ({ ...m, mappings: { ...m.mappings, [idx]: value } }));
   };
 
+  const setMatchedOverride = (idx, value) => {
+    setImportModal((m) => ({ ...m, matchedOverrides: { ...m.matchedOverrides, [idx]: value } }));
+  };
+
   const handleConfirmImport = () => {
-    const { matched, unmatched, mappings } = importModal;
+    const { matched, unmatched, mappings, matchedOverrides = {} } = importModal;
     const nuevas = [];
-    for (const m of matched) {
-      nuevas.push({
-        _id: _nextId++,
-        producto_id: m.producto_id,
-        descripcion: m.nombre_catalogo,
-        cantidad: m.cantidad,
-        precio_unitario: m.precio ?? '',
-        aplica_iva: m.aplica_iva ?? true,
-        no_catalogado: false,
-      });
+    for (let i = 0; i < matched.length; i++) {
+      const m = matched[i];
+      const ov = matchedOverrides[i];
+      if (ov?.tipo === 'catalogo') {
+        nuevas.push({ _id: _nextId++, producto_id: ov.producto_id, descripcion: ov.nombre, cantidad: m.cantidad, precio_unitario: ov.precio ?? '', aplica_iva: ov.aplica_iva ?? true, no_catalogado: false });
+      } else if (ov?.tipo === 'libre') {
+        nuevas.push({ _id: _nextId++, producto_id: null, descripcion: m.descripcion_csv, cantidad: m.cantidad, precio_unitario: '', aplica_iva: true, no_catalogado: true });
+      } else {
+        nuevas.push({ _id: _nextId++, producto_id: m.producto_id, descripcion: m.nombre_catalogo, cantidad: m.cantidad, precio_unitario: m.precio ?? '', aplica_iva: m.aplica_iva ?? true, no_catalogado: false });
+      }
     }
     for (let idx = 0; idx < unmatched.length; idx++) {
       const u = unmatched[idx];
       const mp = mappings[idx];
-      if (!mp) continue; // saltamos los no mapeados
+      if (!mp) continue;
       if (mp.tipo === 'catalogo') {
-        nuevas.push({
-          _id: _nextId++,
-          producto_id: mp.producto_id,
-          descripcion: mp.nombre,
-          cantidad: u.cantidad,
-          precio_unitario: mp.precio ?? '',
-          aplica_iva: mp.aplica_iva ?? true,
-          no_catalogado: false,
-        });
+        nuevas.push({ _id: _nextId++, producto_id: mp.producto_id, descripcion: mp.nombre, cantidad: u.cantidad, precio_unitario: mp.precio ?? '', aplica_iva: mp.aplica_iva ?? true, no_catalogado: false });
       } else {
-        nuevas.push({
-          _id: _nextId++,
-          producto_id: null,
-          descripcion: u.descripcion_csv,
-          cantidad: u.cantidad,
-          precio_unitario: '',
-          aplica_iva: true,
-          no_catalogado: true,
-        });
+        nuevas.push({ _id: _nextId++, producto_id: null, descripcion: u.descripcion_csv, cantidad: u.cantidad, precio_unitario: '', aplica_iva: true, no_catalogado: true });
       }
     }
     setLineas((ls) => [...ls, ...nuevas]);
@@ -724,19 +712,73 @@ export default function CotNueva() {
                   <div className="eyebrow" style={{ marginBottom: 8 }}>
                     Encontrados ({importModal.matched.length})
                   </div>
-                  {importModal.matched.map((m, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '7px 10px', borderBottom: '1px solid var(--ink-100)', fontSize: 12.5,
-                    }}>
-                      <span style={{ color: 'var(--accent)' }}>✓</span>
-                      <span style={{ flex: 1, fontWeight: 500 }}>{m.nombre_catalogo}</span>
-                      <span style={{ color: 'var(--ink-500)' }}>Cant: {m.cantidad}</span>
-                      {m.precio > 0 && (
-                        <span style={{ color: 'var(--ink-500)', fontFamily: 'var(--mono)' }}>{fmt(m.precio)}</span>
-                      )}
-                    </div>
-                  ))}
+                  {importModal.matched.map((m, i) => {
+                    const ov = (importModal.matchedOverrides ?? {})[i];
+                    const score = m.score;
+                    const [scoreBg, scoreColor] = score === undefined ? ['#f3f4f6', '#6b7280']
+                      : score >= 0.75 ? ['#dcfce7', '#16a34a']
+                      : score >= 0.45 ? ['#fef9c3', '#ca8a04']
+                      : ['#ffedd5', '#ea580c'];
+                    if (ov === null) {
+                      return (
+                        <div key={i} style={{ padding: '10px 12px', borderBottom: '1px solid var(--ink-100)', background: '#fffbf2' }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-500)', marginBottom: 6 }}>
+                            CSV: <strong>{m.descripcion_csv}</strong>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ flex: 1 }}>
+                              <ProductoSearch
+                                linea={{ _id: `match-ovr-${i}`, no_catalogado: false, descripcion: m.descripcion_csv }}
+                                onSelect={(p) => setMatchedOverride(i, { tipo: 'catalogo', producto_id: p.id, nombre: p.nombre, precio: p.precio, aplica_iva: p.aplica_iva ?? true })}
+                                onChange={() => {}}
+                              />
+                            </div>
+                            <button className="btn btn-sm" onClick={() => setMatchedOverride(i, { tipo: 'libre' })}>Dejar como texto</button>
+                            <button className="btn btn-sm" onClick={() => setMatchedOverride(i, undefined)}>Restaurar</button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (ov?.tipo === 'catalogo') {
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderBottom: '1px solid var(--ink-100)', fontSize: 12.5, background: '#f7fdf7' }}>
+                          <span style={{ color: 'var(--accent)' }}>✓</span>
+                          <span style={{ flex: 1, fontWeight: 500 }}>{ov.nombre}</span>
+                          <span style={{ color: 'var(--ink-500)' }}>Cant: {m.cantidad}</span>
+                          <button className="btn btn-sm" onClick={() => setMatchedOverride(i, null)}>Cambiar</button>
+                        </div>
+                      );
+                    }
+                    if (ov?.tipo === 'libre') {
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderBottom: '1px solid var(--ink-100)', fontSize: 12.5 }}>
+                          <span style={{ color: 'var(--ink-400)' }}>T</span>
+                          <span style={{ flex: 1, fontStyle: 'italic', color: 'var(--ink-600)' }}>{m.descripcion_csv}</span>
+                          <button className="btn btn-sm" onClick={() => setMatchedOverride(i, undefined)}>Restaurar</button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={i} style={{ padding: '7px 10px', borderBottom: '1px solid var(--ink-100)', fontSize: 12.5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: 'var(--accent)' }}>✓</span>
+                          <span style={{ flex: 1 }}>
+                            <span style={{ color: 'var(--ink-500)', fontSize: 11 }}>{m.descripcion_csv}</span>
+                            <span style={{ color: 'var(--ink-300)', margin: '0 6px' }}>→</span>
+                            <span style={{ fontWeight: 500 }}>{m.nombre_catalogo}</span>
+                          </span>
+                          {score !== undefined && (
+                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: scoreBg, color: scoreColor, fontWeight: 600 }}>
+                              {Math.round(score * 100)}%
+                            </span>
+                          )}
+                          <span style={{ color: 'var(--ink-500)', fontSize: 11 }}>×{m.cantidad}</span>
+                          {m.precio > 0 && <span style={{ color: 'var(--ink-500)', fontFamily: 'var(--mono)', fontSize: 11 }}>{fmt(m.precio)}</span>}
+                          <button className="btn btn-sm" onClick={() => setMatchedOverride(i, null)}>Cambiar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -815,7 +857,10 @@ export default function CotNueva() {
               <button
                 className="btn btn-primary"
                 onClick={handleConfirmImport}
-                disabled={importModal.unmatched.some((_, idx) => importModal.mappings[idx] === null)}
+                disabled={
+                  importModal.unmatched.some((_, idx) => importModal.mappings[idx] === null) ||
+                  Object.values(importModal.matchedOverrides ?? {}).some((v) => v === null)
+                }
               >
                 Confirmar y agregar (
                   {importModal.matched.length + Object.values(importModal.mappings).filter(Boolean).length}

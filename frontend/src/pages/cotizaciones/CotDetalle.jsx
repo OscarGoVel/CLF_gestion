@@ -60,6 +60,7 @@ export default function CotDetalle() {
   const [tNotas,         setTNotas]         = useState('');
   const [guardandoTras,  setGuardandoTras]  = useState(false);
   const [modalVincular,  setModalVincular]  = useState(false);
+  const [creandoEstudio, setCreandoEstudio] = useState(false);
 
   const LABELS_ESTADO = {
     Programada: 'OC registrada — cotización programada',
@@ -112,13 +113,20 @@ export default function CotDetalle() {
     }
   };
 
-  const handleNuevoEstudio = () => {
-    // Usa form nativo para enviar con cookies de sesión (ruta Jinja)
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/abastecimiento/estudios/desde-cotizacion/${id}`;
-    document.body.appendChild(form);
-    form.submit();
+  const handleNuevoEstudio = async () => {
+    if (creandoEstudio) return;
+    setCreandoEstudio(true);
+    try {
+      const d = await api.post('/api/abastecimiento/estudios', {
+        nombre: `Estudio – ${cot.folio}`,
+        cotizacion_id: Number(id),
+        margen_pct: 0.35,
+      });
+      navigate(`/abastecimiento/estudios/${d.id}`);
+    } catch (e) {
+      toast.error(e.message ?? 'Error al crear estudio');
+      setCreandoEstudio(false);
+    }
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -597,17 +605,21 @@ export default function CotDetalle() {
                       </span>
                     </div>
                   </div>
-                  <a href={`/abastecimiento/estudios/${e.id}`}
-                     style={{ fontSize: 11, color: 'var(--primary)', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <button
+                    className="btn btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px' }}
+                    onClick={() => navigate(`/abastecimiento/estudios/${e.id}`)}
+                  >
                     Ver →
-                  </a>
+                  </button>
                 </div>
               );
             })}
             <div style={{ padding: '10px 14px', borderTop: estudios.length > 0 ? '1px solid var(--ink-100)' : 'none' }}>
               <button className="btn" onClick={handleNuevoEstudio}
-                      style={{ width: '100%', fontSize: 11 }}>
-                + Nuevo estudio de mercado
+                      style={{ width: '100%', fontSize: 11 }}
+                      disabled={creandoEstudio}>
+                {creandoEstudio ? 'Creando…' : '+ Nuevo estudio de mercado'}
               </button>
             </div>
           </div>
