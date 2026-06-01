@@ -76,7 +76,7 @@ function ProductoSearch({ linea, onSelect, onChange, onQuickAdd }) {
         value={linea.descripcion}
         onChange={(e) => onChange('descripcion', e.target.value)}
         placeholder="Descripción libre…"
-        style={{ fontStyle: 'italic', width: '100%' }}
+        style={{ fontStyle: 'italic', flex: 1, minWidth: 0 }}
       />
     );
   }
@@ -408,11 +408,8 @@ export default function CotNueva() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => navigate('/comercial/cotizaciones')}>Cancelar</button>
-          <button className="btn" onClick={() => handleGuardar('Borrador')} disabled={saving}>
-            Guardar borrador
-          </button>
           <button className="btn btn-primary" onClick={() => handleGuardar('Pendiente')} disabled={saving}>
-            {saving ? 'Guardando…' : 'Enviar al cliente'}
+            {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
       </div>
@@ -484,6 +481,16 @@ export default function CotNueva() {
                       onQuickAdd={(nombre) => setQuickAdd({ lineaId: l._id, nombre })}
                     />
                     {l.no_catalogado && <span className="qb-tag">Libre</span>}
+                    {l.no_catalogado && (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ fontSize: 11, padding: '1px 7px', color: 'var(--accent)', borderColor: 'var(--accent)', whiteSpace: 'nowrap' }}
+                        onClick={() => setQuickAdd({ lineaId: l._id, nombre: l.descripcion })}
+                      >
+                        + Catálogo
+                      </button>
+                    )}
                   </span>
                   <input
                     className="num"
@@ -571,11 +578,7 @@ export default function CotNueva() {
               <button className="btn btn-sm" onClick={() => setLineas((ls) => [...ls, newLine()])}>
                 + Agregar partida
               </button>
-              <button className="btn btn-sm" style={{ color: 'var(--ink-500)' }}
-                onClick={() => setLineas((ls) => [...ls, { ...newLine(), no_catalogado: true }])}>
-                + Descripción manual
-              </button>
-              <a href="/api/comercial/cotizaciones/plantilla-import"
+<a href="/api/comercial/cotizaciones/plantilla-import"
                  onClick={(e) => {
                    e.preventDefault();
                    const token = sessionStorage.getItem('clf_token');

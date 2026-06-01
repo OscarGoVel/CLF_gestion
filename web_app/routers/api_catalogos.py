@@ -371,6 +371,30 @@ async def editar_producto(producto_id: int, request: Request, user: dict = Depen
     return JSONResponse({"ok": True})
 
 
+def _crear_producto_minimo(cur, nombre: str, precio_base: float = 0.0) -> int:
+    """Inserta un producto mínimo con SKU GENGEN#### y devuelve su id.
+    Llamar dentro de un bloque conexion() activo; el commit lo hace el caller."""
+    prefix = "GENGEN"
+    cur.execute(
+        "SELECT codigo FROM productos WHERE codigo LIKE %s ORDER BY codigo DESC LIMIT 1",
+        (f"{prefix}%",),
+    )
+    ultimo = cur.fetchone()
+    try:
+        num = int(ultimo[0][len(prefix):]) + 1 if ultimo else 1
+    except Exception:
+        num = 1
+    codigo = f"{prefix}{num:04d}"
+    cur.execute(
+        """INSERT INTO productos (nombre, codigo, precio_base, stock_actual, aplica_iva,
+                                  precio_base_fecha)
+           VALUES (%s, %s, %s, 0, 1, CURRENT_DATE::TEXT)
+           RETURNING id""",
+        (nombre, codigo, precio_base),
+    )
+    return cur.fetchone()[0]
+
+
 @router.post("/productos/rapido", status_code=201)
 async def crear_producto_rapido(request: Request, user: dict = Depends(get_usuario_api)):
     body = await request.json()

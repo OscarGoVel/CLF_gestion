@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview } from '../../components/SidePreview';
 import { Modal } from '../../components/Modal';
@@ -52,6 +53,7 @@ function PresupuestoModal({ onClose }) {
         cotizacion_ids: selIds,
         insumos,
       });
+      toast.success('PDF descargado');
       onClose();
     } catch (e) {
       setError(e.message ?? 'Error al generar el PDF');

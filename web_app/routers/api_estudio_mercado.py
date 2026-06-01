@@ -12,6 +12,7 @@ from typing import Optional
 
 from web_app.database import get_pool_empresa
 from web_app.dependencies import get_usuario_api
+from web_app.routers.api_catalogos import _crear_producto_minimo
 
 router = APIRouter(prefix="/api/abastecimiento/estudios", tags=["api"])
 
@@ -130,6 +131,16 @@ class CotizacionProvIn(BaseModel):
 
 class MargenIn(BaseModel):
     margen_pct: float
+
+
+class VincularProductoIn(BaseModel):
+    producto_id: Optional[int] = None
+    crear: bool = False
+
+
+class EnviarOpcionesIn(BaseModel):
+    cotizacion_id: Optional[int] = None
+    item_ids: Optional[list[int]] = None
 
 
 # ── GET /api/estudio-mercado ──────────────────────────────────────────────────
@@ -367,6 +378,46 @@ async def marcar_ganador(cot_id: int, user: dict = Depends(get_usuario_api)):
     return {"ganador": nuevo_ganador}
 
 
+# ── PATCH /api/estudios/items/{item_id}/vincular-producto ────────────────────
+
+@router.patch("/items/{item_id}/vincular-producto")
+async def vincular_producto(
+    item_id: int, body: VincularProductoIn, user: dict = Depends(get_usuario_api)
+):
+    """Vincula un ítem de estudio a un producto del catálogo.
+    Modos:
+      { "producto_id": N }  → vincula al producto existente N
+      { "crear": true }     → auto-crea el producto usando nombre_articulo del ítem
+    """
+    with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        cur.execute(
+            "SELECT nombre_articulo, producto_id FROM estudio_mercado_items WHERE id = %s",
+            (item_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ítem no encontrado")
+        nombre_articulo, producto_id_actual = row
+
+        if body.crear:
+            producto_id = _crear_producto_minimo(cur, nombre_articulo)
+        elif body.producto_id:
+            cur.execute("SELECT id FROM productos WHERE id = %s", (body.producto_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Producto no encontrado en catálogo")
+            producto_id = body.producto_id
+        else:
+            raise HTTPException(status_code=422, detail="Proporciona producto_id o crear=true")
+
+        cur.execute(
+            "UPDATE estudio_mercado_items SET producto_id = %s WHERE id = %s",
+            (producto_id, item_id),
+        )
+        conn.commit()
+
+    return {"item_id": item_id, "producto_id": producto_id}
+
+
 # ── POST /api/estudios/{estudio_id}/aplicar-costos ───────────────────────────
 
 @router.post("/{estudio_id}/aplicar-costos")
@@ -379,61 +430,214 @@ async def aplicar_costos(estudio_id: int, user: dict = Depends(get_usuario_api))
 
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute(
-            "SELECT cotizacion_id FROM estudios_mercado WHERE id = %s", (estudio_id,)
+            "SELECT cotizacion_id, COALESCE(margen_pct, 0.35) FROM estudios_mercado WHERE id = %s",
+            (estudio_id,),
         )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Estudio no encontrado")
-        cotizacion_id = row[0]
+        cotizacion_id, margen_estudio = row[0], float(row[1])
 
         cur.execute("""
-            SELECT i.producto_id, i.nombre_articulo,
+            SELECT i.id AS item_id, i.producto_id, i.nombre_articulo,
                    c.precio_unitario, c.nombre_proveedor, c.proveedor_id
             FROM estudio_mercado_items i
             JOIN estudio_mercado_cotizaciones c ON c.item_id = i.id AND c.ganador = TRUE
-            WHERE i.estudio_id = %s AND i.producto_id IS NOT NULL
+            WHERE i.estudio_id = %s
         """, (estudio_id,))
         ganadores = _rows(cur)
 
         if not ganadores:
             raise HTTPException(
                 status_code=422,
-                detail="No hay ganadores con producto del catálogo. Marca al menos un ganador.",
+                detail="No hay ganadores marcados. Marca al menos un ganador.",
             )
+
+        # Auto-crear en catálogo los ítems sin producto_id
+        productos_creados: list[str] = []
+        for g in ganadores:
+            if g["producto_id"] is None:
+                nuevo_id = _crear_producto_minimo(
+                    cur, g["nombre_articulo"], float(g["precio_unitario"])
+                )
+                cur.execute(
+                    "UPDATE estudio_mercado_items SET producto_id = %s WHERE id = %s",
+                    (nuevo_id, g["item_id"]),
+                )
+                g["producto_id"] = nuevo_id
+                productos_creados.append(g["nombre_articulo"])
 
         hoy = _date.today().isoformat()
         actualizados = 0
         for g in ganadores:
             prod_id = g["producto_id"]
-            precio  = g["precio_unitario"]
+            costo   = float(g["precio_unitario"])
 
             cur.execute(
-                "SELECT COALESCE(precio_base, 0) FROM productos WHERE id = %s", (prod_id,)
-            )
-            old_precio = float((cur.fetchone() or [0])[0])
-
-            cur.execute(
-                "UPDATE productos SET precio_base = %s WHERE id = %s", (precio, prod_id)
+                "UPDATE productos SET precio_base = %s WHERE id = %s", (costo, prod_id)
             )
 
             cur.execute("""
                 INSERT INTO producto_precio_historial
                     (producto_id, precio, fecha, motivo, fuente, proveedor_id)
                 VALUES (%s, %s, %s, %s, 'estudio_mercado', %s)
-            """, (prod_id, precio, hoy,
+            """, (prod_id, costo, hoy,
                   f"Estudio de mercado #{estudio_id} — ganador: {g['nombre_proveedor']}",
                   g.get("proveedor_id")))
 
             if cotizacion_id:
                 cur.execute("""
-                    UPDATE cotizacion_detalle
-                    SET costo_snapshot = %s
-                    WHERE cotizacion_id = %s AND producto_id = %s
-                """, (precio, cotizacion_id, prod_id))
+                    SELECT cd.cantidad, COALESCE(p.aplica_iva, 0)
+                    FROM cotizacion_detalle cd
+                    LEFT JOIN productos p ON p.id = cd.producto_id
+                    WHERE cd.cotizacion_id = %s AND cd.producto_id = %s
+                """, (cotizacion_id, prod_id))
+                det = cur.fetchone()
+                if det:
+                    cantidad, aplica_iva = det
+                    costo_d   = Decimal(str(costo))
+                    precio_u  = (costo_d * (1 + Decimal(str(margen_estudio)))).quantize(Decimal("0.01"))
+                    sub       = (precio_u * Decimal(str(cantidad))).quantize(Decimal("0.01"))
+                    iva_val   = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if aplica_iva else Decimal("0")
+                    tot       = sub + iva_val
+                    margen_c  = round((float(precio_u) - costo) / float(precio_u) * 100, 4) if float(precio_u) > 0 else 0.0
+                    cur.execute("""
+                        UPDATE cotizacion_detalle
+                        SET costo_snapshot  = %s,
+                            precio_unitario = %s,
+                            subtotal        = %s,
+                            iva             = %s,
+                            total           = %s,
+                            margen_pct      = %s
+                        WHERE cotizacion_id = %s AND producto_id = %s
+                    """, (costo, float(precio_u), float(sub), float(iva_val), float(tot), margen_c,
+                           cotizacion_id, prod_id))
 
             actualizados += 1
 
-    return {"actualizados": actualizados}
+        if cotizacion_id:
+            cur.execute("""
+                UPDATE cotizaciones
+                SET subtotal = d.s, iva = d.i, total = d.t
+                FROM (
+                    SELECT COALESCE(SUM(subtotal), 0) s,
+                           COALESCE(SUM(iva),      0) i,
+                           COALESCE(SUM(total),    0) t
+                    FROM cotizacion_detalle WHERE cotizacion_id = %s
+                ) d
+                WHERE id = %s
+            """, (cotizacion_id, cotizacion_id))
+
+    return {"actualizados": actualizados, "productos_creados": productos_creados}
+
+
+# ── POST /api/estudios/{estudio_id}/enviar-opciones ─────────────────────────
+
+@router.post("/{estudio_id}/enviar-opciones", status_code=201)
+async def enviar_opciones(
+    estudio_id: int, body: EnviarOpcionesIn, user: dict = Depends(get_usuario_api)
+):
+    """Crea una línea nueva en la cotización por cada ítem del estudio con ganador marcado.
+    Útil para ofrecer varias marcas/opciones al cliente en la misma cotización.
+    Si body.cotizacion_id se omite, usa la cotización vinculada al estudio.
+    Si body.item_ids se omite, incluye todos los ítems con ganador marcado."""
+    from datetime import date as _date
+
+    with get_pool_empresa(user["empresa_db"]).conexion() as (conn, cur):
+        cur.execute(
+            "SELECT cotizacion_id, COALESCE(margen_pct, 0.35) FROM estudios_mercado WHERE id = %s",
+            (estudio_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Estudio no encontrado")
+        cot_id = body.cotizacion_id or row[0]
+        margen = float(row[1])
+
+        if not cot_id:
+            raise HTTPException(
+                status_code=422, detail="Proporciona cotizacion_id o vincula el estudio a una cotización"
+            )
+
+        # Verificar que la cotización existe
+        cur.execute("SELECT id FROM cotizaciones WHERE id = %s", (cot_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+        # Obtener ítems ganadores (filtrar por item_ids si se proporciona)
+        where_items = "AND i.id = ANY(%s)" if body.item_ids else ""
+        params = [estudio_id] + ([body.item_ids] if body.item_ids else [])
+        cur.execute(f"""
+            SELECT i.id AS item_id, i.producto_id, i.nombre_articulo, i.cantidad,
+                   c.precio_unitario, c.proveedor_id, c.nombre_proveedor
+            FROM estudio_mercado_items i
+            JOIN estudio_mercado_cotizaciones c ON c.item_id = i.id AND c.ganador = TRUE
+            WHERE i.estudio_id = %s {where_items}
+        """, params)
+        candidatos = _rows(cur)
+
+        if not candidatos:
+            raise HTTPException(status_code=422, detail="No hay ítems con ganador marcado.")
+
+        # Auto-crear productos para ítems sin catálogo
+        for c in candidatos:
+            if c["producto_id"] is None:
+                nuevo_id = _crear_producto_minimo(cur, c["nombre_articulo"], float(c["precio_unitario"]))
+                cur.execute(
+                    "UPDATE estudio_mercado_items SET producto_id = %s WHERE id = %s",
+                    (nuevo_id, c["item_id"]),
+                )
+                c["producto_id"] = nuevo_id
+
+        detalle_ids: list[int] = []
+        for c in candidatos:
+            prod_id = c["producto_id"]
+            costo_d = Decimal(str(c["precio_unitario"]))
+            precio_u = (costo_d * (1 + Decimal(str(margen)))).quantize(Decimal("0.01"))
+            cantidad = Decimal(str(c["cantidad"]))
+            sub = (precio_u * cantidad).quantize(Decimal("0.01"))
+
+            cur.execute(
+                "SELECT COALESCE(aplica_iva, 0), COALESCE(stock_actual, 0) FROM productos WHERE id = %s",
+                (prod_id,),
+            )
+            p_row = cur.fetchone()
+            aplica_iva = bool(p_row[0]) if p_row else False
+            stock = float(p_row[1]) if p_row else 0.0
+
+            iva_val = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if aplica_iva else Decimal("0")
+            tot = sub + iva_val
+            margen_c = round((float(precio_u) - float(costo_d)) / float(precio_u) * 100, 4) if float(precio_u) > 0 else 0.0
+            tiene_stock = stock >= float(cantidad)
+
+            cur.execute("""
+                INSERT INTO cotizacion_detalle
+                  (cotizacion_id, producto_id, cantidad, precio_unitario,
+                   subtotal, iva, total, tiene_stock, costo_snapshot, margen_pct)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                cot_id, prod_id, float(cantidad), float(precio_u),
+                float(sub), float(iva_val), float(tot),
+                1 if tiene_stock else 0, float(costo_d), margen_c,
+            ))
+            detalle_ids.append(cur.fetchone()[0])
+
+        # Recalcular totales del header
+        cur.execute("""
+            UPDATE cotizaciones
+            SET subtotal = d.s, iva = d.i, total = d.t
+            FROM (
+                SELECT COALESCE(SUM(subtotal), 0) s,
+                       COALESCE(SUM(iva),      0) i,
+                       COALESCE(SUM(total),    0) t
+                FROM cotizacion_detalle WHERE cotizacion_id = %s
+            ) d
+            WHERE id = %s
+        """, (cot_id, cot_id))
+        conn.commit()
+
+    return {"cotizacion_id": cot_id, "lineas_creadas": len(detalle_ids), "detalle_ids": detalle_ids}
 
 
 # ── POST /api/estudios/{estudio_id}/generar-compra ───────────────────────────
@@ -458,19 +662,33 @@ async def generar_compra(estudio_id: int, user: dict = Depends(get_usuario_api))
         cotizacion_id = row[0]
 
         cur.execute("""
-            SELECT i.producto_id, i.cantidad, i.nombre_articulo,
+            SELECT i.id AS item_id, i.producto_id, i.cantidad, i.nombre_articulo,
                    c.precio_unitario, c.proveedor_id, c.nombre_proveedor
             FROM estudio_mercado_items i
             JOIN estudio_mercado_cotizaciones c ON c.item_id = i.id AND c.ganador = TRUE
-            WHERE i.estudio_id = %s AND i.producto_id IS NOT NULL
+            WHERE i.estudio_id = %s
         """, (estudio_id,))
         ganadores = _rows(cur)
 
         if not ganadores:
             raise HTTPException(
                 status_code=422,
-                detail="No hay ganadores con producto del catálogo.",
+                detail="No hay ganadores marcados.",
             )
+
+        # Auto-crear en catálogo los ítems sin producto_id
+        productos_creados: list[str] = []
+        for g in ganadores:
+            if g["producto_id"] is None:
+                nuevo_id = _crear_producto_minimo(
+                    cur, g["nombre_articulo"], float(g["precio_unitario"])
+                )
+                cur.execute(
+                    "UPDATE estudio_mercado_items SET producto_id = %s WHERE id = %s",
+                    (nuevo_id, g["item_id"]),
+                )
+                g["producto_id"] = nuevo_id
+                productos_creados.append(g["nombre_articulo"])
 
         # Agrupar por proveedor (prov_id puede ser NULL si se capturó manual)
         por_proveedor: dict = {}
@@ -532,4 +750,4 @@ async def generar_compra(estudio_id: int, user: dict = Depends(get_usuario_api))
 
             compra_ids.append(compra_id)
 
-    return {"compra_ids": compra_ids, "compra_id": compra_ids[0]}
+    return {"compra_ids": compra_ids, "compra_id": compra_ids[0], "productos_creados": productos_creados}

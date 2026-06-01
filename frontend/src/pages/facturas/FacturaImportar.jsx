@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
@@ -158,6 +159,16 @@ export default function FacturaImportar() {
     setResults((r) => [...r, ...newResults]);
     setQueue([]);
     setProcessing(false);
+
+    const okCount  = newResults.filter((r) => !r.error).length;
+    const errCount = newResults.filter((r) => r.error).length;
+    if (errCount === 0) {
+      toast.success(`${okCount} factura${okCount !== 1 ? 's' : ''} importada${okCount !== 1 ? 's' : ''}`);
+    } else if (okCount === 0) {
+      toast.error(`${errCount} error${errCount !== 1 ? 'es' : ''} al importar`);
+    } else {
+      toast.warn(`${okCount} importada${okCount !== 1 ? 's' : ''}, ${errCount} con error`);
+    }
   }
 
   const ok = results.filter((r) => !r.error).length;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Modal } from '../../components/Modal';
 
@@ -45,10 +46,12 @@ export default function AdminUsuarios() {
     try {
       if (modal === 'nuevo') {
         await api.post('/api/ajustes/usuarios', form);
+        toast.success('Usuario creado');
       } else {
         const body = { nombre: form.nombre, rol: form.rol };
         if (form.password) body.password = form.password;
         await api.put(`/api/ajustes/usuarios/${modal.id}`, body);
+        toast.success('Cambios guardados');
       }
       cerrar();
       refetch();
@@ -63,6 +66,7 @@ export default function AdminUsuarios() {
     setToggling(u.id);
     try {
       await api.patch(`/api/ajustes/usuarios/${u.id}/activo`, {});
+      toast.success(u.activo ? `${u.nombre} desactivado` : `${u.nombre} activado`);
       refetch();
     } finally {
       setToggling(null);

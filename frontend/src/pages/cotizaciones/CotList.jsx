@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
+import { toast } from '../../lib/toast';
 import { exportCSV } from '../../lib/exportCSV';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Stepper, buildSteps } from '../../components/Stepper';
@@ -66,7 +67,7 @@ export default function CotList() {
   if (buscar) params.set('q', buscar);
   if (activeRS != null) params.set('razon_social_id', activeRS);
 
-  const { data, loading } = useFetch(`/api/comercial/cotizaciones?${params}`);
+  const { data, loading, refetch } = useFetch(`/api/comercial/cotizaciones?${params}`);
   const cotizaciones  = data?.cotizaciones   ?? [];
   const conteoEstado  = data?.conteo_estado  ?? {};
   const clientesLista = data?.clientes       ?? [];
@@ -93,8 +94,10 @@ export default function CotList() {
     setCancelando(true);
     try {
       await api.patch(`/api/comercial/cotizaciones/${confirmCancelarId}/cancelar`, {});
+      toast.success('Cotización cancelada');
       setConfirmCancelarId(null);
       if (selected === confirmCancelarId) setSelected(null);
+      refetch();
     } finally {
       setCancelando(false);
     }
