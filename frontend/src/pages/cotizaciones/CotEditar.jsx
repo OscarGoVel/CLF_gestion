@@ -250,7 +250,7 @@ export default function CotEditar() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: cotData, loading: loadingCot } = useFetch(`/api/comercial/cotizaciones/${id}`);
+  const { data: cotData, loading: loadingCot, refetch: refetchCot } = useFetch(`/api/comercial/cotizaciones/${id}`);
   const { data: clientesData } = useFetch('/api/catalogos/clientes');
   const clientes = clientesData?.clientes ?? [];
 
@@ -262,6 +262,15 @@ export default function CotEditar() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [quickAdd, setQuickAdd] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const dragItemRef = useRef(null);
+  const [estudios, setEstudios] = useState([]);
+  const [modalAplicar, setModalAplicar] = useState(null);
+  const [studyDetail, setStudyDetail] = useState(null);
+  const [loadingStudy, setLoadingStudy] = useState(false);
+  const [sinCatalogoItems, setSinCatalogoItems] = useState([]);
+  const [applyingEstudio, setApplyingEstudio] = useState(false);
 
   useEffect(() => {
     if (!cotData || initialized) return;
@@ -278,7 +287,13 @@ export default function CotEditar() {
       precio_unitario: p.precio_unitario ?? '',
       aplica_iva: Boolean(p.aplica_iva),
       no_catalogado: !p.producto_id || Boolean(p.pendiente_catalogo),
+      costo_promedio: null,
+      precio_desactualizado: false,
+      tiene_historial_compras: false,
+      dias_sin_actualizar: null,
+      proveedor_nombre: p.proveedor_nombre ?? null,
     })));
+    setEstudios(cotData.estudios ?? []);
     setInitialized(true);
   }, [cotData, initialized]);
 
@@ -300,6 +315,7 @@ export default function CotEditar() {
       descripcion: producto.nombre,
       precio_unitario: producto.precio ?? '',
       aplica_iva: producto.aplica_iva ?? true,
+      no_catalogado: false,
       costo_promedio: producto.costo_promedio ?? null,
       precio_desactualizado: producto.precio_desactualizado ?? false,
       tiene_historial_compras: producto.tiene_historial_compras ?? false,
@@ -311,8 +327,101 @@ export default function CotEditar() {
     setLineas((ls) => ls.filter((l) => l._id !== id));
   }, []);
 
+  const handleDragStart = useCallback((id, e) => {
+    dragItemRef.current = id;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(id));
+  }, []);
+
+  const handleDragOver = useCallback((id, e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragItemRef.current !== null && dragItemRef.current !== id) setDragOverId(id);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setDragOverId(null);
+  }, []);
+
+  const handleDrop = useCallback((id, e) => {
+    e.preventDefault();
+    if (dragItemRef.current === null || dragItemRef.current === id) {
+      setDragOverId(null);
+      return;
+    }
+    setLineas(ls => {
+      const arr = [...ls];
+      const fromIdx = arr.findIndex(l => l._id === dragItemRef.current);
+      const toIdx = arr.findIndex(l => l._id === id);
+      const [moved] = arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, moved);
+      return arr;
+    });
+    dragItemRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    dragItemRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  }, []);
+
   const noCatalogadas = lineas.filter((l) => l.no_catalogado).length;
   const folio = cotData?.cotizacion?.folio ?? '';
+  const estudiosAplicables = estudios.filter((e) => e.tiene_ganadores_aplicables);
+
+  async function openAplicarEstudio(estudio) {
+    setLoadingStudy(true);
+    setModalAplicar(estudio);
+    try {
+      const data = await api.get(`/api/abastecimiento/estudios/${estudio.id}`);
+      setStudyDetail(data);
+    } catch {
+      toast.error('No se pudo cargar el estudio');
+      setModalAplicar(null);
+    } finally {
+      setLoadingStudy(false);
+    }
+  }
+
+  async function handleAplicarConfirm() {
+    if (!modalAplicar) return;
+    setApplyingEstudio(true);
+    try {
+      const res = await api.post(`/api/abastecimiento/estudios/${modalAplicar.id}/actualizar-lineas`);
+      setModalAplicar(null);
+      setStudyDetail(null);
+      toast.success(`${res.actualizados} línea(s) actualizada(s)`);
+      if (res.sin_catalogo?.length > 0) {
+        setSinCatalogoItems(res.sin_catalogo.map((i) => ({ ...i, accion: 'libre' })));
+      } else {
+        setInitialized(false);
+        refetchCot();
+      }
+    } catch (e) {
+      toast.error(e.message ?? 'Error al aplicar estudio');
+    } finally {
+      setApplyingEstudio(false);
+    }
+  }
+
+  async function handleSinCatalogoItem(itemId, accion) {
+    setSinCatalogoItems((prev) => prev.map((i) => i.item_id === itemId ? { ...i, accion } : i));
+  }
+
+  async function handleSinCatalogoConfirm() {
+    const crear = sinCatalogoItems.filter((i) => i.accion === 'crear');
+    await Promise.all(crear.map((i) =>
+      api.patch(`/api/abastecimiento/estudios/items/${i.item_id}/vincular-producto`, { crear: true })
+        .catch(() => {})
+    ));
+    setSinCatalogoItems([]);
+    setInitialized(false);
+    refetchCot();
+  }
 
   async function handleGuardar() {
     if (!clienteId) { setError('Selecciona un cliente'); return; }
@@ -362,6 +471,107 @@ export default function CotEditar() {
           onConfirm={handleQuickAddConfirm}
         />
       )}
+
+      {/* Modal: aplicar estudio de mercado */}
+      {modalAplicar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 8, width: 620, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--ink-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Aplicar resultados: {modalAplicar.nombre}</h3>
+              <span style={{ cursor: 'pointer', fontSize: 20, color: 'var(--ink-400)', lineHeight: 1 }} onClick={() => { setModalAplicar(null); setStudyDetail(null); }}>×</span>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
+              {loadingStudy ? (
+                <div style={{ textAlign: 'center', color: 'var(--ink-400)', padding: 24 }}>Cargando estudio…</div>
+              ) : studyDetail ? (() => {
+                const ganadores = (studyDetail.items ?? []).filter((i) => i.ganador_proveedor);
+                if (ganadores.length === 0) return <div style={{ color: 'var(--ink-400)' }}>No hay ganadores marcados en este estudio.</div>;
+                return (
+                  <>
+                    <p style={{ fontSize: 12.5, color: 'var(--ink-500)', marginBottom: 12 }}>
+                      Las siguientes líneas serán actualizadas con la descripción y precio del proveedor ganador.
+                    </p>
+                    <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--ink-50)', textAlign: 'left' }}>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Artículo solicitado</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Descripción ganador</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600 }}>Proveedor</th>
+                          <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>Precio</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ganadores.map((item) => {
+                          const cot = (item.cotizaciones ?? []).find((c) => c.ganador);
+                          const margen = studyDetail.estudio?.margen_pct ?? 0.35;
+                          const precio = cot ? cot.precio_unitario * (1 + margen) : null;
+                          const descGanador = cot?.descripcion_articulo || item.nombre_articulo;
+                          return (
+                            <tr key={item.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
+                              <td style={{ padding: '6px 8px', color: 'var(--ink-500)' }}>{item.nombre_articulo}</td>
+                              <td style={{ padding: '6px 8px', fontWeight: 500 }}>{descGanador}</td>
+                              <td style={{ padding: '6px 8px' }}>{item.ganador_proveedor ?? '—'}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
+                                {precio ? `$${precio.toFixed(2)}` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>
+                );
+              })() : null}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ink-100)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn" onClick={() => { setModalAplicar(null); setStudyDetail(null); }}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleAplicarConfirm} disabled={applyingEstudio || loadingStudy}>
+                {applyingEstudio ? 'Aplicando…' : 'Aplicar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: artículos sin catálogo */}
+      {sinCatalogoItems.length > 0 && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 310, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 8, width: 520, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--ink-100)' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Artículos sin catálogo</h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-500)' }}>
+                Estos artículos no se encontraron en el catálogo. ¿Qué deseas hacer con cada uno?
+              </p>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sinCatalogoItems.map((item) => (
+                <div key={item.item_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 10px', background: 'var(--ink-50)', borderRadius: 6 }}>
+                  <span style={{ fontSize: 12.5, flex: 1 }}>{item.descripcion}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-sm"
+                      style={item.accion === 'crear' ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
+                      onClick={() => handleSinCatalogoItem(item.item_id, 'crear')}
+                    >
+                      Crear en catálogo
+                    </button>
+                    <button
+                      className="btn btn-sm"
+                      style={item.accion === 'libre' ? { background: 'var(--ink-200)' } : {}}
+                      onClick={() => handleSinCatalogoItem(item.item_id, 'libre')}
+                    >
+                      Texto libre
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ink-100)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={handleSinCatalogoConfirm}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="crumbs">
         <a onClick={() => navigate('/comercial/cotizaciones')}>Cotizaciones</a>
         <span className="sep">/</span>
@@ -375,7 +585,16 @@ export default function CotEditar() {
           <div className="page-title">Editar cotización</div>
           <div className="page-sub" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{folio}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {estudiosAplicables.length > 0 && (
+            <button
+              className="btn"
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+              onClick={() => openAplicarEstudio(estudiosAplicables[0])}
+            >
+              Aplicar estudio de mercado →
+            </button>
+          )}
           <button className="btn" onClick={() => navigate(`/comercial/cotizaciones/${id}`)}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleGuardar} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -435,26 +654,50 @@ export default function CotEditar() {
             </div>
 
             {lineas.map((l) => (
-              <div key={l._id}>
+              <div
+                key={l._id}
+                onDragOver={(e) => handleDragOver(l._id, e)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(l._id, e)}
+                style={{
+                  opacity: draggingId === l._id ? 0.4 : 1,
+                  outline: dragOverId === l._id ? '2px solid var(--accent)' : undefined,
+                  borderRadius: dragOverId === l._id ? 3 : undefined,
+                  transition: 'opacity 0.15s',
+                }}
+              >
                 <div className={`qb-line${l.no_catalogado ? ' flag' : ''}`}>
-                  <span className="grip">⠿⠿</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <ProductoSearch
-                      linea={l}
-                      onSelect={(p) => selectProducto(l._id, p)}
-                      onChange={(field, val) => updateLinea(l._id, field, val)}
-                      onQuickAdd={(nombre) => setQuickAdd({ lineaId: l._id, nombre })}
-                    />
-                    {l.no_catalogado && <span className="qb-tag">Libre</span>}
-                    {l.no_catalogado && (
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        style={{ fontSize: 11, padding: '1px 7px', color: 'var(--accent)', borderColor: 'var(--accent)', whiteSpace: 'nowrap' }}
-                        onClick={() => setQuickAdd({ lineaId: l._id, nombre: l.descripcion })}
-                      >
-                        + Catálogo
-                      </button>
+                  <span
+                    className="grip"
+                    draggable
+                    onDragStart={(e) => handleDragStart(l._id, e)}
+                    onDragEnd={handleDragEnd}
+                    style={{ cursor: 'grab' }}
+                  >⠿⠿</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <ProductoSearch
+                        linea={l}
+                        onSelect={(p) => selectProducto(l._id, p)}
+                        onChange={(field, val) => updateLinea(l._id, field, val)}
+                        onQuickAdd={(nombre) => setQuickAdd({ lineaId: l._id, nombre })}
+                      />
+                      {l.no_catalogado && <span className="qb-tag">Libre</span>}
+                      {l.no_catalogado && (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ fontSize: 11, padding: '1px 7px', color: 'var(--accent)', borderColor: 'var(--accent)', whiteSpace: 'nowrap' }}
+                          onClick={() => setQuickAdd({ lineaId: l._id, nombre: l.descripcion })}
+                        >
+                          + Catálogo
+                        </button>
+                      )}
+                    </span>
+                    {l.proveedor_nombre && (
+                      <span style={{ fontSize: 10, color: 'var(--ink-400)', paddingLeft: 2 }}>
+                        Proveedor: {l.proveedor_nombre}
+                      </span>
                     )}
                   </span>
                   <input

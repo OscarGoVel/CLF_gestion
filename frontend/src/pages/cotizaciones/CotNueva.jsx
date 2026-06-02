@@ -267,6 +267,9 @@ export default function CotNueva() {
   const [quickAdd, setQuickAdd] = useState(null); // { lineaId, nombre }
   const [importModal, setImportModal] = useState(null); // { matched, unmatched, mappings }
   const [importError, setImportError] = useState('');
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const dragItemRef = useRef(null);
   const fileRef = useRef(null);
 
   const { data: clientesData } = useFetch('/api/catalogos/clientes');
@@ -290,6 +293,7 @@ export default function CotNueva() {
       descripcion: producto.nombre,
       precio_unitario: producto.precio ?? '',
       aplica_iva: producto.aplica_iva ?? true,
+      no_catalogado: false,
       costo_promedio: producto.costo_promedio ?? null,
       precio_desactualizado: producto.precio_desactualizado ?? false,
       tiene_historial_compras: producto.tiene_historial_compras ?? false,
@@ -299,6 +303,48 @@ export default function CotNueva() {
 
   const removeLinea = useCallback((id) => {
     setLineas((ls) => ls.filter((l) => l._id !== id));
+  }, []);
+
+  const handleDragStart = useCallback((id, e) => {
+    dragItemRef.current = id;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(id));
+  }, []);
+
+  const handleDragOver = useCallback((id, e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragItemRef.current !== null && dragItemRef.current !== id) setDragOverId(id);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setDragOverId(null);
+  }, []);
+
+  const handleDrop = useCallback((id, e) => {
+    e.preventDefault();
+    if (dragItemRef.current === null || dragItemRef.current === id) {
+      setDragOverId(null);
+      return;
+    }
+    setLineas(ls => {
+      const arr = [...ls];
+      const fromIdx = arr.findIndex(l => l._id === dragItemRef.current);
+      const toIdx = arr.findIndex(l => l._id === id);
+      const [moved] = arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, moved);
+      return arr;
+    });
+    dragItemRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    dragItemRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
   }, []);
 
   const utilidadPct = total > 0
@@ -470,9 +516,26 @@ export default function CotNueva() {
             </div>
 
             {lineas.map((l) => (
-              <div key={l._id}>
+              <div
+                key={l._id}
+                onDragOver={(e) => handleDragOver(l._id, e)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(l._id, e)}
+                style={{
+                  opacity: draggingId === l._id ? 0.4 : 1,
+                  outline: dragOverId === l._id ? '2px solid var(--accent)' : undefined,
+                  borderRadius: dragOverId === l._id ? 3 : undefined,
+                  transition: 'opacity 0.15s',
+                }}
+              >
                 <div className={`qb-line${l.no_catalogado ? ' flag' : ''}`}>
-                  <span className="grip">⠿⠿</span>
+                  <span
+                    className="grip"
+                    draggable
+                    onDragStart={(e) => handleDragStart(l._id, e)}
+                    onDragEnd={handleDragEnd}
+                    style={{ cursor: 'grab' }}
+                  >⠿⠿</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                     <ProductoSearch
                       linea={l}

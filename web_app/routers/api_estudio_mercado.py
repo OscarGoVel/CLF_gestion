@@ -57,6 +57,9 @@ def _asegurar_tablas(empresa_db: str) -> None:
         cur.execute("ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS margen_pct NUMERIC(5,4) DEFAULT 0.35")
         cur.execute("ALTER TABLE estudios_mercado ADD COLUMN IF NOT EXISTS cotizacion_id INTEGER REFERENCES cotizaciones(id)")
         cur.execute("ALTER TABLE estudio_mercado_cotizaciones ADD COLUMN IF NOT EXISTS ganador BOOLEAN NOT NULL DEFAULT FALSE")
+        cur.execute("ALTER TABLE cotizacion_detalle ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE estudio_mercado_items ADD COLUMN IF NOT EXISTS cotizacion_detalle_id INTEGER REFERENCES cotizacion_detalle(id) ON DELETE SET NULL")
+        cur.execute("ALTER TABLE estudio_mercado_cotizaciones ADD COLUMN IF NOT EXISTS descripcion_articulo TEXT")
     _tablas_ok.add(empresa_db)
 
 
@@ -125,6 +128,7 @@ class ItemIn(BaseModel):
 class CotizacionProvIn(BaseModel):
     proveedor_id: Optional[int] = None
     nombre_proveedor: str
+    descripcion_articulo: str = ""
     precio_unitario: float
     notas: str = ""
 
@@ -196,20 +200,20 @@ async def crear(body: EstudioIn, user: dict = Depends(get_usuario_api)):
         # Si viene de una cotización, pre-llenar ítems
         if body.cotizacion_id:
             cur.execute("""
-                SELECT cd.cantidad, cd.descripcion_libre,
+                SELECT cd.id, cd.cantidad, cd.descripcion_libre,
                        p.nombre, p.id AS producto_id, p.unidad_medida
                 FROM cotizacion_detalle cd
                 LEFT JOIN productos p ON p.id = cd.producto_id
                 WHERE cd.cotizacion_id = %s
             """, (body.cotizacion_id,))
             for row in cur.fetchall():
-                cantidad, desc_libre, pnom, prod_id, unidad = row
+                detalle_id, cantidad, desc_libre, pnom, prod_id, unidad = row
                 nombre_art = pnom or desc_libre or "Sin nombre"
                 cur.execute("""
                     INSERT INTO estudio_mercado_items
-                        (estudio_id, producto_id, nombre_articulo, cantidad, unidad)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (estudio_id, prod_id, nombre_art, float(cantidad or 1), unidad or ""))
+                        (estudio_id, producto_id, nombre_articulo, cantidad, unidad, cotizacion_detalle_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (estudio_id, prod_id, nombre_art, float(cantidad or 1), unidad or "", detalle_id))
 
     return {"id": estudio_id}
 
@@ -237,7 +241,7 @@ async def detalle(estudio_id: int, user: dict = Depends(get_usuario_api)):
 
         for item in items_raw:
             cur.execute("""
-                SELECT id, nombre_proveedor, precio_unitario, notas, proveedor_id, ganador
+                SELECT id, nombre_proveedor, descripcion_articulo, precio_unitario, notas, proveedor_id, ganador
                 FROM estudio_mercado_cotizaciones WHERE item_id = %s
                 ORDER BY precio_unitario
             """, (item["id"],))
@@ -315,10 +319,10 @@ async def agregar_cotizacion_prov(
     with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
         cur.execute("""
             INSERT INTO estudio_mercado_cotizaciones
-                (item_id, proveedor_id, nombre_proveedor, precio_unitario, notas)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
+                (item_id, proveedor_id, nombre_proveedor, descripcion_articulo, precio_unitario, notas)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
         """, (item_id, body.proveedor_id, body.nombre_proveedor.strip(),
-              body.precio_unitario, body.notas or None))
+              body.descripcion_articulo.strip() or None, body.precio_unitario, body.notas or None))
         cot_id = cur.fetchone()[0]
     return {"id": cot_id}
 
@@ -638,6 +642,135 @@ async def enviar_opciones(
         conn.commit()
 
     return {"cotizacion_id": cot_id, "lineas_creadas": len(detalle_ids), "detalle_ids": detalle_ids}
+
+
+# ── POST /api/estudios/{estudio_id}/actualizar-lineas ────────────────────────
+
+@router.post("/{estudio_id}/actualizar-lineas")
+async def actualizar_lineas(estudio_id: int, user: dict = Depends(get_usuario_api)):
+    """Actualiza las líneas existentes de la cotización con los datos del proveedor ganador.
+    Solo afecta ítems que tienen cotizacion_detalle_id (creados desde una cotización).
+    Aplica búsqueda fuzzy para vincular al catálogo; si no hay match, usa descripción libre."""
+    with get_pool_empresa(user["empresa_db"]).conexion() as (_, cur):
+        cur.execute(
+            "SELECT cotizacion_id, COALESCE(margen_pct, 0.35) FROM estudios_mercado WHERE id = %s",
+            (estudio_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Estudio no encontrado")
+        cotizacion_id, margen_pct = row[0], float(row[1])
+
+        cur.execute("""
+            SELECT i.id AS item_id, i.cotizacion_detalle_id, i.nombre_articulo,
+                   c.precio_unitario, c.proveedor_id, c.nombre_proveedor,
+                   COALESCE(c.descripcion_articulo, i.nombre_articulo) AS desc_ganador
+            FROM estudio_mercado_items i
+            JOIN estudio_mercado_cotizaciones c ON c.item_id = i.id AND c.ganador = TRUE
+            WHERE i.estudio_id = %s AND i.cotizacion_detalle_id IS NOT NULL
+        """, (estudio_id,))
+        candidatos = _rows(cur)
+
+        if not candidatos:
+            raise HTTPException(
+                status_code=422,
+                detail="No hay líneas con ganador marcado. Marca al menos un ganador en el estudio.",
+            )
+
+        sin_catalogo: list[dict] = []
+        actualizados = 0
+
+        for c in candidatos:
+            detalle_id = c["cotizacion_detalle_id"]
+            costo_ganador = Decimal(str(c["precio_unitario"]))
+            precio_venta = (costo_ganador * (1 + Decimal(str(margen_pct)))).quantize(Decimal("0.01"))
+
+            cur.execute("""
+                SELECT cd.cantidad, COALESCE(cd.iva, 0) > 0 AS aplica_iva
+                FROM cotizacion_detalle cd
+                WHERE cd.id = %s
+            """, (detalle_id,))
+            linea = cur.fetchone()
+            if not linea:
+                continue
+            cantidad, aplica_iva_actual = Decimal(str(linea[0])), bool(linea[1])
+
+            # Búsqueda fuzzy en catálogo usando la descripción del proveedor
+            cur.execute("""
+                SELECT id, nombre
+                FROM productos
+                WHERE similarity(%s, nombre) >= 0.40
+                ORDER BY similarity(%s, nombre) DESC
+                LIMIT 1
+            """, (c["desc_ganador"], c["desc_ganador"]))
+            prod_match = cur.fetchone()
+
+            if prod_match:
+                prod_id, prod_nombre = prod_match
+                cur.execute("SELECT COALESCE(aplica_iva, 0) FROM productos WHERE id = %s", (prod_id,))
+                aplica_iva_prod = bool(cur.fetchone()[0])
+                sub = (precio_venta * cantidad).quantize(Decimal("0.01"))
+                iva_val = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if aplica_iva_prod else Decimal("0")
+                tot = sub + iva_val
+                margen_c = round((float(precio_venta) - float(costo_ganador)) / float(precio_venta) * 100, 4) if float(precio_venta) > 0 else 0.0
+                cur.execute("""
+                    UPDATE cotizacion_detalle
+                    SET producto_id       = %s,
+                        descripcion_libre = NULL,
+                        pendiente_catalogo = FALSE,
+                        precio_unitario   = %s,
+                        costo_snapshot    = %s,
+                        proveedor_id      = %s,
+                        subtotal          = %s,
+                        iva               = %s,
+                        total             = %s,
+                        margen_pct        = %s
+                    WHERE id = %s
+                """, (prod_id, float(precio_venta), float(costo_ganador),
+                      c["proveedor_id"], float(sub), float(iva_val), float(tot), margen_c,
+                      detalle_id))
+            else:
+                sub = (precio_venta * cantidad).quantize(Decimal("0.01"))
+                iva_val = (sub * Decimal("0.16")).quantize(Decimal("0.01")) if aplica_iva_actual else Decimal("0")
+                tot = sub + iva_val
+                margen_c = round((float(precio_venta) - float(costo_ganador)) / float(precio_venta) * 100, 4) if float(precio_venta) > 0 else 0.0
+                cur.execute("""
+                    UPDATE cotizacion_detalle
+                    SET descripcion_libre = %s,
+                        producto_id       = NULL,
+                        precio_unitario   = %s,
+                        costo_snapshot    = %s,
+                        proveedor_id      = %s,
+                        subtotal          = %s,
+                        iva               = %s,
+                        total             = %s,
+                        margen_pct        = %s
+                    WHERE id = %s
+                """, (c["desc_ganador"], float(precio_venta), float(costo_ganador),
+                      c["proveedor_id"], float(sub), float(iva_val), float(tot), margen_c,
+                      detalle_id))
+                sin_catalogo.append({
+                    "item_id": c["item_id"],
+                    "detalle_id": detalle_id,
+                    "descripcion": c["desc_ganador"],
+                })
+
+            actualizados += 1
+
+        if cotizacion_id:
+            cur.execute("""
+                UPDATE cotizaciones
+                SET subtotal = d.s, iva = d.i, total = d.t
+                FROM (
+                    SELECT COALESCE(SUM(subtotal), 0) s,
+                           COALESCE(SUM(iva),      0) i,
+                           COALESCE(SUM(total),    0) t
+                    FROM cotizacion_detalle WHERE cotizacion_id = %s
+                ) d
+                WHERE id = %s
+            """, (cotizacion_id, cotizacion_id))
+
+    return {"actualizados": actualizados, "sin_catalogo": sin_catalogo}
 
 
 # ── POST /api/estudios/{estudio_id}/generar-compra ───────────────────────────

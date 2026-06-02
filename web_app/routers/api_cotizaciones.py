@@ -630,9 +630,12 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
                        FROM entregas_parciales ep
                        WHERE ep.cotizacion_id = cd.cotizacion_id
                          AND ep.producto_id   = cd.producto_id
-                   ), 0)                                           AS ya_entregado
+                   ), 0)                                           AS ya_entregado,
+                   cd.proveedor_id,
+                   prov.nombre                                     AS proveedor_nombre
             FROM cotizacion_detalle cd
             LEFT JOIN productos p ON p.id = cd.producto_id
+            LEFT JOIN proveedores prov ON prov.id = cd.proveedor_id
             WHERE cd.cotizacion_id = %s
             ORDER BY cd.id
         """, (cot_id,))
@@ -704,10 +707,15 @@ async def detalle(cot_id: int, user: dict = Depends(get_usuario_api)):
         costos_reales = {r[0]: _serial(r[1]) for r in cur.fetchall() if r[1] is not None}
 
         cur.execute("""
-            SELECT id, nombre, fecha, estado
-            FROM estudios_mercado
-            WHERE cotizacion_id = %s
-            ORDER BY fecha_registro DESC
+            SELECT e.id, e.nombre, e.fecha, e.estado,
+                   EXISTS(
+                       SELECT 1 FROM estudio_mercado_items i
+                       JOIN estudio_mercado_cotizaciones c ON c.item_id = i.id AND c.ganador = TRUE
+                       WHERE i.estudio_id = e.id AND i.cotizacion_detalle_id IS NOT NULL
+                   ) AS tiene_ganadores_aplicables
+            FROM estudios_mercado e
+            WHERE e.cotizacion_id = %s
+            ORDER BY e.fecha_registro DESC
         """, (cot_id,))
         estudios = _rows(cur)
 
