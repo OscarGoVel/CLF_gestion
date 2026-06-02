@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { exportCSV } from '../../lib/exportCSV';
 import { api } from '../../lib/apiClient';
 import { useRazonSocial } from '../../contexts/RazonSocialContext';
@@ -181,7 +181,7 @@ export default function EstadoCuentaList() {
                   )}
                 </td>
                 <td style={{ padding: '10px 12px' }}>
-                  <Pill label={cl.tipo} />
+                  <StatusBadge status={cl.tipo} />
                 </td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>
                   {MXN.format(cl.cartera ?? 0)}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
-import { Pill } from '../../components/Pill';
+import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../lib/apiClient';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../lib/toast';
@@ -109,7 +109,7 @@ export default function CostosFijosList() {
             {items.map(item => (
               <tr key={item.id} style={{ borderBottom: '1px solid var(--ink-100)' }}>
                 <td style={{ padding: '10px 12px' }}>
-                  <Pill label={item.categoria} />
+                  <StatusBadge status={item.categoria} />
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 13 }}>{item.descripcion}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>
