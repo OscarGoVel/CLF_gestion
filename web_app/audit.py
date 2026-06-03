@@ -7,20 +7,22 @@ Tabla: audit_log (en clf_usuarios)
 Columnas: id, usuario_id, username, evento, detalle, ip, ts
 """
 
-from datetime import datetime, timezone
+import logging
 
 from web_app.database import pool_usuarios
 
+logger = logging.getLogger(__name__)
+
 # ── Tipos de evento ───────────────────────────────────────────────────────────
-LOGIN_OK      = "login_exitoso"
-LOGIN_FALLO   = "login_fallido"
-LOGOUT        = "logout"
+LOGIN_OK        = "login_exitoso"
+LOGIN_FALLO     = "login_fallido"
+LOGOUT          = "logout"
 ACCESO_DENEGADO = "acceso_denegado"
 
 
 def _asegurar_tabla():
     """Crea la tabla audit_log si no existe (solo se llama una vez al arrancar)."""
-    with pool_usuarios.conexion() as (conn, cursor):
+    with pool_usuarios.conexion() as (_, cursor):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 id         SERIAL PRIMARY KEY,
@@ -38,10 +40,10 @@ def registrar(evento: str, *, username: str = None, usuario_id: int = None,
               detalle: str = None, ip: str = None):
     """
     Inserta un evento en audit_log.
-    No lanza excepciones — el fallo de auditoria no debe interrumpir la peticion.
+    No lanza excepciones — el fallo de auditoría no debe interrumpir la petición.
     """
     try:
-        with pool_usuarios.conexion() as (conn, cursor):
+        with pool_usuarios.conexion() as (_, cursor):
             cursor.execute(
                 """
                 INSERT INTO audit_log (usuario_id, username, evento, detalle, ip)
@@ -49,13 +51,13 @@ def registrar(evento: str, *, username: str = None, usuario_id: int = None,
                 """,
                 (usuario_id, username, evento, detalle, ip),
             )
-    except Exception:
-        pass  # auditoria silenciosa
+    except Exception as e:
+        logger.debug("audit.registrar falló: %s", e)
 
 
 def obtener_ultimos(limite: int = 50) -> list[dict]:
-    """Devuelve los ultimos eventos de auditoria como lista de dicts."""
-    with pool_usuarios.conexion() as (conn, cursor):
+    """Devuelve los últimos eventos de auditoría como lista de dicts."""
+    with pool_usuarios.conexion() as (_, cursor):
         cursor.execute(
             """
             SELECT id, usuario_id, username, evento, detalle, ip, ts

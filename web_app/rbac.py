@@ -18,8 +18,7 @@ Uso en rutas:
         ...
 """
 
-from typing import Optional
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
 from web_app.dependencies import get_usuario_actual
 
@@ -163,7 +162,12 @@ def require_permiso(key: str):
     """
     async def _check(request: Request) -> dict:
         user = _get_user_or_401(request)
-        empresa_db = user.get("empresa_db", "")
+        empresa_db = user.get("empresa_db")
+        if not empresa_db:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="empresa_db faltante en token.",
+            )
         permisos = _get_permisos_empresa(empresa_db)
         if user.get("rol") not in permisos.get(key, {"Administrador"}):
             raise HTTPException(

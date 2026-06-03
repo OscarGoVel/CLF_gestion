@@ -57,7 +57,7 @@ function ProductoSearch({ linea, onSelect, onChange, onQuickAdd }) {
         setResults(data.resultados ?? []);
         setSearched(true);
         setOpen(true);
-      } catch { setResults([]); }
+      } catch (err) { console.error('[CotNueva] buscar producto:', err); setResults([]); }
     }, 300);
     return () => clearTimeout(debounce.current);
   }, [q, linea.no_catalogado]);

@@ -46,6 +46,13 @@ backup_*.sql
 # Cloud SQL Proxy y binarios locales
 cloud-sql-proxy*
 
+# Catálogos y archivos de trabajo (no pertenecen al repo)
+*.xlsx
+DIA_IDEAL_CASOS_USO.md
+Project-Context*.txt
+Project_Context*.md
+Project_Context*.txt
+
 # Firebase cache
 .firebase/
 

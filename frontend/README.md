@@ -1,16 +1,65 @@
-# React + Vite
+# CLF Gestión — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA React para el sistema ERP CLF. Consume la API REST del backend FastAPI.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19.2 + Vite 8 + React Router DOM v7
+- PWA (vite-plugin-pwa) — instalable en móvil y desktop
+- CSS custom properties — design system en `src/index.css`
 
-## React Compiler
+## Variables de entorno
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `VITE_API_URL` | URL base del backend | `http://localhost:8000` |
 
-## Expanding the ESLint configuration
+En producción, Firebase Hosting reescribe `/api/*` al backend de Cloud Run, por lo que `VITE_API_URL` queda vacío en `.env.production`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Desarrollo local
+
+```bash
+npm install
+npm run dev          # http://localhost:5173 — proxy a localhost:8000
+```
+
+## Build
+
+```bash
+npm run build        # genera frontend/dist/
+npm run preview      # sirve el build localmente para verificar
+```
+
+## Lint y formato
+
+```bash
+npm run lint         # ESLint
+npm run format       # Prettier (formatea src/)
+```
+
+## Estructura
+
+```
+src/
+├── pages/           ← una carpeta por módulo (cotizaciones/, crm/, etc.)
+├── components/      ← design system: DataTable, Modal, StatusBadge, KpiCard…
+├── hooks/           ← useFetch, useAuth
+├── lib/             ← apiClient.js (HTTP centralizado), toast.js
+└── contexts/        ← RazonSocialContext (multi-empresa)
+```
+
+## Componentes reutilizables
+
+| Componente | Uso |
+|------------|-----|
+| `StatusBadge` | Badge de estado semántico |
+| `DataTable` | Tabla con sort client-side |
+| `KpiCard` / `KpiGrid` | Métricas ejecutivas |
+| `Modal` / `ConfirmModal` | Overlays |
+| `SectionCard` | Contenedor con título |
+| `EmptyState` | Estado vacío con CTA |
+| `FilterChips` | Chips de filtro con conteo |
+| `SidePreview` + `FieldGrid` | Panel lateral de detalles |
+| `Historial` | Timeline de eventos por entidad |
+| `Stepper` | Indicador de pasos |
+| `TableStates` | Loading/Empty rows para tablas |

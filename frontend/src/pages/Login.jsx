@@ -21,7 +21,7 @@ export default function Login() {
         setEmpresas(list);
         if (list.length > 0) setEmpresaId(list[0].id);
       })
-      .catch(() => {});
+      .catch((err) => console.error('[Login] cargar empresas:', err));
   }, []);
 
   async function handleSubmit(e) {

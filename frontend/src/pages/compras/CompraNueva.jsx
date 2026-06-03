@@ -43,7 +43,7 @@ function ModalProductoRapido({ nombreInicial, onCreado, onCerrar }) {
     api.get('/api/catalogos/categorias').then(d => {
       setCats(d.categorias ?? []);
       setSubcats(d.subcategorias ?? []);
-    }).catch(() => {});
+    }).catch((err) => console.error('[CompraNueva] cargar categorias:', err));
   }, []);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ function ModalProductoRapido({ nombreInicial, onCreado, onCerrar }) {
       : `?categoria_id=${categoriaId}`;
     api.get(`/api/catalogos/generar-sku${qs}`).then(d => {
       if (d.sku) setCodigo(d.sku);
-    }).catch(() => {});
+    }).catch((err) => console.error('[CompraNueva] generar SKU:', err));
   }, [categoriaId, subcategoriaId]);
 
   function handleCategoriaChange(e) {

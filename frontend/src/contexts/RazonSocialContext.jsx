@@ -14,7 +14,7 @@ export function RazonSocialProvider({ children }) {
     if (!sessionStorage.getItem('clf_token')) return;
     api.get('/api/razones-sociales')
       .then(data => setRazonSociales(data.razones_sociales ?? []))
-      .catch(() => {});
+      .catch((err) => console.error('[RazonSocial] cargar:', err));
   }, []);
 
   function setActiveRS(id) {
