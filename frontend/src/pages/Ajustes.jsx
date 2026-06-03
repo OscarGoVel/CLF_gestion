@@ -11,7 +11,7 @@ const USUARIO_EMPTY = { username: '', nombre: '', rol: 'Operador', password: '' 
 
 // ── Sección: Mi cuenta ────────────────────────────────────────────────────────
 
-function MiCuenta({ user }) {
+function MiCuenta() {
   const { data: perfil, loading } = useFetch('/api/ajustes/perfil');
 
   const [nombre, setNombre]       = useState('');

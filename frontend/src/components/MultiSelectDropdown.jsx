@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 
-export function MultiSelectDropdown({ options, values = [], onChange, counts, placeholder = 'Filtrar…', labelPlural = 'seleccionados' }) {
+export function MultiSelectDropdown({ options, values = [], onChange, counts, labelPlural = 'seleccionados' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 

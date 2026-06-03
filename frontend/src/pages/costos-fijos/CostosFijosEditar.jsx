@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useFetch } from '../../hooks/useFetch';
 import { api } from '../../lib/apiClient';
 import { useState, useEffect } from 'react';
 import { toast } from '../../lib/toast';
@@ -10,8 +9,6 @@ export default function CostosFijosEditar() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  // Cargamos el costo buscándolo en el período que sea
-  const [costo, setCosto] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [periodo, setPeriodo]     = useState('');

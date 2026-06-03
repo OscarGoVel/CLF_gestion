@@ -1,7 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 
-const ROLES = ['Administrador', 'Operador', 'Almacenista', 'Solo lectura'];
-
 const PERMISOS = [
   { modulo: 'Dashboard',         admin: true, operador: true,  almacenista: true,  lectura: true  },
   { modulo: 'Cotizaciones',      admin: true, operador: true,  almacenista: false, lectura: true  },
