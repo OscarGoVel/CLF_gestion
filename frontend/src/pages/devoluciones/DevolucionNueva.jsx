@@ -13,7 +13,7 @@ export default function DevolucionNueva() {
   const [clienteSel, setClienteSel] = useState(null);
   const [clienteRes, setClienteRes] = useState([]);
   const [cotFolio,   setCotFolio]   = useState('');
-  const [cotId,      setCotId]      = useState(search.get('cot') ? Number(search.get('cot')) : null);
+  const [cotId]                     = useState(search.get('cot') ? Number(search.get('cot')) : null);
   const [fecha,      setFecha]      = useState(new Date().toISOString().slice(0, 10));
   const [motivo,     setMotivo]     = useState('');
   const [notas,      setNotas]      = useState('');

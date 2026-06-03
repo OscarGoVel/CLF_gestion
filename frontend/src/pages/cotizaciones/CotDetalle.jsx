@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFetch } from '../../hooks/useFetch';
 import { StatusBadge } from '../../components/StatusBadge';
-import { EmptyState } from '../../components/EmptyState';
 import { Stepper, buildSteps } from '../../components/Stepper';
 import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { Modal } from '../../components/Modal';

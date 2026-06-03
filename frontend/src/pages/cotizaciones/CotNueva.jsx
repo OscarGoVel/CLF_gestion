@@ -347,14 +347,7 @@ export default function CotNueva() {
     setDragOverId(null);
   }, []);
 
-  const utilidadPct = total > 0
-    ? parseFloat(((total - lineas.reduce((s, l) => {
-        const q = parseFloat(l.cantidad) || 0;
-        return s + q * 0;
-      }, 0)) / total * 100).toFixed(1))
-    : 0;
-
-  async function handleGuardar(estado = 'Borrador') {
+  async function handleGuardar(_estado = 'Borrador') {
     if (!clienteId) { setError('Selecciona un cliente'); return; }
     if (lineas.length === 0) { setError('Agrega al menos una partida'); return; }
     setSaving(true);

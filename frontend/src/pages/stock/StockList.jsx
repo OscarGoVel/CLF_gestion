@@ -95,7 +95,7 @@ export default function StockList() {
   if (bajoMin) params.set('bajo_minimo', bajoMin);
 
   const { data, loading, refetch }    = useFetch(vista === 'inventario' ? `/api/inventario/stock?${params}` : null);
-  const { data: movData, loading: movLoading, refetch: refetchMov } = useFetch(
+  const { data: movData, loading: movLoading } = useFetch(
     vista === 'movimientos' ? `/api/inventario/stock/movimientos?pagina=${movPag}` : null
   );
 

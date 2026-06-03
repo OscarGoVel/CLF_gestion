@@ -32,7 +32,7 @@ export default function Pipeline() {
   const [editing,  setEditing]  = useState(null);   // null = nuevo
   const [form,     setForm]     = useState(BLANK);
   const [guardando, setGuardando] = useState(false);
-  const [moverOpen, setMoverOpen] = useState(null);  // id del prospecto con select abierto
+  const [, setMoverOpen] = useState(null);  // id del prospecto con select abierto
 
   const byEtapa = data?.by_etapa ?? {};
   const totales = data?.totales  ?? {};

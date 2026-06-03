@@ -5,8 +5,6 @@ import { api } from '../../lib/apiClient';
 import { toast } from '../../lib/toast';
 import { ContextMenu } from '../../components/ContextMenu';
 
-const ESTADOS = ['borrador', 'revision', 'aprobada', 'enviando', 'completada'];
-
 const ESTADO_COLOR = {
   borrador:   { bg: '#f3f4f6', color: '#374151' },
   revision:   { bg: '#fef3c7', color: '#92400e' },

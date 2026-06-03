@@ -14,7 +14,7 @@ export default function MercadoList() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [showNuevo, setShowNuevo]       = useState(false);
 
-  const { data, loading, refetch } = useFetch(
+  const { data, loading } = useFetch(
     `/api/abastecimiento/estudios${filtroEstado ? `?estado=${filtroEstado}` : ''}`
   );
   const estudios = data?.estudios ?? [];

@@ -6,7 +6,6 @@ import { toast } from '../../lib/toast';
 import { exportCSV } from '../../lib/exportCSV';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Stepper, buildSteps } from '../../components/Stepper';
-import { NextRibbon, buildNextAction } from '../../components/NextRibbon';
 import { MultiSelectDropdown } from '../../components/MultiSelectDropdown';
 import { DataTable } from '../../components/DataTable';
 import { SidePreview } from '../../components/SidePreview';

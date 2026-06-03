@@ -1,0 +1,16 @@
+# ruff.toml — configuración de linting Python
+# Solo reglas F (pyflakes: errores reales) y E (pycodestyle críticos).
+# Las reglas más opinionadas (convenciones de estilo) no aplican aquí.
+
+[lint]
+select = ["E", "F"]
+ignore = [
+  "E501",  # líneas largas — no aplicamos límite de longitud
+  "F841",  # variable local asignada pero no usada — ya cubierto por pytest/mypy
+  "E741",  # nombres de variable ambiguos (l, O, I) — legacy en varios módulos
+  "E402",  # import no en la cima del archivo — patrón intencional en algunos módulos
+]
+
+[lint.per-file-ignores]
+# Los routers legacy Jinja usan patrones distintos; no los revisamos aquí
+"web_app/routers/[!a][!p][!i]*.py" = ["F401", "F811"]

@@ -6,8 +6,6 @@ import { Modal } from '../../components/Modal';
 import { useRazonSocial } from '../../contexts/RazonSocialContext';
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
-const today = new Date().toISOString().slice(0, 10);
-
 function fmt(iso) {
   if (!iso) return '—';
   return iso.slice(0, 10);

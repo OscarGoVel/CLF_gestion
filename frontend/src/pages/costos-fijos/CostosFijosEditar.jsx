@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/apiClient';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { toast } from '../../lib/toast';
 
 const CATS = ['renta', 'nomina', 'servicios', 'depreciacion', 'otro'];
@@ -9,30 +9,12 @@ export default function CostosFijosEditar() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-
   const [periodo, setPeriodo]     = useState('');
   const [categoria, setCategoria] = useState('renta');
   const [desc, setDesc]           = useState('');
   const [monto, setMonto]         = useState('');
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState('');
-
-  useEffect(() => {
-    // Buscamos el costo en el mes actual; si no aparece cargamos igual
-    async function load() {
-      try {
-        // Intentar encontrarlo buscando en todos los períodos no es trivial
-        // sin endpoint de detalle. Usamos el período del query param si está disponible
-        // La forma más simple: el usuario llega aquí desde la lista con estado en memoria
-        // Para este wireframe, simplemente mostramos el form vacío y el usuario confirma
-        setLoading(false);
-      } catch {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [id]);
 
   async function handleSubmit(e) {
     e.preventDefault();
